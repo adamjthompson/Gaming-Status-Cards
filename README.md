@@ -1,6 +1,6 @@
 # 🎮 Gaming Status Cards for Home Assistant
 
-A collection of beautiful, highly customizable Lovelace frontend cards designed specifically to work with the **[Gaming Status Integration](https://github.com/adamjthompson/Gaming-Status)**. 
+A collection of beautiful, highly customizable dashboard cards designed specifically to work with the **[Gaming Status Integration](https://github.com/adamjthompson/Gaming-Status)**. 
 
 This plugin includes three unique cards to visualize your squad's gaming habits: a clean **List Card**, a dynamic CSS-animated **Slideshow Card**, and a historical **Chart Card**. 
 
@@ -15,7 +15,7 @@ This card is designed to be installed via [HACS](https://hacs.xyz/).
 1. Open HACS in your Home Assistant instance.
 2. Click the three dots in the top right corner and select **Custom repositories**.
 3. Paste the URL of this repository.
-4. Select **Lovelace** as the category and click **Add**.
+4. Select **Dashboard** as the category and click **Add**.
 5. Click on the new **Gaming Status Cards** integration and hit **Download**.
 6. When prompted, reload your browser cache.
 
