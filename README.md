@@ -34,13 +34,13 @@ A clean, native-feeling list of your tracked gamers. It dynamically tints the ca
 * **Visibility:** Toggle the platform icon badges and text shadows to fit your dashboard theme.
 
 **Online Now**
-![Currently Playing Card Screenshot](../images/playing.png)
+![Currently Playing Card Screenshot](images/playing.png)
 
 **Recent Players**
-![Recent Players Card Screenshot](../images/recent.png)
+![Recent Players Card Screenshot](images/recent.png)
 
 **Platform-Specific**
-![Platform-Specific Card Screenshot](../images/steam.png)
+![Platform-Specific Card Screenshot](images/steam.png)
 
 
 
@@ -54,7 +54,7 @@ A dynamic, CSS-animated slideshow that cycles through the high-resolution cover 
 * **Auto-Hide:** Automatically hides the entire card from your dashboard if no one is currently playing a game, saving valuable screen real estate.
 
 **Slideshow with Player Avatars**
-![Large Slideshow Card Screenshot](../images/wide.png)
+![Large Slideshow Card Screenshot](images/wide.png)
 
 ### 3. Gaming Status - Chart
 An automated wrapper that builds a beautiful rolling 8-day historical chart of your gamers' habits. 
@@ -65,7 +65,7 @@ An automated wrapper that builds a beautiful rolling 8-day historical chart of y
 * **Custom Colors:** Allows you to override the default palette by passing a comma-separated list of CSS colors (e.g., `#ffbe0b, rgb(251, 86, 7), blue`).
 
 **Weekly Stats Chart**
-![Playtime Stats Card Screenshot](../images/graph.png)
+![Playtime Stats Card Screenshot](images/graph.png)
 
 ---
 
