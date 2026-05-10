@@ -91,24 +91,24 @@ mode: all # Options: all, online, steam, xbox, playstation
 sort_by: last_online # Options: last_online, name, state
 show_badges: true
 show_text_shadow: true
-manual_entities: '' # Comma-separated list of sensors to include (if you don't want ALL of them)
+manual_entities: '' # Whitelist of comma-separated sensor names
 ```
 
 **The Slideshow Card**
 ```yaml
 type: custom:gaming-slideshow-card
 aspect_ratio: 3840/1240 # Default aspect ratio matches the SteamGridDB hero images
-time_per_slide: 5 # Seconds to display each slide
-transition_time: 1
+time_per_slide: 5 # Display time for each slide (seconds)
+transition_time: 1 # Transition time (seconds)
 show_avatars: true
 auto_hide: true
-manual_entities: '' # Comma-separated list of sensors to include (if you don't want ALL of them)
+manual_entities: '' # Whitelist of comma-separated sensor names
 ```
 
 **The Chart Card**
 ```yaml
 type: custom:gaming-status-chart-card
 title: Weekly Playtime
-manual_entities: '' # Comma-separated list of sensors to include (if you don't want ALL of them)
-custom_colors: '#ffbe0b, #fb5607, #ff006e' # Override the default colors with your own list
+manual_entities: '' # Whitelist of comma-separated sensor names
+custom_colors: '#ffbe0b, #fb5607, #ff006e' # Override the default colors
 ```
