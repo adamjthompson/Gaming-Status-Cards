@@ -33,6 +33,17 @@ A clean, native-feeling list of your tracked gamers. It dynamically tints the ca
 * **Sort By:** Automatically sorts players chronologically by who was `Last Online`. Actively online players are always pinned to the top. Can also be sorted alphabetically by Name or Game Title.
 * **Visibility:** Toggle the platform icon badges and text shadows to fit your dashboard theme.
 
+**Online Now**
+![Currently Playing Card Screenshot](../images/playing.png)
+
+**Recent Players**
+![Recent Players Card Screenshot](../images/recent.png)
+
+**Platform-Specific**
+![Platform-Specific Card Screenshot](../images/steam.png)
+
+
+
 ### 2. Gaming Status - Slideshow
 A dynamic, CSS-animated slideshow that cycles through the high-resolution cover art of currently active games. 
 
@@ -42,6 +53,9 @@ A dynamic, CSS-animated slideshow that cycles through the high-resolution cover 
 * **Player Avatars:** Automatically superimposes the avatar of the person playing the game into the bottom right corner.
 * **Auto-Hide:** Automatically hides the entire card from your dashboard if no one is currently playing a game, saving valuable screen real estate.
 
+**Slideshow with Player Avatars**
+![Large Slideshow Card Screenshot](../images/wide.png)
+
 ### 3. Gaming Status - Chart
 An automated wrapper that builds a beautiful rolling 8-day historical chart of your gamers' habits. 
 *⚠️ **Note:** This specific card requires the popular [apexcharts-card](https://github.com/RomRider/apexcharts-card) to be installed via HACS.*
@@ -49,6 +63,9 @@ An automated wrapper that builds a beautiful rolling 8-day historical chart of y
 **UI Configuration Options:**
 * **Automated Setup:** Automatically grabs all your gamers and assigns them distinct, vibrant colors on the chart with zero configuration.
 * **Custom Colors:** Allows you to override the default palette by passing a comma-separated list of CSS colors (e.g., `#ffbe0b, rgb(251, 86, 7), blue`).
+
+**Weekly Stats Chart**
+![Playtime Stats Card Screenshot](../images/graph.png)
 
 ---
 
