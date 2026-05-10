@@ -448,6 +448,7 @@ class GamingSlideshowCard extends HTMLElement {
       transition_time: 1,
       show_avatars: true,
       auto_hide: true,
+      include_plex: false,
       manual_entities: "",
       entities_pattern: "_gaming_status",
     };
@@ -462,6 +463,7 @@ class GamingSlideshowCard extends HTMLElement {
         config.transition_time !== undefined ? config.transition_time : 1,
       show_avatars: config.show_avatars !== false,
       auto_hide: config.auto_hide !== false,
+      include_plex: config.include_plex === true,
       manual_entities: config.manual_entities || "",
       entities_pattern: config.entities_pattern || "_gaming_status",
       ...config,
@@ -501,6 +503,23 @@ class GamingSlideshowCard extends HTMLElement {
       }
     }
 
+    // Add Plex/Tautulli sensors to the processing pool if enabled
+    if (this.config.include_plex) {
+      for (const entityId in hass.states) {
+        if (
+          entityId.startsWith("sensor.plex_session_") &&
+          entityId.includes("_tautulli")
+        ) {
+          // Prevent duplicates if user manually specified them
+          if (!rawEntities.some((e) => e.entity_id === entityId)) {
+            rawEntities.push(hass.states[entityId]);
+            currentHash +=
+              hass.states[entityId].state + hass.states[entityId].last_changed;
+          }
+        }
+      }
+    }
+
     if (this._lastHash === currentHash) return;
     this._lastHash = currentHash;
     // -------------------------------------------
@@ -514,27 +533,64 @@ class GamingSlideshowCard extends HTMLElement {
     let active_items = [];
     entities.forEach((entity) => {
       const state = entity.state.toLowerCase();
-      const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(
-        state
-      );
-      const isHistory = state.includes("last seen") || state.includes("ago");
+      const isPlex =
+        entity.entity_id.startsWith("sensor.plex_session_") &&
+        entity.entity_id.includes("_tautulli");
 
-      if (!isOffline && !isHistory) {
-        const gameName = entity.attributes.current_game;
-        const gameArt = entity.attributes.game_cover_art;
-        const pic = entity.attributes.entity_picture;
+      if (isPlex) {
+        if (["playing", "paused", "buffering"].includes(state)) {
+          const gameName =
+            entity.attributes.full_title || entity.attributes.friendly_name;
+          const gameArt =
+            entity.attributes.art_url || entity.attributes.image_url;
+          const username =
+            entity.attributes.username || entity.attributes.user || "Plex";
+          const initial = username.charAt(0).toUpperCase();
+          const badge = { isImage: false, content: initial };
 
-        if (gameName && gameArt) {
-          let existing = active_items.find((i) => i.name === gameName);
-          if (existing) {
-            if (pic && !existing.players.includes(pic))
-              existing.players.push(pic);
-          } else {
-            active_items.push({
-              name: gameName,
-              art: gameArt,
-              players: pic ? [pic] : [],
-            });
+          if (gameName && gameArt) {
+            let existing = active_items.find((i) => i.name === gameName);
+            if (existing) {
+              if (!existing.players.find((p) => p.content === badge.content)) {
+                existing.players.push(badge);
+              }
+            } else {
+              active_items.push({
+                name: gameName,
+                art: gameArt,
+                players: [badge],
+              });
+            }
+          }
+        }
+      } else {
+        const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(
+          state
+        );
+        const isHistory = state.includes("last seen") || state.includes("ago");
+
+        if (!isOffline && !isHistory) {
+          const gameName = entity.attributes.current_game;
+          const gameArt = entity.attributes.game_cover_art;
+          const pic = entity.attributes.entity_picture;
+          const badge = pic ? { isImage: true, content: pic } : null;
+
+          if (gameName && gameArt) {
+            let existing = active_items.find((i) => i.name === gameName);
+            if (existing) {
+              if (
+                badge &&
+                !existing.players.find((p) => p.content === badge.content)
+              ) {
+                existing.players.push(badge);
+              }
+            } else {
+              active_items.push({
+                name: gameName,
+                art: gameArt,
+                players: badge ? [badge] : [],
+              });
+            }
           }
         }
       }
@@ -586,8 +642,12 @@ class GamingSlideshowCard extends HTMLElement {
       if (!this.config.show_avatars || !players || players.length === 0)
         return "";
       let html = `<div style="position: absolute; bottom: 10px; right: 10px; display: flex; z-index: 2;">`;
-      players.forEach((pic) => {
-        html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-image: url('${pic}'); background-size: cover; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;"></div>`;
+      players.forEach((badge) => {
+        if (badge && badge.isImage && badge.content) {
+          html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-image: url('${badge.content}'); background-size: cover; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;"></div>`;
+        } else if (badge && !badge.isImage && badge.content) {
+          html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-color: rgba(30, 30, 30, 0.8); color: white; font-family: sans-serif; font-size: 22px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;">${badge.content}</div>`;
+        }
       });
       html += `</div>`;
       return html;
@@ -688,6 +748,9 @@ class GamingSlideshowCardEditor extends HTMLElement {
           <label style="margin-top: 10px;"><input type="checkbox" .configValue="auto_hide" ${
             this._config.auto_hide !== false ? "checked" : ""
           }> Auto-hide card when empty</label>
+          <label style="margin-top: 10px;"><input type="checkbox" .configValue="include_plex" ${
+            this._config.include_plex === true ? "checked" : ""
+          }> Include Plex/Tautulli Sessions</label>
         </div><hr>
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
