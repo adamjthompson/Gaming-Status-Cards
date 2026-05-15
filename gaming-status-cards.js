@@ -208,7 +208,7 @@ class GamingStatusCard extends HTMLElement {
               ? "1px 1px 2px rgba(0,0,0,0.8)"
               : "none"
           }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; margin-bottom: 2px; }
-          .secondary { font-size: 12px; color: #ddd; text-shadow: ${
+          .secondary { font-size: 12px; color: #ffffff; text-shadow: ${
             this.config.show_text_shadow
               ? "1px 1px 2px rgba(0,0,0,0.8)"
               : "none"
