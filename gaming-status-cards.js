@@ -21,6 +21,7 @@ class GamingStatusCard extends HTMLElement {
       sort_by: "last_online",
       show_badges: true,
       show_text_shadow: true,
+      max_visible_players: "",
       manual_entities: "",
     };
   }
@@ -35,6 +36,7 @@ class GamingStatusCard extends HTMLElement {
       sort_by: config.sort_by || "last_online",
       show_badges: config.show_badges !== false,
       show_text_shadow: config.show_text_shadow !== false,
+      max_visible_players: config.max_visible_players || "",
       manual_entities: config.manual_entities || "",
       ...config,
     };
@@ -170,6 +172,14 @@ class GamingStatusCard extends HTMLElement {
 
   render(data) {
     if (!this.content) {
+      let stackStyle = "";
+      if (this.config.max_visible_players && parseInt(this.config.max_visible_players) > 0) {
+        const maxPlayers = parseInt(this.config.max_visible_players);
+        // Calculate max height: 56px per card (36px avatar + 20px padding) + 8px gap
+        const maxHeight = (56 * maxPlayers) + (8 * (maxPlayers - 1));
+        stackStyle = `max-height: ${maxHeight}px; overflow-y: auto; overflow-x: hidden; padding-right: 4px;`;
+      }
+
       this.shadowRoot.innerHTML = `
         <style>
           :host { display: block; }
@@ -179,6 +189,13 @@ class GamingStatusCard extends HTMLElement {
             display: ${this.config.title ? "block" : "none"};
           }
           .card-stack { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+          
+          /* Custom Scrollbar */
+          .card-stack::-webkit-scrollbar { width: 6px; }
+          .card-stack::-webkit-scrollbar-track { background: transparent; }
+          .card-stack::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, 0.4); border-radius: 3px; }
+          .card-stack::-webkit-scrollbar-thumb:hover { background: rgba(120, 120, 120, 0.8); }
+
           .player-card {
             position: relative; overflow: hidden; border-radius: var(--ha-card-border-radius, 12px);
             background: var(--ha-card-background, var(--card-background-color, #1e1e1e));
@@ -217,7 +234,7 @@ class GamingStatusCard extends HTMLElement {
           .placeholder-avatar { background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
         </style>
         <div class="card-header">${this.config.title}</div>
-        <div id="players-container" class="card-stack"></div>
+        <div id="players-container" class="card-stack" style="${stackStyle}"></div>
       `;
       this.content = this.shadowRoot.getElementById("players-container");
     }
@@ -318,8 +335,8 @@ class GamingStatusCardEditor extends HTMLElement {
       <style>
         .editor-container { display: flex; flex-direction: column; gap: 20px; color: var(--primary-text-color); }
         .section-title { font-weight: 600; margin-bottom: 8px; }
-        input[type="text"] { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
-        input[type="text"]:focus { outline: none; border-color: var(--primary-color); }
+        input[type="text"], input[type="number"] { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
+        input[type="text"]:focus, input[type="number"]:focus { outline: none; border-color: var(--primary-color); }
         .radio-group { display: flex; flex-direction: column; gap: 10px; }
         label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
         hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
@@ -368,6 +385,13 @@ class GamingStatusCardEditor extends HTMLElement {
           }> Show Text Shadow</label>
         </div><hr>
         <div>
+          <div class="section-title">Maximum Visible Players</div>
+          <div class="helper-text">Leave blank to show all players. Enter a number to restrict the visible height and enable a dynamic scrollbar.</div>
+          <input type="number" id="max-players-input" .configValue="max_visible_players" value="${
+            this._config.max_visible_players || ""
+          }" placeholder="e.g. 3" min="1">
+        </div><hr>
+        <div>
           <div class="section-title">Manual Entities (Advanced)</div>
           <div class="helper-text">Leave blank to automatically grab all sensors. To restrict this card to specific people, enter a comma-separated list of exact entity IDs (e.g. <code>sensor.adam_gaming_status, sensor.liv_gaming_status</code>).</div>
           <input type="text" id="manual-entities-input" .configValue="manual_entities" value="${
@@ -380,6 +404,18 @@ class GamingStatusCardEditor extends HTMLElement {
     const titleInput = this.shadowRoot.getElementById("title-input");
     titleInput.addEventListener("change", (ev) => {
       this._config = { ...this._config, title: ev.target.value };
+      this.dispatchEvent(
+        new CustomEvent("config-changed", {
+          detail: { config: this._config },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    });
+
+    const maxPlayersInput = this.shadowRoot.getElementById("max-players-input");
+    maxPlayersInput.addEventListener("change", (ev) => {
+      this._config = { ...this._config, max_visible_players: ev.target.value };
       this.dispatchEvent(
         new CustomEvent("config-changed", {
           detail: { config: this._config },
