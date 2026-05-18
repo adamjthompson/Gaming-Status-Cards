@@ -172,14 +172,6 @@ class GamingStatusCard extends HTMLElement {
 
   render(data) {
     if (!this.content) {
-      let stackStyle = "";
-      if (this.config.max_visible_players && parseInt(this.config.max_visible_players) > 0) {
-        const maxPlayers = parseInt(this.config.max_visible_players);
-        // Calculate max height: 56px per card (36px avatar + 20px padding) + 8px gap
-        const maxHeight = (56 * maxPlayers) + (8 * (maxPlayers - 1));
-        stackStyle = `max-height: ${maxHeight}px; overflow-y: auto; overflow-x: hidden; padding-right: 4px;`;
-      }
-
       this.shadowRoot.innerHTML = `
         <style>
           :host { display: block; }
@@ -188,7 +180,8 @@ class GamingStatusCard extends HTMLElement {
             color: var(--ha-card-header-color, var(--primary-text-color)); padding: 8px 16px 16px;
             display: ${this.config.title ? "block" : "none"};
           }
-          .card-stack { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+          .card-stack { display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; }
+          .card-stack.scrollable { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
           
           /* Custom Scrollbar */
           .card-stack::-webkit-scrollbar { width: 6px; }
@@ -235,9 +228,21 @@ class GamingStatusCard extends HTMLElement {
           .placeholder-avatar { background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
         </style>
         <div class="card-header">${this.config.title}</div>
-        <div id="players-container" class="card-stack" style="${stackStyle}"></div>
+        <div id="players-container" class="card-stack"></div>
       `;
       this.content = this.shadowRoot.getElementById("players-container");
+    }
+
+    // Always re-apply scroll constraints (works on first render and config changes)
+    if (this.config.max_visible_players && parseInt(this.config.max_visible_players) > 0) {
+      const maxPlayers = parseInt(this.config.max_visible_players);
+      // Each card: 36px avatar + 20px padding = 56px, plus 8px gap between cards
+      const maxHeight = (56 * maxPlayers) + (8 * (maxPlayers - 1));
+      this.content.style.maxHeight = `${maxHeight}px`;
+      this.content.classList.add("scrollable");
+    } else {
+      this.content.style.maxHeight = "";
+      this.content.classList.remove("scrollable");
     }
 
     if (data.length === 0) {
