@@ -201,6 +201,7 @@ class GamingStatusCard extends HTMLElement {
             background: var(--ha-card-background, var(--card-background-color, #1e1e1e));
             display: flex; align-items: center; padding: 10px 10px; cursor: pointer; box-sizing: border-box;
             width: 100%; transition: transform 0.2s;
+            flex-shrink: 0; /* Prevents flexbox from squishing the cards */
           }
           .player-card:active { transform: scale(0.98); }
           .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none; }

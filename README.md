@@ -32,6 +32,7 @@ A clean, native-feeling list of your tracked gamers. It dynamically tints the ca
 * **Mode:** Choose who to show. Show everyone, strictly online players, or filter by a specific platform (Steam, Xbox, PlayStation).
 * **Sort By:** Automatically sorts players chronologically by who was `Last Online`. Actively online players are always pinned to the top. Can also be sorted alphabetically by Name or Game Title.
 * **Visibility:** Toggle the platform icon badges and text shadows to fit your dashboard theme.
+* **Maximum Visible Players** Limit how many players will be shown at once before a scrollbar is displayed.
 
 **Online Now**
 ![Currently Playing Card Screenshot](images/playing.png)
