@@ -64,7 +64,7 @@ class GamingStatusCard extends HTMLElement {
       for (const id of entityIds) {
         if (hass.states[id]) {
           rawEntities.push(hass.states[id]);
-          currentHash += hass.states[id].state + hass.states[id].last_changed;
+          currentHash += hass.states[id].state + hass.states[id].last_updated;
         }
       }
     } else {
@@ -73,7 +73,7 @@ class GamingStatusCard extends HTMLElement {
         if (entityId.startsWith("sensor.") && entityId.includes(targetSuffix)) {
           rawEntities.push(hass.states[entityId]);
           currentHash +=
-            hass.states[entityId].state + hass.states[entityId].last_changed;
+            hass.states[entityId].state + hass.states[entityId].last_updated;
         }
       }
     }
@@ -529,7 +529,7 @@ class GamingSlideshowCard extends HTMLElement {
       for (const id of entityIds) {
         if (hass.states[id]) {
           rawEntities.push(hass.states[id]);
-          currentHash += hass.states[id].state + hass.states[id].last_changed;
+          currentHash += hass.states[id].state + hass.states[id].last_updated;
         }
       }
     } else {
@@ -540,7 +540,7 @@ class GamingSlideshowCard extends HTMLElement {
         ) {
           rawEntities.push(hass.states[entityId]);
           currentHash +=
-            hass.states[entityId].state + hass.states[entityId].last_changed;
+            hass.states[entityId].state + hass.states[entityId].last_updated;
         }
       }
     }
@@ -556,7 +556,7 @@ class GamingSlideshowCard extends HTMLElement {
           if (!rawEntities.some((e) => e.entity_id === entityId)) {
             rawEntities.push(hass.states[entityId]);
             currentHash +=
-              hass.states[entityId].state + hass.states[entityId].last_changed;
+              hass.states[entityId].state + hass.states[entityId].last_updated;
           }
         }
       }
