@@ -110,17 +110,17 @@ class GamingStatusCard extends HTMLElement {
       if (this.config.sort_by === "state") return stateA.localeCompare(stateB);
 
       const getValidTime = (entity) => {
-        if (entity.attributes.last_online_valid_timestamp) {
-          return new Date(
-            entity.attributes.last_online_valid_timestamp
-          ).getTime();
+        const isCurrentlyOffline = ["offline", "unavailable", "unknown"].includes(entity.state.toLowerCase());
+
+        if (!isCurrentlyOffline && entity.attributes.play_start_time) {
+          return new Date(entity.attributes.play_start_time).getTime();
         }
-        if (
-          ["offline", "unavailable", "unknown"].includes(
-            entity.state.toLowerCase()
-          )
-        )
-          return 0;
+
+        if (entity.attributes.last_online_valid_timestamp) {
+          return new Date(entity.attributes.last_online_valid_timestamp).getTime();
+        }
+        
+        if (isCurrentlyOffline) return 0;
         return new Date(entity.last_changed).getTime();
       };
 
