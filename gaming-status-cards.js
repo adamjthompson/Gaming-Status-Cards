@@ -68,7 +68,6 @@ class GamingStatusCard extends HTMLElement {
         }
       }
     } else {
-      // Fast loop over keys instead of Object.values
       for (const entityId in hass.states) {
         if (entityId.startsWith("sensor.") && entityId.includes(targetSuffix)) {
           rawEntities.push(hass.states[entityId]);
@@ -78,7 +77,6 @@ class GamingStatusCard extends HTMLElement {
       }
     }
 
-    // Instantly kill the function if our specific entities haven't changed
     if (this._lastHash === currentHash) return;
     this._lastHash = currentHash;
     // -------------------------------------------
@@ -159,7 +157,9 @@ class GamingStatusCard extends HTMLElement {
         state: entity.state,
         secondary: entity.attributes.secondary || "",
         picture: entity.attributes.entity_picture || "",
+        // Look for Hero art first, then Cover art, then avatar
         cover:
+          entity.attributes.game_hero_art ||
           entity.attributes.game_cover_art ||
           entity.attributes.entity_picture ||
           "",
@@ -194,7 +194,7 @@ class GamingStatusCard extends HTMLElement {
             background: var(--ha-card-background, var(--card-background-color, #1e1e1e));
             display: flex; align-items: center; padding: 10px 10px; cursor: pointer; box-sizing: border-box;
             width: 100%; transition: transform 0.2s;
-            flex-shrink: 0; /* Prevents flexbox from squishing the cards */
+            flex-shrink: 0;
           }
           .player-card:active { transform: scale(0.98); }
           .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none; }
@@ -233,10 +233,8 @@ class GamingStatusCard extends HTMLElement {
       this.content = this.shadowRoot.getElementById("players-container");
     }
 
-    // Always re-apply scroll constraints (works on first render and config changes)
     if (this.config.max_visible_players && parseInt(this.config.max_visible_players) > 0) {
       const maxPlayers = parseInt(this.config.max_visible_players);
-      // Each card: 36px avatar + 20px padding = 56px, plus 8px gap between cards
       const maxHeight = (56 * maxPlayers) + (8 * (maxPlayers - 1));
       this.content.style.maxHeight = `${maxHeight}px`;
       this.content.classList.add("scrollable");
@@ -485,7 +483,8 @@ class GamingSlideshowCard extends HTMLElement {
 
   static getStubConfig() {
     return {
-      aspect_ratio: "3840/1240",
+      aspect_ratio: "",
+      artwork_type: "hero",
       time_per_slide: 5,
       transition_time: 1,
       show_avatars: true,
@@ -498,7 +497,8 @@ class GamingSlideshowCard extends HTMLElement {
 
   setConfig(config) {
     this.config = {
-      aspect_ratio: config.aspect_ratio || "3840/1240",
+      aspect_ratio: config.aspect_ratio !== undefined ? config.aspect_ratio : "",
+      artwork_type: config.artwork_type || "hero",
       time_per_slide:
         config.time_per_slide !== undefined ? config.time_per_slide : 5,
       transition_time:
@@ -545,14 +545,12 @@ class GamingSlideshowCard extends HTMLElement {
       }
     }
 
-    // Add Plex/Tautulli sensors to the processing pool if enabled
     if (this.config.include_plex) {
       for (const entityId in hass.states) {
         if (
           entityId.startsWith("sensor.plex_session_") &&
           entityId.includes("_tautulli")
         ) {
-          // Prevent duplicates if user manually specified them
           if (!rawEntities.some((e) => e.entity_id === entityId)) {
             rawEntities.push(hass.states[entityId]);
             currentHash +=
@@ -567,8 +565,21 @@ class GamingSlideshowCard extends HTMLElement {
     // -------------------------------------------
 
     const processedData = this.processData(rawEntities);
-
     this.render(processedData);
+  }
+
+  // --- SMART ASPECT RATIO CALCULATION ---
+  getEffectiveAspectRatio() {
+    if (this.config.aspect_ratio && String(this.config.aspect_ratio).trim() !== "") {
+      return this.config.aspect_ratio;
+    }
+    switch(this.config.artwork_type) {
+      case "cover": return "600/900"; // Grid
+      case "logo": return "16/9";
+      case "icon": return "1/1";
+      case "hero":
+      default: return "3840/1240";
+    }
   }
 
   processData(entities) {
@@ -606,14 +617,24 @@ class GamingSlideshowCard extends HTMLElement {
           }
         }
       } else {
-        const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(
-          state
-        );
+        const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(state);
         const isHistory = state.includes("last seen") || state.includes("ago");
 
         if (!isOffline && !isHistory) {
           const gameName = entity.attributes.current_game;
-          const gameArt = entity.attributes.game_cover_art;
+          
+          // Select the correct artwork based on user preference
+          let gameArt = null;
+          if (this.config.artwork_type === "cover") gameArt = entity.attributes.game_cover_art;
+          else if (this.config.artwork_type === "logo") gameArt = entity.attributes.game_logo_art;
+          else if (this.config.artwork_type === "icon") gameArt = entity.attributes.game_icon_art;
+          else gameArt = entity.attributes.game_hero_art;
+
+          // Safe fallback if the requested image type is missing from the sensor
+          if (!gameArt) {
+            gameArt = entity.attributes.game_hero_art || entity.attributes.game_cover_art;
+          }
+
           const pic = entity.attributes.entity_picture;
           const badge = pic ? { isImage: true, content: pic } : null;
 
@@ -641,6 +662,8 @@ class GamingSlideshowCard extends HTMLElement {
   }
 
   render(data) {
+    const activeAspectRatio = this.getEffectiveAspectRatio();
+
     if (data.length === 0) {
       if (this.config.auto_hide) {
         this.style.display = "none";
@@ -651,13 +674,13 @@ class GamingSlideshowCard extends HTMLElement {
         if (!this.content) {
           this.shadowRoot.innerHTML = `
             <ha-card id="slideshow-container" style="
-              width: 100%; aspect-ratio: ${this.config.aspect_ratio}; border-radius: var(--ha-card-border-radius, 12px); 
+              width: 100%; border-radius: var(--ha-card-border-radius, 12px); 
               position: relative; overflow: hidden; box-shadow: var(--ha-card-box-shadow, 0px 5px 15px rgba(0,0,0,0.5));
               background: var(--card-background-color, #1e1e1e);
             "></ha-card>`;
           this.content = this.shadowRoot.getElementById("slideshow-container");
         }
-        this.content.style.aspectRatio = this.config.aspect_ratio;
+        this.content.style.aspectRatio = activeAspectRatio;
         this.content.innerHTML = `
           <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.2); color: var(--secondary-text-color, #888);">
             <ha-icon icon="mdi:gamepad-variant-outline" style="width: 48px; height: 48px; opacity: 0.5; margin-bottom: 8px;"></ha-icon>
@@ -672,13 +695,19 @@ class GamingSlideshowCard extends HTMLElement {
     if (!this.content) {
       this.shadowRoot.innerHTML = `
         <ha-card id="slideshow-container" style="
-          width: 100%; aspect-ratio: ${this.config.aspect_ratio}; border-radius: var(--ha-card-border-radius, 12px); 
+          width: 100%; border-radius: var(--ha-card-border-radius, 12px); 
           position: relative; overflow: hidden; box-shadow: var(--ha-card-box-shadow, 0px 5px 15px rgba(0,0,0,0.5));
           background: #000;
         "></ha-card>`;
       this.content = this.shadowRoot.getElementById("slideshow-container");
     }
-    this.content.style.aspectRatio = this.config.aspect_ratio;
+    
+    this.content.style.aspectRatio = activeAspectRatio;
+
+    // --- SMART IMAGE SCALING ---
+    // If it's a Logo or Icon, we use 'contain' so it doesn't stretch or distort.
+    const bgSize = (this.config.artwork_type === "logo" || this.config.artwork_type === "icon") ? "contain" : "cover";
+    const bgRepeat = "no-repeat";
 
     const getAvatarHtml = (players) => {
       if (!this.config.show_avatars || !players || players.length === 0)
@@ -697,9 +726,7 @@ class GamingSlideshowCard extends HTMLElement {
 
     if (data.length === 1) {
       this.content.innerHTML = `
-        <div style="width: 100%; height: 100%; background-image: url('${
-          data[0].art
-        }'); background-size: cover; background-position: center;"></div>
+        <div style="width: 100%; height: 100%; background-image: url('${data[0].art}'); background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
         ${getAvatarHtml(data[0].players)}
       `;
       return;
@@ -729,9 +756,7 @@ class GamingSlideshowCard extends HTMLElement {
       const delay = index * t_slide;
       html += `
         <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; animation: ${anim_name} ${loop_duration}s infinite; animation-delay: ${delay}s;">
-          <div style="width: 100%; height: 100%; background-image: url('${
-            g.art
-          }'); background-size: cover; background-position: center;"></div>
+          <div style="width: 100%; height: 100%; background-image: url('${g.art}'); background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
           ${getAvatarHtml(g.players)}
         </div>`;
     });
@@ -762,16 +787,32 @@ class GamingSlideshowCardEditor extends HTMLElement {
       <style>
         .editor-container { display: flex; flex-direction: column; gap: 20px; color: var(--primary-text-color); }
         .section-title { font-weight: 600; margin-bottom: 8px; }
-        input[type="text"], input[type="number"] { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
-        input:focus { outline: none; border-color: var(--primary-color); }
+        input[type="text"], input[type="number"], select { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
+        input:focus, select:focus { outline: none; border-color: var(--primary-color); }
         label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
         hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
         .helper-text { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 8px; line-height: 1.4; }
       </style>
       <div class="editor-container">
-        <div><div class="section-title">Aspect Ratio</div><input type="text" id="aspect-input" .configValue="aspect_ratio" value="${
-          this._config.aspect_ratio || "3840/1240"
-        }" placeholder="e.g. 3840/1240 or 16/9"></div>
+        
+        <div>
+          <div class="section-title">Artwork Type</div>
+          <select id="artwork-type-input" .configValue="artwork_type">
+            <option value="hero" ${this._config.artwork_type === "hero" || !this._config.artwork_type ? "selected" : ""}>Hero (Horizontal Landscape)</option>
+            <option value="cover" ${this._config.artwork_type === "cover" ? "selected" : ""}>Cover/Grid (Vertical Portrait)</option>
+            <option value="logo" ${this._config.artwork_type === "logo" ? "selected" : ""}>Logo (Transparent Title)</option>
+            <option value="icon" ${this._config.artwork_type === "icon" ? "selected" : ""}>Icon (Small Square)</option>
+          </select>
+        </div>
+
+        <div>
+          <div class="section-title">Aspect Ratio Override</div>
+          <div class="helper-text">Leave blank to automatically use the default ratio for your selected artwork style.</div>
+          <input type="text" id="aspect-input" .configValue="aspect_ratio" value="${
+            this._config.aspect_ratio || ""
+          }" placeholder="e.g. 16/9">
+        </div>
+
         <div><div class="section-title">Time Per Slide (Seconds)</div><input type="number" id="time-input" .configValue="time_per_slide" value="${
           this._config.time_per_slide !== undefined
             ? this._config.time_per_slide
@@ -804,6 +845,18 @@ class GamingSlideshowCardEditor extends HTMLElement {
       </div>
     `;
 
+    const typeInput = this.shadowRoot.getElementById("artwork-type-input");
+    typeInput.addEventListener("change", (ev) => {
+      this._config = { ...this._config, artwork_type: ev.target.value };
+      this.dispatchEvent(
+        new CustomEvent("config-changed", {
+          detail: { config: this._config },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    });
+
     const aspectInput = this.shadowRoot.getElementById("aspect-input");
     aspectInput.addEventListener("change", (ev) => {
       this._config = { ...this._config, aspect_ratio: ev.target.value };
@@ -815,6 +868,7 @@ class GamingSlideshowCardEditor extends HTMLElement {
         })
       );
     });
+
     const timeInput = this.shadowRoot.getElementById("time-input");
     timeInput.addEventListener("change", (ev) => {
       this._config = {
@@ -829,6 +883,7 @@ class GamingSlideshowCardEditor extends HTMLElement {
         })
       );
     });
+
     const transInput = this.shadowRoot.getElementById("transition-input");
     transInput.addEventListener("change", (ev) => {
       this._config = {
@@ -843,6 +898,7 @@ class GamingSlideshowCardEditor extends HTMLElement {
         })
       );
     });
+
     const manualInput = this.shadowRoot.getElementById(
       "manual-entities-input-slide"
     );
