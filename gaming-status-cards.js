@@ -157,12 +157,9 @@ class GamingStatusCard extends HTMLElement {
         state: entity.state,
         secondary: entity.attributes.secondary || "",
         picture: entity.attributes.entity_picture || "",
-        // Look for Hero art first, then Cover art, then avatar
-        cover:
-          entity.attributes.game_hero_art ||
-          entity.attributes.game_cover_art ||
-          entity.attributes.entity_picture ||
-          "",
+        cover: isOffline 
+            ? (entity.attributes.entity_picture || "")
+            : (entity.attributes.game_hero_art || entity.attributes.entity_picture || ""),        
         platformColor,
         badgeIcon,
         isOffline,
