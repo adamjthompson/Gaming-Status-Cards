@@ -741,18 +741,24 @@ class GamingSlideshowCard extends HTMLElement {
 
     let html = `<style>
       @keyframes ${anim_name} {
-        0% { opacity: 0; }
-        ${pct_fade}% { opacity: 1; }
-        ${pct_fade + pct_visible}% { opacity: 1; }
-        ${pct_fade + pct_visible + pct_fade}% { opacity: 0; }
-        100% { opacity: 0; }
+        0% { opacity: 0; z-index: 2; }
+        ${pct_fade}% { opacity: 1; z-index: 2; }
+        ${pct_fade + pct_visible}% { opacity: 1; z-index: 2; }
+        ${pct_fade + pct_visible + 0.001}% { opacity: 1; z-index: 1; }
+        ${pct_fade + pct_visible + pct_fade}% { opacity: 1; z-index: 1; }
+        ${pct_fade + pct_visible + pct_fade + 0.001}% { opacity: 0; z-index: 0; }
+        100% { opacity: 0; z-index: 0; }
       }
     </style>`;
 
     data.forEach((g, index) => {
       const delay = index * t_slide;
       html += `
-        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; animation: ${anim_name} ${loop_duration}s infinite; animation-delay: ${delay}s;">
+        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; 
+          will-change: opacity, z-index; 
+          transform: translateZ(0); 
+          backface-visibility: hidden;
+          animation: ${anim_name} ${loop_duration}s infinite; animation-delay: ${delay}s;">
           <div style="width: 100%; height: 100%; background-image: url('${g.art}'); background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
           ${getAvatarHtml(g.players)}
         </div>`;
