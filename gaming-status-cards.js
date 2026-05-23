@@ -1361,6 +1361,247 @@ class GamingStatusDonutEditor extends HTMLElement {
 }
 
 // ====================================================================
+// ====================================================================
+// CARD 5: GAMING STATUS - LEADERBOARD
+// ====================================================================
+// ====================================================================
+
+class GamingStatusLeaderboardCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this.chart = null;
+  }
+
+  static getConfigElement() {
+    return document.createElement("gaming-status-leaderboard-editor");
+  }
+
+  static getStubConfig() {
+    return {
+      title: "Gaming Leaderboard",
+      metric: "hours",
+      max_players: "3",
+      entities_pattern: "_gaming_status"
+    };
+  }
+
+  setConfig(config) {
+    this.config = {
+      title: config.title || "Gaming Leaderboard",
+      metric: config.metric || "hours",
+      max_players: config.max_players || "3",
+      entities_pattern: config.entities_pattern || "_gaming_status",
+      ...config
+    };
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    
+    if (!this.content) {
+      this.shadowRoot.innerHTML = `
+        <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
+          <div id="card-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: ${this.config.title ? "block" : "none"};">${this.config.title}</div>
+          <div id="chart-container" style="width: 100%;"></div>
+        </ha-card>
+      `;
+      this.content = this.shadowRoot.getElementById("chart-container");
+    }
+
+    this.updateChart();
+  }
+
+  updateChart() {
+    if (!this._hass || !this.content) return;
+
+    if (!window.ApexCharts) {
+      this.content.innerHTML = `<div style="color: red; padding: 10px;">ApexCharts library not found. Ensure apexcharts-card is installed via HACS.</div>`;
+      return;
+    }
+
+    // 1. Gather and Parse Player Data
+    const targetSuffix = this.config.entities_pattern;
+    const playersData = [];
+
+    for (const entityId in this._hass.states) {
+      if (entityId.startsWith("sensor.") && entityId.endsWith(targetSuffix)) {
+        const stateObj = this._hass.states[entityId];
+        if (!stateObj) continue;
+
+        const friendlyName = (stateObj.attributes.friendly_name || entityId)
+          .replace(/ Gaming Status/gi, "");
+
+        // Metric Extractors
+        const hours = parseFloat(stateObj.attributes.total_weekly_hours) || 0;
+        
+        const breakdown = stateObj.attributes.weekly_breakdown || {};
+        const gamesCount = Object.keys(breakdown).length;
+
+        const longestStr = stateObj.attributes.longest_session || "None";
+        let longestMinutes = 0;
+        const hMatch = longestStr.match(/(\d+)\s*h/);
+        const mMatch = longestStr.match(/(\d+)\s*m/);
+        if (hMatch) longestMinutes += parseInt(hMatch[1]) * 60;
+        if (mMatch) longestMinutes += parseInt(mMatch[1]);
+
+        playersData.push({
+          name: friendlyName,
+          hours: hours,
+          gamesCount: gamesCount,
+          longestMinutes: longestMinutes,
+          longestStr: longestStr,
+        });
+      }
+    }
+
+    // 2. Sort Data Based on Chosen Metric
+    if (this.config.metric === "hours") {
+      playersData.sort((a, b) => b.hours - a.hours);
+    } else if (this.config.metric === "games") {
+      playersData.sort((a, b) => b.gamesCount - a.gamesCount);
+    } else if (this.config.metric === "longest") {
+      playersData.sort((a, b) => b.longestMinutes - a.longestMinutes);
+    }
+
+    // 3. Truncate to Top X Players
+    const limit = parseInt(this.config.max_players) || 3;
+    const finalData = playersData.slice(0, limit);
+
+    // 4. Map to ApexCharts Series Arrays
+    const categories = finalData.map(p => p.name);
+    let seriesData = [];
+    let yAxisTitle = "";
+
+    if (this.config.metric === "hours") {
+      seriesData = finalData.map(p => p.hours);
+      yAxisTitle = "Hours";
+    } else if (this.config.metric === "games") {
+      seriesData = finalData.map(p => p.gamesCount);
+      yAxisTitle = "Games";
+    } else if (this.config.metric === "longest") {
+      seriesData = finalData.map(p => parseFloat((p.longestMinutes / 60).toFixed(2)));
+      yAxisTitle = "Hours";
+    }
+
+    // 5. Build/Update native ApexCharts Configuration
+    const chartOptions = {
+      chart: {
+        type: 'bar',
+        height: finalData.length * 50 + 70, // Dynamically scales layout size based on row counts
+        fontFamily: 'var(--primary-font-family)',
+        toolbar: { show: false },
+        animations: { enabled: true, speed: 400 }
+      },
+      plotOptions: {
+        bar: {
+          horizontal: true,
+          distributed: true, // Assigns unique color to each bar line item
+          barHeight: '70%',
+          borderRadius: 4,
+          dataLabels: { position: 'end' }
+        }
+      },
+      colors: ['#02adef', '#0b7c10', '#003087', '#643264', '#fb5607', '#ffbe0b'],
+      dataLabels: {
+        enabled: true,
+        textAnchor: 'end',
+        offsetX: -10,
+        style: { fontSize: '14px', colors: ['#fff'] },
+        formatter: (val, opts) => {
+          if (this.config.metric === "longest") {
+            return finalData[opts.dataPointIndex].longestStr.replace(/.*?\((.*?)\)/, '$1');
+          }
+          return this.config.metric === "hours" ? `${val}h` : `${val} Games`;
+        }
+      },
+      xaxis: {
+        categories: categories,
+        labels: { show: true, style: { colors: 'var(--secondary-text-color)' } },
+        axisBorder: { show: false },
+        axisTicks: { show: false }
+      },
+      yaxis: {
+        labels: { show: true, style: { fontSize: '14px', colors: 'var(--primary-text-color)' } }
+      },
+      grid: {
+        show: true,
+        borderColor: 'var(--divider-color)',
+        strokeDashArray: 4,
+        padding: { left: 10, right: 10, top: 0, bottom: 0 }
+      },
+      legend: { show: false },
+      tooltip: {
+        theme: 'dark',
+        custom: (opts) => {
+          const p = finalData[opts.dataPointIndex];
+          if (this.config.metric === "longest") {
+            return `<div style="padding: 8px; background: #222; border: 1px solid #444;"><strong>${p.name}</strong><br/>Longest: ${p.longestStr}</div>`;
+          }
+          return `<div style="padding: 8px; background: #222; border: 1px solid #444;"><strong>${p.name}</strong><br/>${yAxisTitle}: ${opts.series[opts.seriesIndex][opts.dataPointIndex]}</div>`;
+        }
+      }
+    };
+
+    // 6. Smooth Live Redrawing Logic
+    if (!this.chart) {
+      this.chart = new window.ApexCharts(this.content, chartOptions);
+      this.chart.render();
+    } else {
+      this.chart.updateOptions(chartOptions);
+    }
+  }
+
+  getCardSize() {
+    return 4;
+  }
+}
+
+class GamingStatusLeaderboardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+  }
+  setConfig(config) { this._config = config; this.render(); }
+  set hass(hass) { this._hass = hass; }
+
+  render() {
+    this.shadowRoot.innerHTML = `
+      <style>
+        .container { display: flex; flex-direction: column; gap: 15px; color: var(--primary-text-color); }
+        select, input { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
+        label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; }
+      </style>
+      <div class="container">
+        <label>Card Title:
+          <input type="text" id="title" .configValue="title" value="${this._config.title || ''}">
+        </label>
+        
+        <label>Leaderboard Metric:
+          <select id="metric" .configValue="metric">
+            <option value="hours" ${this._config.metric === 'hours' ? 'selected' : ''}>Most Played Hours (Weekly)</option>
+            <option value="longest" ${this._config.metric === 'longest' ? 'selected' : ''}>Longest Gaming Session</option>
+            <option value="games" ${this._config.metric === 'games' ? 'selected' : ''}>Most Different Games Played</option>
+          </select>
+        </label>
+
+        <label>Max Players to Display:
+          <input type="number" id="max_players" .configValue="max_players" value="${this._config.max_players || '3'}" min="1" max="10">
+        </label>
+      </div>
+    `;
+
+    this.shadowRoot.querySelectorAll('input, select').forEach(el => {
+      el.addEventListener('change', e => {
+        const field = e.target.getAttribute('.configValue');
+        this._config = { ...this._config, [field]: e.target.value };
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+      });
+    });
+  }
+}
+
+// ====================================================================
 // REGISTRATION
 // ====================================================================
 
@@ -1382,6 +1623,10 @@ customElements.define("gaming-status-chart-editor", GamingStatusChartEditor);
 // Card 4
 customElements.define("gaming-status-donut-card", GamingStatusDonutCard);
 customElements.define("gaming-status-donut-editor", GamingStatusDonutEditor);
+
+// Card 5
+customElements.define("gaming-status-leaderboard-card", GamingStatusLeaderboardCard);
+customElements.define("gaming-status-leaderboard-editor", GamingStatusLeaderboardEditor);
 
 // Inject into UI
 window.customCards = window.customCards || [];
@@ -1416,3 +1661,9 @@ window.customCards.push({
   description: "Aggregated or single-player donut chart for gaming platform stats."
 });
 
+window.customCards.push({
+  type: "gaming-status-leaderboard-card",
+  name: "Gaming Status - Leaderboard",
+  preview: true,
+  description: "A dynamic standalone bar graph ranking the top players across chosen metrics."
+});
