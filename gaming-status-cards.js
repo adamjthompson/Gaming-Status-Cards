@@ -1362,7 +1362,7 @@ class GamingStatusDonutEditor extends HTMLElement {
 
 // ====================================================================
 // ====================================================================
-// CARD 5: GAMING STATUS - LEADERBOARD
+// CARD 5: GAMING STATUS - LEADERBOARD (Native UI)
 // ====================================================================
 // ====================================================================
 
@@ -1370,7 +1370,6 @@ class GamingStatusLeaderboardCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this.chart = null;
   }
 
   static getConfigElement() {
@@ -1415,27 +1414,41 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       this.content = this.shadowRoot.getElementById("chart-container");
     }
 
-    this.updateChart();
+    this.updateLeaderboard();
   }
 
-  updateChart() {
+  // Helper to convert strings like "1h 14m" into total minutes for math
+  extractMinutes(timeStr) {
+    if (!timeStr || timeStr === "None") return 0;
+    let m = 0;
+    const hMatch = timeStr.match(/(\d+)\s*h/);
+    const mMatch = timeStr.match(/(\d+)\s*m/);
+    if (hMatch) m += parseInt(hMatch[1]) * 60;
+    if (mMatch) m += parseInt(mMatch[1]);
+    return m;
+  }
+
+  // Helper to convert minutes back to readable format
+  formatMinutes(totalMins) {
+    if (totalMins === 0) return "0m";
+    const h = Math.floor(totalMins / 60);
+    const m = Math.floor(totalMins % 60);
+    if (h > 0 && m > 0) return `${h}h ${m}m`;
+    if (h > 0) return `${h}h`;
+    return `${m}m`;
+  }
+
+  updateLeaderboard() {
     if (!this._hass || !this.content) return;
 
-    if (!window.ApexCharts) {
-      this.content.innerHTML = `<div style="color: red; padding: 10px;">ApexCharts library not found. Ensure apexcharts-card is installed via HACS.</div>`;
-      return;
-    }
-
-    // 1. Determine which entities to process based on chosen Mode
+    // 1. Determine which entities to process
     let entityIdsToProcess = [];
-    
     if (this.config.mode === "single" && this.config.single_entity) {
-      entityIdsToProcess.push(this.config.single_entity);
+      if (this._hass.states[this.config.single_entity]) entityIdsToProcess.push(this.config.single_entity);
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
-      entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim());
+      entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => this._hass.states[e]);
     } else {
-      // Default to "All" mode
-      const targetSuffix = this.config.entities_pattern;
+      const targetSuffix = this.config.entities_pattern || "_gaming_status";
       for (const key in this._hass.states) {
         if (key.startsWith("sensor.") && key.endsWith(targetSuffix)) {
           entityIdsToProcess.push(key);
@@ -1443,139 +1456,93 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       }
     }
 
-    // 2. Gather Data for those specific entities
-    const playersData = [];
+    let finalData = [];
 
-    for (const entityId of entityIdsToProcess) {
-      const stateObj = this._hass.states[entityId];
-      if (!stateObj) continue;
+    // 2. Process Data based on chosen metric
+    if (this.config.metric === "game_hours") {
+      // PIVOT: Rank Games instead of Players
+      let gamesMap = {};
+      for (const entityId of entityIdsToProcess) {
+        const stateObj = this._hass.states[entityId];
+        const breakdown = stateObj.attributes.weekly_breakdown || {};
+        for (const [game, timeStr] of Object.entries(breakdown)) {
+          gamesMap[game] = (gamesMap[game] || 0) + this.extractMinutes(timeStr);
+        }
+      }
+      for (const [game, mins] of Object.entries(gamesMap)) {
+        finalData.push({
+          name: game,
+          value: mins,
+          displayValue: this.formatMinutes(mins)
+        });
+      }
+    } else {
+      // STANDARD: Rank Players
+      for (const entityId of entityIdsToProcess) {
+        const stateObj = this._hass.states[entityId];
+        const friendlyName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status/gi, "");
 
-      const friendlyName = (stateObj.attributes.friendly_name || entityId)
-        .replace(/ Gaming Status/gi, "");
-
-      const hours = parseFloat(stateObj.attributes.total_weekly_hours) || 0;
-      const breakdown = stateObj.attributes.weekly_breakdown || {};
-      const gamesCount = Object.keys(breakdown).length;
-
-      const longestStr = stateObj.attributes.longest_session || "None";
-      let longestMinutes = 0;
-      const hMatch = longestStr.match(/(\d+)\s*h/);
-      const mMatch = longestStr.match(/(\d+)\s*m/);
-      if (hMatch) longestMinutes += parseInt(hMatch[1]) * 60;
-      if (mMatch) longestMinutes += parseInt(mMatch[1]);
-
-      playersData.push({
-        name: friendlyName,
-        hours: hours,
-        gamesCount: gamesCount,
-        longestMinutes: longestMinutes,
-        longestStr: longestStr,
-      });
+        if (this.config.metric === "hours") {
+          const hours = parseFloat(stateObj.attributes.total_weekly_hours) || 0;
+          finalData.push({ name: friendlyName, value: hours, displayValue: `${hours}h` });
+        } 
+        else if (this.config.metric === "games") {
+          const breakdown = stateObj.attributes.weekly_breakdown || {};
+          const count = Object.keys(breakdown).length;
+          finalData.push({ name: friendlyName, value: count, displayValue: `${count}` });
+        } 
+        else if (this.config.metric === "longest") {
+          const longestStr = stateObj.attributes.longest_session || "None";
+          const mins = this.extractMinutes(longestStr);
+          finalData.push({ name: friendlyName, value: mins, displayValue: longestStr });
+        }
+      }
     }
 
-    // 3. Sort Data Based on Chosen Metric
-    if (this.config.metric === "hours") {
-      playersData.sort((a, b) => b.hours - a.hours);
-    } else if (this.config.metric === "games") {
-      playersData.sort((a, b) => b.gamesCount - a.gamesCount);
-    } else if (this.config.metric === "longest") {
-      playersData.sort((a, b) => b.longestMinutes - a.longestMinutes);
-    }
-
-    // 4. Truncate to Top X Players
+    // 3. Sort, Slice, and Calculate Max
+    finalData.sort((a, b) => b.value - a.value);
     const limit = parseInt(this.config.max_players) || 3;
-    const finalData = playersData.slice(0, limit);
+    finalData = finalData.slice(0, limit);
 
-    if (finalData.length === 0) {
-      this.content.innerHTML = `<div style="padding: 10px; color: var(--secondary-text-color);">No player data available for this selection.</div>`;
-      if (this.chart) { this.chart.destroy(); this.chart = null; }
+    if (finalData.length === 0 || finalData.every(d => d.value === 0)) {
+      this.content.innerHTML = `<div style="padding: 10px; color: var(--secondary-text-color); font-style: italic;">No activity to display.</div>`;
       return;
     }
 
-    // 5. Map to ApexCharts Series Arrays
-    const categories = finalData.map(p => p.name);
-    let seriesData = [];
-    let yAxisTitle = "";
+    // Find highest value to scale the CSS bars
+    const maxValue = Math.max(...finalData.map(d => d.value));
 
-    if (this.config.metric === "hours") {
-      seriesData = finalData.map(p => p.hours);
-      yAxisTitle = "Hours";
-    } else if (this.config.metric === "games") {
-      seriesData = finalData.map(p => p.gamesCount);
-      yAxisTitle = "Games";
-    } else if (this.config.metric === "longest") {
-      seriesData = finalData.map(p => parseFloat((p.longestMinutes / 60).toFixed(2)));
-      yAxisTitle = "Hours";
-    }
-
-    // 6. Build/Update native ApexCharts Configuration
-    const chartOptions = {
-      chart: {
-        type: 'bar',
-        height: finalData.length * 50 + 70,
-        fontFamily: 'var(--primary-font-family)',
-        toolbar: { show: false },
-        animations: { enabled: true, speed: 400 }
-      },
-      series: [{ name: yAxisTitle, data: seriesData }],
-      plotOptions: {
-        bar: {
-          horizontal: true,
-          distributed: true,
-          barHeight: '70%',
-          borderRadius: 4,
-          dataLabels: { position: 'end' }
-        }
-      },
-      colors: ['#02adef', '#0b7c10', '#003087', '#643264', '#fb5607', '#ffbe0b'],
-      dataLabels: {
-        enabled: true,
-        textAnchor: 'end',
-        offsetX: -10,
-        style: { fontSize: '14px', colors: ['#fff'] },
-        formatter: (val, opts) => {
-          if (this.config.metric === "longest") {
-            return finalData[opts.dataPointIndex].longestStr.replace(/.*?\((.*?)\)/, '$1');
-          }
-          return this.config.metric === "hours" ? `${val}h` : `${val} Games`;
-        }
-      },
-      xaxis: {
-        categories: categories,
-        labels: { show: true, style: { colors: 'var(--secondary-text-color)' } },
-        axisBorder: { show: false },
-        axisTicks: { show: false }
-      },
-      yaxis: {
-        labels: { show: true, style: { fontSize: '14px', colors: 'var(--primary-text-color)' } }
-      },
-      grid: {
-        show: true,
-        borderColor: 'var(--divider-color)',
-        strokeDashArray: 4,
-        padding: { left: 10, right: 10, top: 0, bottom: 0 }
-      },
-      legend: { show: false },
-      tooltip: {
-        theme: 'dark',
-        custom: (opts) => {
-          const p = finalData[opts.dataPointIndex];
-          if (this.config.metric === "longest") {
-            return `<div style="padding: 8px; background: #222; border: 1px solid #444;"><strong>${p.name}</strong><br/>Longest: ${p.longestStr}</div>`;
-          }
-          return `<div style="padding: 8px; background: #222; border: 1px solid #444;"><strong>${p.name}</strong><br/>${yAxisTitle}: ${opts.series[opts.seriesIndex][opts.dataPointIndex]}</div>`;
-        }
-      }
-    };
-
-    // 7. Smooth Live Redrawing Logic
-    if (!this.chart) {
-      this.content.innerHTML = ""; // Clear any previous 'no data' messages
-      this.chart = new window.ApexCharts(this.content, chartOptions);
-      this.chart.render();
-    } else {
-      this.chart.updateOptions(chartOptions);
-    }
+    // 4. Render HTML Bars
+    const colors = ['#02adef', '#0b7c10', '#003087', '#643264', '#fb5607', '#ffbe0b'];
+    
+    let html = `<div style="display: flex; flex-direction: column; gap: 14px; margin-top: 8px;">`;
+    
+    finalData.forEach((item, index) => {
+      // Ensure bar has at least a 2% sliver so it's visible even if small
+      const pct = maxValue > 0 ? Math.max((item.value / maxValue) * 100, 2) : 0;
+      const color = colors[index % colors.length];
+      
+      html += `
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;">
+          
+          <div style="width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 500; color: var(--primary-text-color);">
+            ${item.name}
+          </div>
+          
+          <div style="flex-grow: 1; height: 20px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); border-radius: 4px; position: relative; overflow: hidden;">
+            <div style="width: ${pct}%; height: 100%; background: ${color}; border-radius: 4px; transition: width 0.5s ease-out;"></div>
+          </div>
+          
+          <div style="width: 100px; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            ${item.displayValue}
+          </div>
+          
+        </div>
+      `;
+    });
+    
+    html += `</div>`;
+    this.content.innerHTML = html;
   }
 
   getCardSize() { return 4; }
@@ -1592,13 +1559,14 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
   render() {
     if (!this._hass) return;
 
-    // Filter states for your specific gaming sensors to populate the dropdown
+    // Filter states and dynamically strip "Gaming Status" from dropdown labels
     const targetSuffix = this._config.entities_pattern || "_gaming_status";
     const entityOptions = Object.keys(this._hass.states)
       .filter(key => key.endsWith(targetSuffix))
       .map(key => {
-        const friendlyName = this._hass.states[key].attributes.friendly_name || key;
-        return `<option value="${key}" ${this._config.single_entity === key ? 'selected' : ''}>${friendlyName}</option>`;
+        const rawName = this._hass.states[key].attributes.friendly_name || key;
+        const cleanName = rawName.replace(/ Gaming Status/gi, "");
+        return `<option value="${key}" ${this._config.single_entity === key ? 'selected' : ''}>${cleanName}</option>`;
       }).join('');
 
     this.shadowRoot.innerHTML = `
@@ -1615,15 +1583,16 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         
         <label>Leaderboard Metric:
           <select id="metric" .configValue="metric">
-            <option value="hours" ${this._config.metric === 'hours' ? 'selected' : ''}>Most Played Hours (Weekly)</option>
-            <option value="longest" ${this._config.metric === 'longest' ? 'selected' : ''}>Longest Gaming Session</option>
-            <option value="games" ${this._config.metric === 'games' ? 'selected' : ''}>Most Different Games Played</option>
+            <option value="hours" ${this._config.metric === 'hours' ? 'selected' : ''}>Top Players: Most Played Hours (Weekly)</option>
+            <option value="longest" ${this._config.metric === 'longest' ? 'selected' : ''}>Top Players: Longest Gaming Session</option>
+            <option value="games" ${this._config.metric === 'games' ? 'selected' : ''}>Top Players: Most Different Games Played</option>
+            <option value="game_hours" ${this._config.metric === 'game_hours' ? 'selected' : ''}>Top Games: Hours Per Game (Aggregate)</option>
           </select>
         </label>
 
-        <label>Player Mode:
+        <label>Player Filter Mode:
           <select id="mode" .configValue="mode">
-            <option value="all" ${this._config.mode === 'all' || !this._config.mode ? 'selected' : ''}>All Players</option>
+            <option value="all" ${this._config.mode === 'all' || !this._config.mode ? 'selected' : ''}>All Tracked Players</option>
             <option value="single" ${this._config.mode === 'single' ? 'selected' : ''}>Single Player</option>
             <option value="selected" ${this._config.mode === 'selected' ? 'selected' : ''}>Selected Players</option>
           </select>
@@ -1640,19 +1609,18 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
         <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.adam_gaming_status, sensor.liv_gaming_status">
-            <span class="helper-text">Enter a comma-separated list of entity IDs.</span>
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.adam_gaming_status, ...">
+            <span class="helper-text">Enter a comma-separated list of exact entity IDs.</span>
           </label>
         </div>
 
-        <label>Max Players to Display:
-          <input type="number" id="max_players" .configValue="max_players" value="${this._config.max_players || '3'}" min="1" max="10">
+        <label>Items to Display (Rows):
+          <input type="number" id="max_players" .configValue="max_players" value="${this._config.max_players || '3'}" min="1" max="20">
         </label>
       </div>
     `;
 
     // Manage visibility toggles and config saves
-    const modeSelect = this.shadowRoot.getElementById('mode');
     const singleSelector = this.shadowRoot.getElementById('single-selector');
     const selectedSelector = this.shadowRoot.getElementById('selected-selector');
 
@@ -1674,6 +1642,17 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
     });
   }
 }
+
+// Register Cards
+customElements.define("gaming-status-leaderboard-card", GamingStatusLeaderboardCard);
+customElements.define("gaming-status-leaderboard-editor", GamingStatusLeaderboardEditor);
+
+window.customCards.push({
+  type: "gaming-status-leaderboard-card",
+  name: "Gaming Status - Leaderboard",
+  preview: true,
+  description: "A fast, native CSS bar graph ranking top players or top games across chosen metrics."
+});
 
 // ====================================================================
 // REGISTRATION
