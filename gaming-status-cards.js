@@ -1239,9 +1239,13 @@ class GamingStatusDonutCard extends HTMLElement {
   }
 
   setConfig(config) {
-    // Graceful migration from old config formats
     let mode = config.mode || "all";
     let single_entity = config.single_entity || config.entity || "";
+
+    // Security catch: Prevent 'single' mode if metric is 'hours'
+    if (config.metric === "hours" && mode === "single") {
+      mode = "all";
+    }
 
     this.config = { 
       title: config.title || "", 
@@ -1368,7 +1372,10 @@ class GamingStatusDonutCard extends HTMLElement {
       apex_config: {
         chart: { height: 200, fontFamily: "var(--primary-font-family)" },
         tooltip: { enabled: false },
-        legend: { position: "left", offsetY: 24, offsetX: 15, fontSize: "16px", markers: { strokeWidth: 0, offsetX: -5 } },
+        
+        // OffsetY and OffsetX removed so ApexCharts naturally vertically centers the labels
+        legend: { position: "left", fontSize: "16px", markers: { strokeWidth: 0, offsetX: -5 } },
+        
         dataLabels: { style: { fontSize: "16px" } },
         stroke: { show: false },
         plotOptions: {
@@ -1407,6 +1414,8 @@ class GamingStatusDonutEditor extends HTMLElement {
         return `<option value="${key}" ${this._config.single_entity === key ? 'selected' : ''}>${cleanName}</option>`;
       }).join('');
 
+    const isHoursMetric = this._config.metric === 'hours';
+
     this.shadowRoot.innerHTML = `
       <style>
         .container { display: flex; flex-direction: column; gap: 15px; color: var(--primary-text-color); }
@@ -1429,14 +1438,14 @@ class GamingStatusDonutEditor extends HTMLElement {
         <label>Chart Metric:
           <select id="metric" .configValue="metric">
             <option value="platforms" ${this._config.metric === 'platforms' || !this._config.metric ? 'selected' : ''}>Platform Split (Xbox, PS, Steam, PC)</option>
-            <option value="hours" ${this._config.metric === 'hours' ? 'selected' : ''}>Most Played Hours (By Player)</option>
+            <option value="hours" ${isHoursMetric ? 'selected' : ''}>Most Played Hours (By Player)</option>
           </select>
         </label>
 
         <label>Player Filter Mode:
           <select id="mode" .configValue="mode">
             <option value="all" ${this._config.mode === 'all' || !this._config.mode ? 'selected' : ''}>All Tracked Players</option>
-            <option value="single" ${this._config.mode === 'single' ? 'selected' : ''}>Single Player</option>
+            <option value="single" ${this._config.mode === 'single' ? 'selected' : ''} ${isHoursMetric ? 'disabled hidden' : ''}>Single Player</option>
             <option value="selected" ${this._config.mode === 'selected' ? 'selected' : ''}>Selected Players</option>
           </select>
         </label>
@@ -1467,28 +1476,26 @@ class GamingStatusDonutEditor extends HTMLElement {
       </div>
     `;
 
-    // Logic to toggle visibility and save config
-    const singleSelector = this.shadowRoot.getElementById('single-selector');
-    const selectedSelector = this.shadowRoot.getElementById('selected-selector');
-
     this.shadowRoot.querySelectorAll('input, select').forEach(el => {
       el.addEventListener('change', e => {
         const field = e.target.getAttribute('.configValue');
-        const value = e.target.value;
+        let value = e.target.value;
         
-        this._config = { ...this._config, [field]: value };
-        
-        // UI Toggle
-        if (field === 'mode') {
-            singleSelector.style.display = (value === 'single') ? 'block' : 'none';
-            selectedSelector.style.display = (value === 'selected') ? 'block' : 'none';
+        // Auto-correct 'mode' if metric is changed to 'hours' while 'single' is active
+        if (field === 'metric' && value === 'hours' && this._config.mode === 'single') {
+          this._config = { ...this._config, mode: 'all' };
         }
+
+        this._config = { ...this._config, [field]: value };
 
         this.dispatchEvent(new CustomEvent("config-changed", { 
           detail: { config: this._config }, 
           bubbles: true, 
           composed: true 
         }));
+        
+        // Force an instant DOM re-render to appropriately hide/show the 'Single Player' option
+        this.render();
       });
     });
   }
