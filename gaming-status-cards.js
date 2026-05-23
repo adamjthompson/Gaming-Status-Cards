@@ -48,7 +48,6 @@ class GamingStatusCard extends HTMLElement {
       targetSuffix = `_${this.config.mode}`;
     }
 
-    // --- PERFORMANCE OPTIMIZATION: FAST HASH ---
     let currentHash = "";
     let rawEntities = [];
 
@@ -77,7 +76,6 @@ class GamingStatusCard extends HTMLElement {
 
     if (this._lastHash === currentHash) return;
     this._lastHash = currentHash;
-    // -------------------------------------------
 
     const processedData = this.processData(rawEntities);
     this.render(processedData);
@@ -508,7 +506,6 @@ class GamingSlideshowCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
 
-    // --- PERFORMANCE OPTIMIZATION: FAST HASH ---
     let currentHash = "";
     let rawEntities = [];
 
@@ -555,19 +552,17 @@ class GamingSlideshowCard extends HTMLElement {
 
     if (this._lastHash === currentHash) return;
     this._lastHash = currentHash;
-    // -------------------------------------------
 
     const processedData = this.processData(rawEntities);
     this.render(processedData);
   }
 
-  // --- SMART ASPECT RATIO CALCULATION ---
   getEffectiveAspectRatio() {
     if (this.config.aspect_ratio && String(this.config.aspect_ratio).trim() !== "") {
       return this.config.aspect_ratio;
     }
     switch(this.config.artwork_type) {
-      case "cover": return "600/900"; // Grid
+      case "cover": return "600/900";
       case "logo": return "16/9";
       case "icon": return "1/1";
       case "hero":
@@ -616,14 +611,12 @@ class GamingSlideshowCard extends HTMLElement {
         if (!isOffline && !isHistory) {
           const gameName = entity.attributes.current_game;
           
-          // Select the correct artwork based on user preference
           let gameArt = null;
           if (this.config.artwork_type === "cover") gameArt = entity.attributes.game_cover_art;
           else if (this.config.artwork_type === "logo") gameArt = entity.attributes.game_logo_art;
           else if (this.config.artwork_type === "icon") gameArt = entity.attributes.game_icon_art;
           else gameArt = entity.attributes.game_hero_art;
 
-          // Safe fallback if the requested image type is missing from the sensor
           if (!gameArt) {
             gameArt = entity.attributes.game_hero_art || entity.attributes.game_cover_art;
           }
@@ -697,8 +690,6 @@ class GamingSlideshowCard extends HTMLElement {
     
     this.content.style.aspectRatio = activeAspectRatio;
 
-    // --- SMART IMAGE SCALING ---
-    // If it's a Logo or Icon, we use 'contain' so it doesn't stretch or distort.
     const bgSize = (this.config.artwork_type === "logo" || this.config.artwork_type === "icon") ? "contain" : "cover";
     const bgRepeat = "no-repeat";
 
@@ -1365,15 +1356,22 @@ class GamingStatusDonutCard extends HTMLElement {
       apex_config: {
         chart: { 
           height: 240, 
-          fontFamily: "var(--primary-font-family)" 
+          fontFamily: "var(--primary-font-family)",
+          events: {
+             mounted: (chartContext, config) => {
+               const legend = chartContext.el.querySelector('.apexcharts-legend');
+               if (legend) legend.style.left = '0px';
+             }
+          }
         },
         tooltip: { enabled: false },
         legend: { 
           position: "left", 
           fontSize: "16px", 
-          offsetX: 16,     // Aligns perfectly with standard HA card padding
-          offsetY: 0,      // Allows true mathematical centering
-          itemMargin: { vertical: 6 }, // Spaces out the items dynamically
+          offsetX: -10, 
+          offsetY: 0, 
+          width: 140,
+          itemMargin: { vertical: 6 }, 
           markers: { strokeWidth: 0, offsetX: -5 } 
         },
         dataLabels: { 
@@ -1382,7 +1380,7 @@ class GamingStatusDonutCard extends HTMLElement {
         stroke: { show: false },
         plotOptions: {
           pie: { 
-            customScale: 0.9, // Shrinks the donut slightly so it doesn't overlap the padded legend
+            customScale: 0.9,
             donut: { 
               size: "50%", 
               labels: { 
@@ -1418,7 +1416,6 @@ class GamingStatusDonutEditor extends HTMLElement {
     this.render(); 
   }
   
-  // FIX: Properly trigger the initial render once HA data is available
   set hass(hass) { 
     const firstLoad = !this._hass;
     this._hass = hass; 
@@ -1588,7 +1585,6 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     this.updateLeaderboard();
   }
 
-  // FIX: Bulletproof extraction that handles both raw numbers and formatted strings
   extractMinutes(timeVal) {
     if (timeVal === undefined || timeVal === null || timeVal === "None") return 0;
     if (typeof timeVal === "number") return Math.floor(timeVal / 60);
@@ -1738,7 +1734,6 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
   }
   setConfig(config) { this._config = config; this.render(); }
   
-  // FIX: Properly trigger the initial render once HA data is available
   set hass(hass) { 
     const firstLoad = !this._hass;
     this._hass = hass; 
