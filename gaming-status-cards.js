@@ -25,10 +25,8 @@ class GamingStatusCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.entities_pattern) {
-      config = { ...config, entities_pattern: "_gaming_status" };
-    }
     this.config = {
+      entities_pattern: "_gaming_status",
       title: config.title || "",
       mode: config.mode || "all",
       sort_by: config.sort_by || "last_online",
