@@ -1,7 +1,5 @@
 // ====================================================================
-// ====================================================================
 // CARD 1: GAMING STATUS - LIST
-// ====================================================================
 // ====================================================================
 
 class GamingStatusCard extends HTMLElement {
@@ -463,9 +461,7 @@ class GamingStatusCardEditor extends HTMLElement {
 }
 
 // ====================================================================
-// ====================================================================
 // CARD 2: GAMING STATUS - SLIDESHOW
-// ====================================================================
 // ====================================================================
 
 class GamingSlideshowCard extends HTMLElement {
@@ -938,9 +934,7 @@ class GamingSlideshowCardEditor extends HTMLElement {
 }
 
 // ====================================================================
-// ====================================================================
-// CARD 3: GAMING STATUS - CHART (ApexCharts Wrapper)
-// ====================================================================
+// CARD 3: GAMING STATUS - CHART
 // ====================================================================
 
 class GamingStatusChartCard extends HTMLElement {
@@ -1211,7 +1205,7 @@ class GamingStatusChartEditor extends HTMLElement {
 }
 
 // ====================================================================
-// NEW CARD 4: GAMING STATUS - DONUT
+// CARD 4: GAMING STATUS - DONUT
 // ====================================================================
 
 class GamingStatusDonutCard extends HTMLElement {
@@ -1314,8 +1308,14 @@ class GamingStatusDonutEditor extends HTMLElement {
       <style>
         .container { display: flex; flex-direction: column; gap: 15px; color: var(--primary-text-color); }
         select { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; }
+        .warning { background: rgba(255,165,0,0.2); padding: 10px; border-radius: 4px; border-left: 4px solid orange; font-size: 13px; }
       </style>
       <div class="container">
+        
+        <div class="warning">
+          <strong>Note:</strong> This wrapper card requires the popular <code>apexcharts-card</code> to be installed via HACS in order to render the graphical data.
+        </div>
+
         <label>Mode: 
           <select id="mode" .configValue="mode">
             <option value="all" ${this._config.mode !== 'single' ? 'selected' : ''}>All Players (Aggregate)</option>
@@ -1361,9 +1361,7 @@ class GamingStatusDonutEditor extends HTMLElement {
 }
 
 // ====================================================================
-// ====================================================================
-// CARD 5: GAMING STATUS - LEADERBOARD (Native UI)
-// ====================================================================
+// CARD 5: GAMING STATUS - LEADERBOARD
 // ====================================================================
 
 class GamingStatusLeaderboardCard extends HTMLElement {
@@ -1535,7 +1533,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       // If metric is longest session, skip bars to allow full text expansion
       if (this.config.metric === "longest") {
         html += `
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border-left: 4px solid ${color}; padding-left: 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border-left: 4px solid ${color}; padding-left: 8px; box-sizing: border-box;">
             <div style="flex-grow: 1; font-size: 14px; font-weight: 500; color: var(--primary-text-color); word-break: break-word;">
               ${item.name}
             </div>
@@ -1556,8 +1554,8 @@ class GamingStatusLeaderboardCard extends HTMLElement {
             
             <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
               <div style="width: ${pct}%; height: 100%; background: ${color}; 
-                   -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 100%); 
-                   mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 100%); 
+                   -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
+                   mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
                    border-radius: 0; transition: width 0.5s ease-out;">
               </div>
             </div>
@@ -1605,8 +1603,14 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; }
         hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
         .helper-text { font-size: 12px; font-weight: normal; color: var(--secondary-text-color); margin-top: 2px; }
+        .info { background: rgba(0,150,255,0.1); padding: 10px; border-radius: 4px; border-left: 4px solid #0096ff; font-size: 13px; }
       </style>
       <div class="container">
+
+        <div class="info">
+          <strong>Note:</strong> This is a lightweight, native CSS card. Unlike the Chart or Donut cards, it does <strong>not</strong> require ApexCharts or any other external HACS dependencies to render.
+        </div>
+
         <label>Card Title:
           <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ''}">
         </label>
