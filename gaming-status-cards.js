@@ -1211,9 +1211,146 @@ class GamingStatusChartEditor extends HTMLElement {
 }
 
 // ====================================================================
+// NEW CARD 4: GAMING STATUS - DONUT
 // ====================================================================
-// REGISTRATION (Registers ALL THREE cards to Home Assistant)
+
+class GamingStatusDonutCard extends HTMLElement {
+  constructor() { super(); }
+
+  static getConfigElement() { return document.createElement("gaming-status-donut-editor"); }
+
+  static getStubConfig() {
+    return { title: "", mode: "all", entity: "" };
+  }
+
+  setConfig(config) {
+    this.config = { title: "", mode: "all", entity: "", ...config };
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (this.chartElement) this.chartElement.hass = hass;
+    else this.renderChart(hass);
+  }
+
+  renderChart(hass) {
+    if (!this.chartElement) {
+      this.chartElement = document.createElement("apexcharts-card");
+      this.appendChild(this.chartElement);
+    }
+
+    const platforms = [
+      { name: "Xbox", key: "Xbox", color: "rgb(11, 124, 16)" },
+      { name: "PlayStation", key: "PlayStation", color: "rgb(0, 48, 135)" },
+      { name: "Steam", key: "Steam", color: "rgb(2, 173, 239)" },
+      { name: "PC", key: "PC", color: "rgb(100, 50, 100)" }
+    ];
+
+    const series = platforms.map(p => {
+      let generator = "";
+      if (this.config.mode === "single" && this.config.entity) {
+        generator = `const attr = entity.attributes; return attr.platform_split && attr.platform_split['${p.key}'] ? [[new Date().getTime(), (parseInt(attr.platform_split['${p.key}']) / 100) * attr.total_weekly_hours]] : [];`;
+      } else {
+        generator = `let total = 0; Object.keys(hass.states).forEach(key => { if (key.endsWith('_gaming_status')) { const attr = hass.states[key].attributes; if (attr.platform_split && attr.platform_split['${p.key}'] && attr.total_weekly_hours) { total += (parseInt(attr.platform_split['${p.key}']) / 100) * attr.total_weekly_hours; } } }); return total > 0 ? [[new Date().getTime(), total]] : [];`;
+      }
+
+      return {
+        entity: this.config.mode === "single" ? this.config.entity : "sensor.players_online",
+        name: p.name,
+        color: p.color,
+        data_generator: generator
+      };
+    });
+
+    const apexConfig = {
+      type: "custom:apexcharts-card",
+      chart_type: "donut",
+      update_interval: "5m",
+      apex_config: {
+        chart: { height: 200, fontFamily: "var(--primary-font-family)" },
+        tooltip: { enabled: false },
+        legend: { position: "left", offsetY: 24, offsetX: 15, fontSize: "16px", markers: { strokeWidth: 0, offsetX: -5 } },
+        dataLabels: { style: { fontSize: "16px" } },
+        stroke: { show: false },
+        plotOptions: {
+          pie: { donut: { size: "40%", labels: { show: true, name: { show: false }, value: { show: true, offsetY: 6, fontSize: "20px" }, total: { show: true, showAlways: true, label: "Total", formatter: "EVAL:function(w) { return w.globals.seriesTotals.reduce((a, b) => a + b, 0).toFixed(1) + 'h' }" } } } }
+        }
+      },
+      series: series
+    };
+
+    this.chartElement.setConfig(apexConfig);
+  }
+}
+
+class GamingStatusDonutEditor extends HTMLElement {
+  constructor() { super(); this.attachShadow({ mode: "open" }); }
+  setConfig(config) { this._config = config; this.render(); }
+  set hass(hass) { this._hass = hass; }
+
+  render() {
+    if (!this._hass) return;
+
+    // Filter states for your specific gaming sensors
+    const entityOptions = Object.keys(this._hass.states)
+      .filter(key => key.endsWith('_gaming_status'))
+      .map(key => {
+        const friendlyName = this._hass.states[key].attributes.friendly_name || key;
+        return `<option value="${key}" ${this._config.entity === key ? 'selected' : ''}>${friendlyName}</option>`;
+      }).join('');
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        .container { display: flex; flex-direction: column; gap: 15px; color: var(--primary-text-color); }
+        select { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; }
+      </style>
+      <div class="container">
+        <label>Mode: 
+          <select id="mode" .configValue="mode">
+            <option value="all" ${this._config.mode !== 'single' ? 'selected' : ''}>All Players (Aggregate)</option>
+            <option value="single" ${this._config.mode === 'single' ? 'selected' : ''}>Single Player</option>
+          </select>
+        </label>
+        
+        <div id="entity-selector" style="display: ${this._config.mode === 'single' ? 'block' : 'none'}">
+          <label>Select Player: 
+            <select id="entity" .configValue="entity">
+              <option value="" disabled ${!this._config.entity ? 'selected' : ''}>Select a player...</option>
+              ${entityOptions}
+            </select>
+          </label>
+        </div>
+      </div>
+    `;
+
+    // Logic to toggle visibility and save config
+    const modeSelect = this.shadowRoot.getElementById('mode');
+    const entityWrapper = this.shadowRoot.getElementById('entity-selector');
+
+    this.shadowRoot.querySelectorAll('select').forEach(el => {
+      el.addEventListener('change', e => {
+        const field = e.target.getAttribute('.configValue');
+        const value = e.target.value;
+        
+        this._config = { ...this._config, [field]: value };
+        
+        // UI Toggle
+        if (field === 'mode') {
+            entityWrapper.style.display = (value === 'single') ? 'block' : 'none';
+        }
+
+        this.dispatchEvent(new CustomEvent("config-changed", { 
+          detail: { config: this._config }, 
+          bubbles: true, 
+          composed: true 
+        }));
+      });
+    });
+  }
+}
+
 // ====================================================================
+// REGISTRATION
 // ====================================================================
 
 // Card 1
@@ -1230,6 +1367,10 @@ customElements.define(
 // Card 3
 customElements.define("gaming-status-chart-card", GamingStatusChartCard);
 customElements.define("gaming-status-chart-editor", GamingStatusChartEditor);
+
+// Card 4
+customElements.define("gaming-status-donut-card", GamingStatusDonutCard);
+customElements.define("gaming-status-donut-editor", GamingStatusDonutEditor);
 
 // Inject into UI
 window.customCards = window.customCards || [];
@@ -1256,3 +1397,11 @@ window.customCards.push({
   description:
     "An automated wrapper that builds a historical gaming ApexChart.",
 });
+
+window.customCards.push({
+  type: "gaming-status-donut-card",
+  name: "Gaming Status - Donut",
+  preview: true,
+  description: "Aggregated or single-player donut chart for gaming platform stats."
+});
+
