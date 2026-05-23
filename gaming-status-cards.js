@@ -1215,29 +1215,40 @@ class GamingStatusChartEditor extends HTMLElement {
 // ====================================================================
 
 class GamingStatusDonutCard extends HTMLElement {
-  constructor() { super(); }
+  constructor() { 
+    super(); 
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot.innerHTML = `<div id="container"></div>`;
+    this.container = this.shadowRoot.getElementById("container");
+  }
 
   static getConfigElement() { return document.createElement("gaming-status-donut-editor"); }
 
-  static getStubConfig() {
-    return { title: "", mode: "all", entity: "" };
-  }
-
   setConfig(config) {
     this.config = { title: "", mode: "all", entity: "", ...config };
+    this.renderChart(); // Try rendering now
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (this.chartElement) this.chartElement.hass = hass;
-    else this.renderChart(hass);
+    if (this.chartElement) {
+      this.chartElement.hass = hass;
+    } else {
+      this.renderChart();
+    }
   }
 
-  renderChart(hass) {
-    if (!this.chartElement) {
-      this.chartElement = document.createElement("apexcharts-card");
-      this.appendChild(this.chartElement);
+  renderChart() {
+    if (!this.config || !this._hass || this.chartElement) return;
+
+    // Check if apexcharts-card is registered yet
+    if (!customElements.get('apexcharts-card')) {
+      console.warn("ApexCharts Card not loaded yet, waiting...");
+      return; // It will retry when hass is set again
     }
+
+    this.chartElement = document.createElement("apexcharts-card");
+    this.container.appendChild(this.chartElement);
 
     const platforms = [
       { name: "Xbox", key: "Xbox", color: "rgb(11, 124, 16)" },
@@ -1253,7 +1264,6 @@ class GamingStatusDonutCard extends HTMLElement {
       } else {
         generator = `let total = 0; Object.keys(hass.states).forEach(key => { if (key.endsWith('_gaming_status')) { const attr = hass.states[key].attributes; if (attr.platform_split && attr.platform_split['${p.key}'] && attr.total_weekly_hours) { total += (parseInt(attr.platform_split['${p.key}']) / 100) * attr.total_weekly_hours; } } }); return total > 0 ? [[new Date().getTime(), total]] : [];`;
       }
-
       return {
         entity: this.config.mode === "single" ? this.config.entity : "sensor.players_online",
         name: p.name,
@@ -1280,6 +1290,7 @@ class GamingStatusDonutCard extends HTMLElement {
     };
 
     this.chartElement.setConfig(apexConfig);
+    this.chartElement.hass = this._hass;
   }
 }
 
