@@ -1381,6 +1381,9 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     return {
       title: "Gaming Leaderboard",
       metric: "hours",
+      mode: "all",
+      single_entity: "",
+      selected_entities: "",
       max_players: "3",
       entities_pattern: "_gaming_status"
     };
@@ -1388,8 +1391,11 @@ class GamingStatusLeaderboardCard extends HTMLElement {
 
   setConfig(config) {
     this.config = {
-      title: config.title || "Gaming Leaderboard",
+      title: config.title !== undefined ? config.title : "Gaming Leaderboard",
       metric: config.metric || "hours",
+      mode: config.mode || "all",
+      single_entity: config.single_entity || "",
+      selected_entities: config.selected_entities || "",
       max_players: config.max_players || "3",
       entities_pattern: config.entities_pattern || "_gaming_status",
       ...config
@@ -1420,42 +1426,54 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       return;
     }
 
-    // 1. Gather and Parse Player Data
-    const targetSuffix = this.config.entities_pattern;
-    const playersData = [];
-
-    for (const entityId in this._hass.states) {
-      if (entityId.startsWith("sensor.") && entityId.endsWith(targetSuffix)) {
-        const stateObj = this._hass.states[entityId];
-        if (!stateObj) continue;
-
-        const friendlyName = (stateObj.attributes.friendly_name || entityId)
-          .replace(/ Gaming Status/gi, "");
-
-        // Metric Extractors
-        const hours = parseFloat(stateObj.attributes.total_weekly_hours) || 0;
-        
-        const breakdown = stateObj.attributes.weekly_breakdown || {};
-        const gamesCount = Object.keys(breakdown).length;
-
-        const longestStr = stateObj.attributes.longest_session || "None";
-        let longestMinutes = 0;
-        const hMatch = longestStr.match(/(\d+)\s*h/);
-        const mMatch = longestStr.match(/(\d+)\s*m/);
-        if (hMatch) longestMinutes += parseInt(hMatch[1]) * 60;
-        if (mMatch) longestMinutes += parseInt(mMatch[1]);
-
-        playersData.push({
-          name: friendlyName,
-          hours: hours,
-          gamesCount: gamesCount,
-          longestMinutes: longestMinutes,
-          longestStr: longestStr,
-        });
+    // 1. Determine which entities to process based on chosen Mode
+    let entityIdsToProcess = [];
+    
+    if (this.config.mode === "single" && this.config.single_entity) {
+      entityIdsToProcess.push(this.config.single_entity);
+    } else if (this.config.mode === "selected" && this.config.selected_entities) {
+      entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim());
+    } else {
+      // Default to "All" mode
+      const targetSuffix = this.config.entities_pattern;
+      for (const key in this._hass.states) {
+        if (key.startsWith("sensor.") && key.endsWith(targetSuffix)) {
+          entityIdsToProcess.push(key);
+        }
       }
     }
 
-    // 2. Sort Data Based on Chosen Metric
+    // 2. Gather Data for those specific entities
+    const playersData = [];
+
+    for (const entityId of entityIdsToProcess) {
+      const stateObj = this._hass.states[entityId];
+      if (!stateObj) continue;
+
+      const friendlyName = (stateObj.attributes.friendly_name || entityId)
+        .replace(/ Gaming Status/gi, "");
+
+      const hours = parseFloat(stateObj.attributes.total_weekly_hours) || 0;
+      const breakdown = stateObj.attributes.weekly_breakdown || {};
+      const gamesCount = Object.keys(breakdown).length;
+
+      const longestStr = stateObj.attributes.longest_session || "None";
+      let longestMinutes = 0;
+      const hMatch = longestStr.match(/(\d+)\s*h/);
+      const mMatch = longestStr.match(/(\d+)\s*m/);
+      if (hMatch) longestMinutes += parseInt(hMatch[1]) * 60;
+      if (mMatch) longestMinutes += parseInt(mMatch[1]);
+
+      playersData.push({
+        name: friendlyName,
+        hours: hours,
+        gamesCount: gamesCount,
+        longestMinutes: longestMinutes,
+        longestStr: longestStr,
+      });
+    }
+
+    // 3. Sort Data Based on Chosen Metric
     if (this.config.metric === "hours") {
       playersData.sort((a, b) => b.hours - a.hours);
     } else if (this.config.metric === "games") {
@@ -1464,11 +1482,17 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       playersData.sort((a, b) => b.longestMinutes - a.longestMinutes);
     }
 
-    // 3. Truncate to Top X Players
+    // 4. Truncate to Top X Players
     const limit = parseInt(this.config.max_players) || 3;
     const finalData = playersData.slice(0, limit);
 
-    // 4. Map to ApexCharts Series Arrays
+    if (finalData.length === 0) {
+      this.content.innerHTML = `<div style="padding: 10px; color: var(--secondary-text-color);">No player data available for this selection.</div>`;
+      if (this.chart) { this.chart.destroy(); this.chart = null; }
+      return;
+    }
+
+    // 5. Map to ApexCharts Series Arrays
     const categories = finalData.map(p => p.name);
     let seriesData = [];
     let yAxisTitle = "";
@@ -1484,19 +1508,20 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       yAxisTitle = "Hours";
     }
 
-    // 5. Build/Update native ApexCharts Configuration
+    // 6. Build/Update native ApexCharts Configuration
     const chartOptions = {
       chart: {
         type: 'bar',
-        height: finalData.length * 50 + 70, // Dynamically scales layout size based on row counts
+        height: finalData.length * 50 + 70,
         fontFamily: 'var(--primary-font-family)',
         toolbar: { show: false },
         animations: { enabled: true, speed: 400 }
       },
+      series: [{ name: yAxisTitle, data: seriesData }],
       plotOptions: {
         bar: {
           horizontal: true,
-          distributed: true, // Assigns unique color to each bar line item
+          distributed: true,
           barHeight: '70%',
           borderRadius: 4,
           dataLabels: { position: 'end' }
@@ -1543,8 +1568,9 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       }
     };
 
-    // 6. Smooth Live Redrawing Logic
+    // 7. Smooth Live Redrawing Logic
     if (!this.chart) {
+      this.content.innerHTML = ""; // Clear any previous 'no data' messages
       this.chart = new window.ApexCharts(this.content, chartOptions);
       this.chart.render();
     } else {
@@ -1552,9 +1578,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     }
   }
 
-  getCardSize() {
-    return 4;
-  }
+  getCardSize() { return 4; }
 }
 
 class GamingStatusLeaderboardEditor extends HTMLElement {
@@ -1566,15 +1590,27 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
   set hass(hass) { this._hass = hass; }
 
   render() {
+    if (!this._hass) return;
+
+    // Filter states for your specific gaming sensors to populate the dropdown
+    const targetSuffix = this._config.entities_pattern || "_gaming_status";
+    const entityOptions = Object.keys(this._hass.states)
+      .filter(key => key.endsWith(targetSuffix))
+      .map(key => {
+        const friendlyName = this._hass.states[key].attributes.friendly_name || key;
+        return `<option value="${key}" ${this._config.single_entity === key ? 'selected' : ''}>${friendlyName}</option>`;
+      }).join('');
+
     this.shadowRoot.innerHTML = `
       <style>
         .container { display: flex; flex-direction: column; gap: 15px; color: var(--primary-text-color); }
         select, input { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
         label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; }
+        .helper-text { font-size: 12px; font-weight: normal; color: var(--secondary-text-color); margin-top: 2px; }
       </style>
       <div class="container">
         <label>Card Title:
-          <input type="text" id="title" .configValue="title" value="${this._config.title || ''}">
+          <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ''}">
         </label>
         
         <label>Leaderboard Metric:
@@ -1585,16 +1621,54 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
           </select>
         </label>
 
+        <label>Player Mode:
+          <select id="mode" .configValue="mode">
+            <option value="all" ${this._config.mode === 'all' || !this._config.mode ? 'selected' : ''}>All Players</option>
+            <option value="single" ${this._config.mode === 'single' ? 'selected' : ''}>Single Player</option>
+            <option value="selected" ${this._config.mode === 'selected' ? 'selected' : ''}>Selected Players</option>
+          </select>
+        </label>
+
+        <div id="single-selector" style="display: ${this._config.mode === 'single' ? 'block' : 'none'}">
+          <label>Select Player: 
+            <select id="single_entity" .configValue="single_entity">
+              <option value="" disabled ${!this._config.single_entity ? 'selected' : ''}>Select a player...</option>
+              ${entityOptions}
+            </select>
+          </label>
+        </div>
+
+        <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
+          <label>Selected Entities:
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.adam_gaming_status, sensor.liv_gaming_status">
+            <span class="helper-text">Enter a comma-separated list of entity IDs.</span>
+          </label>
+        </div>
+
         <label>Max Players to Display:
           <input type="number" id="max_players" .configValue="max_players" value="${this._config.max_players || '3'}" min="1" max="10">
         </label>
       </div>
     `;
 
+    // Manage visibility toggles and config saves
+    const modeSelect = this.shadowRoot.getElementById('mode');
+    const singleSelector = this.shadowRoot.getElementById('single-selector');
+    const selectedSelector = this.shadowRoot.getElementById('selected-selector');
+
     this.shadowRoot.querySelectorAll('input, select').forEach(el => {
       el.addEventListener('change', e => {
         const field = e.target.getAttribute('.configValue');
-        this._config = { ...this._config, [field]: e.target.value };
+        const value = e.target.value;
+        
+        this._config = { ...this._config, [field]: value };
+        
+        // Dynamic UI Toggle based on Mode
+        if (field === 'mode') {
+            singleSelector.style.display = (value === 'single') ? 'block' : 'none';
+            selectedSelector.style.display = (value === 'selected') ? 'block' : 'none';
+        }
+
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
       });
     });
