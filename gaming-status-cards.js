@@ -1408,6 +1408,120 @@ class GamingStatusDonutCard extends HTMLElement {
   }
 }
 
+class GamingStatusDonutEditor extends HTMLElement {
+  constructor() { super(); this.attachShadow({ mode: "open" }); }
+  
+  setConfig(config) { 
+    let mode = config.mode || "all";
+    let single_entity = config.single_entity || config.entity || "";
+    this._config = { ...config, mode, single_entity }; 
+    this.render(); 
+  }
+  
+  // FIX: Properly trigger the initial render once HA data is available
+  set hass(hass) { 
+    const firstLoad = !this._hass;
+    this._hass = hass; 
+    if (firstLoad) this.render();
+  }
+
+  render() {
+    if (!this._hass) return;
+
+    const targetSuffix = this._config.entities_pattern || "_gaming_status";
+    const entityOptions = Object.keys(this._hass.states)
+      .filter(key => key.endsWith(targetSuffix))
+      .map(key => {
+        const rawName = this._hass.states[key].attributes.friendly_name || key;
+        const cleanName = rawName.replace(/ Gaming Status/gi, "");
+        return `<option value="${key}" ${this._config.single_entity === key ? 'selected' : ''}>${cleanName}</option>`;
+      }).join('');
+
+    const isHoursMetric = this._config.metric === 'hours';
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        .container { display: flex; flex-direction: column; gap: 15px; color: var(--primary-text-color); }
+        select, input { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
+        label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; }
+        hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
+        .helper-text { font-size: 12px; font-weight: normal; color: var(--secondary-text-color); margin-top: 2px; }
+        .warning { background: rgba(255,165,0,0.2); padding: 10px; border-radius: 4px; border-left: 4px solid orange; font-size: 13px; }
+      </style>
+      <div class="container">
+        
+        <div class="warning">
+          <strong>Note:</strong> This wrapper card requires the popular <code>apexcharts-card</code> to be installed via HACS in order to render the graphical data.
+        </div>
+
+        <label>Card Title (Optional):
+          <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ''}">
+        </label>
+
+        <label>Chart Metric:
+          <select id="metric" .configValue="metric">
+            <option value="platforms" ${this._config.metric === 'platforms' || !this._config.metric ? 'selected' : ''}>Platform Split (Xbox, PS, Steam, PC)</option>
+            <option value="hours" ${isHoursMetric ? 'selected' : ''}>Most Played Hours (By Player)</option>
+          </select>
+        </label>
+
+        <label>Player Filter Mode:
+          <select id="mode" .configValue="mode">
+            <option value="all" ${this._config.mode === 'all' || !this._config.mode ? 'selected' : ''}>All Tracked Players</option>
+            <option value="single" ${this._config.mode === 'single' ? 'selected' : ''} ${isHoursMetric ? 'disabled hidden' : ''}>Single Player</option>
+            <option value="selected" ${this._config.mode === 'selected' ? 'selected' : ''}>Selected Players</option>
+          </select>
+        </label>
+
+        <div id="single-selector" style="display: ${this._config.mode === 'single' ? 'block' : 'none'}">
+          <label>Select Player: 
+            <select id="single_entity" .configValue="single_entity">
+              <option value="" disabled ${!this._config.single_entity ? 'selected' : ''}>Select a player...</option>
+              ${entityOptions}
+            </select>
+          </label>
+        </div>
+
+        <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
+          <label>Selected Entities:
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.adam_gaming_status, ...">
+            <span class="helper-text">Enter a comma-separated list of exact entity IDs.</span>
+          </label>
+        </div>
+
+        <hr>
+
+        <label>Custom Colors (Advanced):
+          <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
+          <span class="helper-text">Leave blank to use default colors. For Platform Mode, leaving blank uses native brand colors. Override by entering a comma-separated list.</span>
+        </label>
+
+      </div>
+    `;
+
+    this.shadowRoot.querySelectorAll('input, select').forEach(el => {
+      el.addEventListener('change', e => {
+        const field = e.target.getAttribute('.configValue');
+        let value = e.target.value;
+        
+        if (field === 'metric' && value === 'hours' && this._config.mode === 'single') {
+          this._config = { ...this._config, mode: 'all' };
+        }
+
+        this._config = { ...this._config, [field]: value };
+
+        this.dispatchEvent(new CustomEvent("config-changed", { 
+          detail: { config: this._config }, 
+          bubbles: true, 
+          composed: true 
+        }));
+        
+        this.render();
+      });
+    });
+  }
+}
+
 // ====================================================================
 // CARD 5: GAMING STATUS - LEADERBOARD
 // ====================================================================
@@ -1444,6 +1558,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
   }
 
   setConfig(config) {
+    if (!config) throw new Error("Invalid configuration");
     this.config = {
       title: config.title !== undefined ? config.title : "Gaming Leaderboard",
       metric: config.metric || "hours",
@@ -1473,18 +1588,20 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     this.updateLeaderboard();
   }
 
-  // Helper to convert strings like "1h 14m" into total minutes for math
-  extractMinutes(timeStr) {
-    if (!timeStr || timeStr === "None") return 0;
+  // FIX: Bulletproof extraction that handles both raw numbers and formatted strings
+  extractMinutes(timeVal) {
+    if (timeVal === undefined || timeVal === null || timeVal === "None") return 0;
+    if (typeof timeVal === "number") return Math.floor(timeVal / 60);
+    
+    const str = String(timeVal);
     let m = 0;
-    const hMatch = timeStr.match(/(\d+)\s*h/);
-    const mMatch = timeStr.match(/(\d+)\s*m/);
+    const hMatch = str.match(/(\d+)\s*h/);
+    const mMatch = str.match(/(\d+)\s*m/);
     if (hMatch) m += parseInt(hMatch[1]) * 60;
     if (mMatch) m += parseInt(mMatch[1]);
     return m;
   }
 
-  // Helper to convert minutes back to readable format
   formatMinutes(totalMins) {
     if (totalMins === 0) return "0m";
     const h = Math.floor(totalMins / 60);
@@ -1497,7 +1614,6 @@ class GamingStatusLeaderboardCard extends HTMLElement {
   updateLeaderboard() {
     if (!this._hass || !this.content) return;
 
-    // 1. Determine which entities to process
     let entityIdsToProcess = [];
     if (this.config.mode === "single" && this.config.single_entity) {
       if (this._hass.states[this.config.single_entity]) entityIdsToProcess.push(this.config.single_entity);
@@ -1514,12 +1630,11 @@ class GamingStatusLeaderboardCard extends HTMLElement {
 
     let finalData = [];
 
-    // 2. Process Data based on chosen metric
     if (this.config.metric === "game_hours") {
       let gamesMap = {};
       for (const entityId of entityIdsToProcess) {
         const stateObj = this._hass.states[entityId];
-        const breakdown = stateObj.attributes.weekly_breakdown || {};
+        const breakdown = stateObj.attributes.weekly_breakdown || stateObj.attributes.weekly_game_breakdown || {};
         for (const [game, timeStr] of Object.entries(breakdown)) {
           gamesMap[game] = (gamesMap[game] || 0) + this.extractMinutes(timeStr);
         }
@@ -1541,19 +1656,18 @@ class GamingStatusLeaderboardCard extends HTMLElement {
           finalData.push({ name: friendlyName, value: hours, displayValue: `${hours}h` });
         } 
         else if (this.config.metric === "games") {
-          const breakdown = stateObj.attributes.weekly_breakdown || {};
+          const breakdown = stateObj.attributes.weekly_breakdown || stateObj.attributes.weekly_game_breakdown || {};
           const count = Object.keys(breakdown).length;
           finalData.push({ name: friendlyName, value: count, displayValue: `${count}` });
         } 
         else if (this.config.metric === "longest") {
           const longestStr = stateObj.attributes.longest_session || "None";
           const mins = this.extractMinutes(longestStr);
-          finalData.push({ name: friendlyName, value: mins, displayValue: longestStr });
+          finalData.push({ name: friendlyName, value: mins, displayValue: String(longestStr) });
         }
       }
     }
 
-    // 3. Sort, Slice, and Calculate Max
     finalData.sort((a, b) => b.value - a.value);
     const limit = parseInt(this.config.max_players) || 3;
     finalData = finalData.slice(0, limit);
@@ -1563,7 +1677,6 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       return;
     }
 
-    // 4. Color Palette setup
     let activePalette = this.defaultPalette;
     if (this.config.custom_colors && this.config.custom_colors.trim() !== "") {
       activePalette = this.config.custom_colors
@@ -1578,7 +1691,6 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     finalData.forEach((item, index) => {
       const color = activePalette[index % activePalette.length];
 
-      // If metric is longest session, skip bars to allow full text expansion
       if (this.config.metric === "longest") {
         html += `
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border-left: 4px solid ${color}; padding-left: 8px; box-sizing: border-box;">
@@ -1591,27 +1703,22 @@ class GamingStatusLeaderboardCard extends HTMLElement {
           </div>
         `;
       } else {
-        // Standard Bar View
         const pct = maxValue > 0 ? Math.max((item.value / maxValue) * 100, 2) : 0;
         html += `
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;">
-            
             <div style="width: 110px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 500; color: var(--primary-text-color);">
               ${item.name}
             </div>
-            
             <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
               <div style="width: ${pct}%; height: 100%; background: ${color}; 
-                   -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
-                   mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
+                   -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
+                   mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
                    border-radius: 0; transition: width 0.5s ease-out;">
               </div>
             </div>
-            
             <div style="min-width: 40px; flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap;">
               ${item.displayValue}
             </div>
-            
           </div>
         `;
       }
@@ -1630,7 +1737,13 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
     this.attachShadow({ mode: "open" });
   }
   setConfig(config) { this._config = config; this.render(); }
-  set hass(hass) { this._hass = hass; }
+  
+  // FIX: Properly trigger the initial render once HA data is available
+  set hass(hass) { 
+    const firstLoad = !this._hass;
+    this._hass = hass; 
+    if (firstLoad) this.render();
+  }
 
   render() {
     if (!this._hass) return;
@@ -1709,7 +1822,6 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
       </div>
     `;
 
-    // Manage visibility toggles and config saves
     const singleSelector = this.shadowRoot.getElementById('single-selector');
     const selectedSelector = this.shadowRoot.getElementById('selected-selector');
 
