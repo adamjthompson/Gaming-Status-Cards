@@ -1370,6 +1370,14 @@ class GamingStatusLeaderboardCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this.defaultPalette = [
+      "rgb(255, 190, 11)",
+      "rgb(251, 86, 7)",
+      "rgb(255, 0, 110)",
+      "rgb(131, 56, 236)",
+      "rgb(58, 134, 255)",
+      "rgb(56, 176, 0)",
+    ];
   }
 
   static getConfigElement() {
@@ -1384,6 +1392,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       single_entity: "",
       selected_entities: "",
       max_players: "3",
+      custom_colors: "",
       entities_pattern: "_gaming_status"
     };
   }
@@ -1396,6 +1405,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       single_entity: config.single_entity || "",
       selected_entities: config.selected_entities || "",
       max_players: config.max_players || "3",
+      custom_colors: config.custom_colors || "",
       entities_pattern: config.entities_pattern || "_gaming_status",
       ...config
     };
@@ -1460,7 +1470,6 @@ class GamingStatusLeaderboardCard extends HTMLElement {
 
     // 2. Process Data based on chosen metric
     if (this.config.metric === "game_hours") {
-      // PIVOT: Rank Games instead of Players
       let gamesMap = {};
       for (const entityId of entityIdsToProcess) {
         const stateObj = this._hass.states[entityId];
@@ -1477,7 +1486,6 @@ class GamingStatusLeaderboardCard extends HTMLElement {
         });
       }
     } else {
-      // STANDARD: Rank Players
       for (const entityId of entityIdsToProcess) {
         const stateObj = this._hass.states[entityId];
         const friendlyName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status/gi, "");
@@ -1509,36 +1517,58 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       return;
     }
 
-    // Find highest value to scale the CSS bars
-    const maxValue = Math.max(...finalData.map(d => d.value));
+    // 4. Color Palette setup
+    let activePalette = this.defaultPalette;
+    if (this.config.custom_colors && this.config.custom_colors.trim() !== "") {
+      activePalette = this.config.custom_colors
+        .split(",")
+        .map((c) => c.trim())
+        .filter((c) => c);
+    }
 
-    // 4. Render HTML Bars
-    const colors = ['#02adef', '#0b7c10', '#003087', '#643264', '#fb5607', '#ffbe0b'];
-    
+    const maxValue = Math.max(...finalData.map(d => d.value));
     let html = `<div style="display: flex; flex-direction: column; gap: 14px; margin-top: 8px;">`;
     
     finalData.forEach((item, index) => {
-      // Ensure bar has at least a 2% sliver so it's visible even if small
-      const pct = maxValue > 0 ? Math.max((item.value / maxValue) * 100, 2) : 0;
-      const color = colors[index % colors.length];
-      
-      html += `
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;">
-          
-          <div style="width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 500; color: var(--primary-text-color);">
-            ${item.name}
+      const color = activePalette[index % activePalette.length];
+
+      // If metric is longest session, skip bars to allow full text expansion
+      if (this.config.metric === "longest") {
+        html += `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border-left: 4px solid ${color}; padding-left: 8px;">
+            <div style="flex-grow: 1; font-size: 14px; font-weight: 500; color: var(--primary-text-color); word-break: break-word;">
+              ${item.name}
+            </div>
+            <div style="flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color);">
+              ${item.displayValue}
+            </div>
           </div>
-          
-          <div style="flex-grow: 1; height: 20px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); border-radius: 4px; position: relative; overflow: hidden;">
-            <div style="width: ${pct}%; height: 100%; background: ${color}; border-radius: 4px; transition: width 0.5s ease-out;"></div>
+        `;
+      } else {
+        // Standard Bar View
+        const pct = maxValue > 0 ? Math.max((item.value / maxValue) * 100, 2) : 0;
+        html += `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;">
+            
+            <div style="width: 110px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 500; color: var(--primary-text-color);">
+              ${item.name}
+            </div>
+            
+            <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
+              <div style="width: ${pct}%; height: 100%; background: ${color}; 
+                   -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 100%); 
+                   mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 100%); 
+                   border-radius: 0; transition: width 0.5s ease-out;">
+              </div>
+            </div>
+            
+            <div style="min-width: 40px; flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap;">
+              ${item.displayValue}
+            </div>
+            
           </div>
-          
-          <div style="width: 100px; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-            ${item.displayValue}
-          </div>
-          
-        </div>
-      `;
+        `;
+      }
     });
     
     html += `</div>`;
@@ -1559,7 +1589,6 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
   render() {
     if (!this._hass) return;
 
-    // Filter states and dynamically strip "Gaming Status" from dropdown labels
     const targetSuffix = this._config.entities_pattern || "_gaming_status";
     const entityOptions = Object.keys(this._hass.states)
       .filter(key => key.endsWith(targetSuffix))
@@ -1574,6 +1603,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         .container { display: flex; flex-direction: column; gap: 15px; color: var(--primary-text-color); }
         select, input { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
         label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; }
+        hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
         .helper-text { font-size: 12px; font-weight: normal; color: var(--secondary-text-color); margin-top: 2px; }
       </style>
       <div class="container">
@@ -1617,6 +1647,13 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         <label>Items to Display (Rows):
           <input type="number" id="max_players" .configValue="max_players" value="${this._config.max_players || '3'}" min="1" max="20">
         </label>
+        
+        <hr>
+
+        <label>Custom Colors (Advanced):
+          <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
+          <span class="helper-text">Leave blank to use the default vibrant palette. Override by entering a comma-separated list of colors.</span>
+        </label>
       </div>
     `;
 
@@ -1631,7 +1668,6 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         
         this._config = { ...this._config, [field]: value };
         
-        // Dynamic UI Toggle based on Mode
         if (field === 'mode') {
             singleSelector.style.display = (value === 'single') ? 'block' : 'none';
             selectedSelector.style.display = (value === 'selected') ? 'block' : 'none';
@@ -1642,17 +1678,6 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
     });
   }
 }
-
-// Register Cards
-customElements.define("gaming-status-leaderboard-card", GamingStatusLeaderboardCard);
-customElements.define("gaming-status-leaderboard-editor", GamingStatusLeaderboardEditor);
-
-window.customCards.push({
-  type: "gaming-status-leaderboard-card",
-  name: "Gaming Status - Leaderboard",
-  preview: true,
-  description: "A fast, native CSS bar graph ranking top players or top games across chosen metrics."
-});
 
 // ====================================================================
 // REGISTRATION
