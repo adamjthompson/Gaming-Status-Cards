@@ -1424,7 +1424,7 @@ class GamingStatusDonutEditor extends HTMLElement {
   }
 
   render() {
-    if (!this._hass) return;
+    if (!this._hass || !this._config) return;
 
     const targetSuffix = this._config.entities_pattern || "_gaming_status";
     const entityOptions = Object.keys(this._hass.states)
@@ -1743,7 +1743,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
   }
 
   render() {
-    if (!this._hass) return;
+    if (!this._hass || !this._config) return;
 
     const targetSuffix = this._config.entities_pattern || "_gaming_status";
     const entityOptions = Object.keys(this._hass.states)
