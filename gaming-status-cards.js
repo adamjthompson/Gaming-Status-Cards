@@ -40,6 +40,7 @@ class GamingStatusCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (!this.config) return;
 
     let targetSuffix = "_gaming_status";
     if (["steam", "xbox", "playstation"].includes(this.config.mode)) {
@@ -503,6 +504,7 @@ class GamingSlideshowCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (!this.config) return;
 
     let currentHash = "";
     let rawEntities = [];
@@ -964,6 +966,7 @@ class GamingStatusChartCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (!this.config) return;
 
     let targetEntities = [];
     if (
@@ -1569,6 +1572,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (!this.config) return;
     
     if (!this.content) {
       this.shadowRoot.innerHTML = `
