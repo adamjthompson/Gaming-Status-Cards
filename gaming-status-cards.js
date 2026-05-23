@@ -1242,7 +1242,6 @@ class GamingStatusDonutCard extends HTMLElement {
     let mode = config.mode || "all";
     let single_entity = config.single_entity || config.entity || "";
 
-    // Security catch: Prevent 'single' mode if metric is 'hours'
     if (config.metric === "hours" && mode === "single") {
       mode = "all";
     }
@@ -1280,7 +1279,6 @@ class GamingStatusDonutCard extends HTMLElement {
     this.chartElement = document.createElement("apexcharts-card");
     this.container.appendChild(this.chartElement);
 
-    // 1. Determine which entities to process
     let entityIdsToProcess = [];
     if (this.config.mode === "single" && this.config.single_entity) {
       if (this._hass.states[this.config.single_entity]) entityIdsToProcess.push(this.config.single_entity);
@@ -1296,7 +1294,6 @@ class GamingStatusDonutCard extends HTMLElement {
     }
     entityIdsToProcess.sort();
 
-    // 2. Prepare Colors
     let activePalette = this.defaultPalette;
     const hasCustomColors = this.config.custom_colors && this.config.custom_colors.trim() !== "";
     if (hasCustomColors) {
@@ -1305,9 +1302,7 @@ class GamingStatusDonutCard extends HTMLElement {
 
     let series = [];
 
-    // 3. Build Series Data based on Metric
     if (this.config.metric === "hours") {
-      // --- METRIC: HOURS PER PLAYER ---
       entityIdsToProcess.forEach((entityId, index) => {
         const stateObj = this._hass.states[entityId];
         if (!stateObj) return;
@@ -1324,7 +1319,6 @@ class GamingStatusDonutCard extends HTMLElement {
       });
 
     } else {
-      // --- METRIC: PLATFORM AGGREGATION ---
       const platforms = [
         { name: "Xbox", key: "Xbox", color: "rgb(11, 124, 16)" },
         { name: "PlayStation", key: "PlayStation", color: "rgb(0, 48, 135)" },
@@ -1352,7 +1346,7 @@ class GamingStatusDonutCard extends HTMLElement {
         `;
 
         return {
-          entity: "sensor.players_online", // Used as a global heartbeat trigger
+          entity: "sensor.players_online", 
           name: p.name,
           color: color,
           data_generator: generator
@@ -1360,7 +1354,6 @@ class GamingStatusDonutCard extends HTMLElement {
       });
     }
 
-    // 4. Inject Configuration
     const apexConfig = {
       type: "custom:apexcharts-card",
       chart_type: "donut",
@@ -1370,16 +1363,41 @@ class GamingStatusDonutCard extends HTMLElement {
         title: this.config.title || undefined,
       },
       apex_config: {
-        chart: { height: 200, fontFamily: "var(--primary-font-family)" },
+        chart: { 
+          height: 240, 
+          fontFamily: "var(--primary-font-family)" 
+        },
         tooltip: { enabled: false },
-        
-        // OffsetY and OffsetX removed so ApexCharts naturally vertically centers the labels
-        legend: { position: "left", fontSize: "16px", markers: { strokeWidth: 0, offsetX: -5 } },
-        
-        dataLabels: { style: { fontSize: "16px" } },
+        legend: { 
+          position: "left", 
+          fontSize: "16px", 
+          offsetX: 16,     // Aligns perfectly with standard HA card padding
+          offsetY: 0,      // Allows true mathematical centering
+          itemMargin: { vertical: 6 }, // Spaces out the items dynamically
+          markers: { strokeWidth: 0, offsetX: -5 } 
+        },
+        dataLabels: { 
+          style: { fontSize: "16px" } 
+        },
         stroke: { show: false },
         plotOptions: {
-          pie: { donut: { size: "40%", labels: { show: true, name: { show: false }, value: { show: true, offsetY: 6, fontSize: "20px" }, total: { show: true, showAlways: true, label: "Total", formatter: "EVAL:function(w) { return w.globals.seriesTotals.reduce((a, b) => a + b, 0).toFixed(1) + 'h' }" } } } }
+          pie: { 
+            customScale: 0.9, // Shrinks the donut slightly so it doesn't overlap the padded legend
+            donut: { 
+              size: "50%", 
+              labels: { 
+                show: true, 
+                name: { show: false }, 
+                value: { show: true, offsetY: 8, fontSize: "22px" }, 
+                total: { 
+                  show: true, 
+                  showAlways: true, 
+                  label: "Total", 
+                  formatter: "EVAL:function(w) { return w.globals.seriesTotals.reduce((a, b) => a + b, 0).toFixed(1) + 'h' }" 
+                } 
+              } 
+            } 
+          }
         }
       },
       series: series
@@ -1387,117 +1405,6 @@ class GamingStatusDonutCard extends HTMLElement {
 
     this.chartElement.setConfig(apexConfig);
     this.chartElement.hass = this._hass;
-  }
-}
-
-class GamingStatusDonutEditor extends HTMLElement {
-  constructor() { super(); this.attachShadow({ mode: "open" }); }
-  
-  setConfig(config) { 
-    let mode = config.mode || "all";
-    let single_entity = config.single_entity || config.entity || "";
-    this._config = { ...config, mode, single_entity }; 
-    this.render(); 
-  }
-  
-  set hass(hass) { this._hass = hass; }
-
-  render() {
-    if (!this._hass) return;
-
-    const targetSuffix = this._config.entities_pattern || "_gaming_status";
-    const entityOptions = Object.keys(this._hass.states)
-      .filter(key => key.endsWith(targetSuffix))
-      .map(key => {
-        const rawName = this._hass.states[key].attributes.friendly_name || key;
-        const cleanName = rawName.replace(/ Gaming Status/gi, "");
-        return `<option value="${key}" ${this._config.single_entity === key ? 'selected' : ''}>${cleanName}</option>`;
-      }).join('');
-
-    const isHoursMetric = this._config.metric === 'hours';
-
-    this.shadowRoot.innerHTML = `
-      <style>
-        .container { display: flex; flex-direction: column; gap: 15px; color: var(--primary-text-color); }
-        select, input { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
-        label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; }
-        hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
-        .helper-text { font-size: 12px; font-weight: normal; color: var(--secondary-text-color); margin-top: 2px; }
-        .warning { background: rgba(255,165,0,0.2); padding: 10px; border-radius: 4px; border-left: 4px solid orange; font-size: 13px; }
-      </style>
-      <div class="container">
-        
-        <div class="warning">
-          <strong>Note:</strong> This wrapper card requires the popular <code>apexcharts-card</code> to be installed via HACS in order to render the graphical data.
-        </div>
-
-        <label>Card Title (Optional):
-          <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ''}">
-        </label>
-
-        <label>Chart Metric:
-          <select id="metric" .configValue="metric">
-            <option value="platforms" ${this._config.metric === 'platforms' || !this._config.metric ? 'selected' : ''}>Platform Split (Xbox, PS, Steam, PC)</option>
-            <option value="hours" ${isHoursMetric ? 'selected' : ''}>Most Played Hours (By Player)</option>
-          </select>
-        </label>
-
-        <label>Player Filter Mode:
-          <select id="mode" .configValue="mode">
-            <option value="all" ${this._config.mode === 'all' || !this._config.mode ? 'selected' : ''}>All Tracked Players</option>
-            <option value="single" ${this._config.mode === 'single' ? 'selected' : ''} ${isHoursMetric ? 'disabled hidden' : ''}>Single Player</option>
-            <option value="selected" ${this._config.mode === 'selected' ? 'selected' : ''}>Selected Players</option>
-          </select>
-        </label>
-
-        <div id="single-selector" style="display: ${this._config.mode === 'single' ? 'block' : 'none'}">
-          <label>Select Player: 
-            <select id="single_entity" .configValue="single_entity">
-              <option value="" disabled ${!this._config.single_entity ? 'selected' : ''}>Select a player...</option>
-              ${entityOptions}
-            </select>
-          </label>
-        </div>
-
-        <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
-          <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.adam_gaming_status, ...">
-            <span class="helper-text">Enter a comma-separated list of exact entity IDs.</span>
-          </label>
-        </div>
-
-        <hr>
-
-        <label>Custom Colors (Advanced):
-          <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
-          <span class="helper-text">Leave blank to use default colors. For Platform Mode, leaving blank uses native brand colors. Override by entering a comma-separated list.</span>
-        </label>
-
-      </div>
-    `;
-
-    this.shadowRoot.querySelectorAll('input, select').forEach(el => {
-      el.addEventListener('change', e => {
-        const field = e.target.getAttribute('.configValue');
-        let value = e.target.value;
-        
-        // Auto-correct 'mode' if metric is changed to 'hours' while 'single' is active
-        if (field === 'metric' && value === 'hours' && this._config.mode === 'single') {
-          this._config = { ...this._config, mode: 'all' };
-        }
-
-        this._config = { ...this._config, [field]: value };
-
-        this.dispatchEvent(new CustomEvent("config-changed", { 
-          detail: { config: this._config }, 
-          bubbles: true, 
-          composed: true 
-        }));
-        
-        // Force an instant DOM re-render to appropriately hide/show the 'Single Player' option
-        this.render();
-      });
-    });
   }
 }
 
