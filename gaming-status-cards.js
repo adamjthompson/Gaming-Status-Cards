@@ -1214,13 +1214,46 @@ class GamingStatusDonutCard extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `<div id="container"></div>`;
     this.container = this.shadowRoot.getElementById("container");
+    this.defaultPalette = [
+      "rgb(255, 190, 11)",
+      "rgb(251, 86, 7)",
+      "rgb(255, 0, 110)",
+      "rgb(131, 56, 236)",
+      "rgb(58, 134, 255)",
+      "rgb(56, 176, 0)",
+    ];
   }
 
   static getConfigElement() { return document.createElement("gaming-status-donut-editor"); }
 
+  static getStubConfig() {
+    return { 
+      title: "", 
+      metric: "platforms",
+      mode: "all", 
+      single_entity: "",
+      selected_entities: "",
+      custom_colors: "",
+      entities_pattern: "_gaming_status"
+    };
+  }
+
   setConfig(config) {
-    this.config = { title: "", mode: "all", entity: "", ...config };
-    this.renderChart(); // Try rendering now
+    // Graceful migration from old config formats
+    let mode = config.mode || "all";
+    let single_entity = config.single_entity || config.entity || "";
+
+    this.config = { 
+      title: config.title || "", 
+      metric: config.metric || "platforms",
+      mode: mode, 
+      single_entity: single_entity, 
+      selected_entities: config.selected_entities || "",
+      custom_colors: config.custom_colors || "",
+      entities_pattern: config.entities_pattern || "_gaming_status",
+      ...config 
+    };
+    this.renderChart();
   }
 
   set hass(hass) {
@@ -1235,41 +1268,103 @@ class GamingStatusDonutCard extends HTMLElement {
   renderChart() {
     if (!this.config || !this._hass || this.chartElement) return;
 
-    // Check if apexcharts-card is registered yet
     if (!customElements.get('apexcharts-card')) {
       console.warn("ApexCharts Card not loaded yet, waiting...");
-      return; // It will retry when hass is set again
+      return;
     }
 
     this.chartElement = document.createElement("apexcharts-card");
     this.container.appendChild(this.chartElement);
 
-    const platforms = [
-      { name: "Xbox", key: "Xbox", color: "rgb(11, 124, 16)" },
-      { name: "PlayStation", key: "PlayStation", color: "rgb(0, 48, 135)" },
-      { name: "Steam", key: "Steam", color: "rgb(2, 173, 239)" },
-      { name: "PC", key: "PC", color: "rgb(100, 50, 100)" }
-    ];
-
-    const series = platforms.map(p => {
-      let generator = "";
-      if (this.config.mode === "single" && this.config.entity) {
-        generator = `const attr = entity.attributes; return attr.platform_split && attr.platform_split['${p.key}'] ? [[new Date().getTime(), (parseInt(attr.platform_split['${p.key}']) / 100) * attr.total_weekly_hours]] : [];`;
-      } else {
-        generator = `let total = 0; Object.keys(hass.states).forEach(key => { if (key.endsWith('_gaming_status')) { const attr = hass.states[key].attributes; if (attr.platform_split && attr.platform_split['${p.key}'] && attr.total_weekly_hours) { total += (parseInt(attr.platform_split['${p.key}']) / 100) * attr.total_weekly_hours; } } }); return total > 0 ? [[new Date().getTime(), total]] : [];`;
+    // 1. Determine which entities to process
+    let entityIdsToProcess = [];
+    if (this.config.mode === "single" && this.config.single_entity) {
+      if (this._hass.states[this.config.single_entity]) entityIdsToProcess.push(this.config.single_entity);
+    } else if (this.config.mode === "selected" && this.config.selected_entities) {
+      entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => this._hass.states[e]);
+    } else {
+      const targetSuffix = this.config.entities_pattern || "_gaming_status";
+      for (const key in this._hass.states) {
+        if (key.startsWith("sensor.") && key.endsWith(targetSuffix)) {
+          entityIdsToProcess.push(key);
+        }
       }
-      return {
-        entity: this.config.mode === "single" ? this.config.entity : "sensor.players_online",
-        name: p.name,
-        color: p.color,
-        data_generator: generator
-      };
-    });
+    }
+    entityIdsToProcess.sort();
 
+    // 2. Prepare Colors
+    let activePalette = this.defaultPalette;
+    const hasCustomColors = this.config.custom_colors && this.config.custom_colors.trim() !== "";
+    if (hasCustomColors) {
+      activePalette = this.config.custom_colors.split(",").map(c => c.trim()).filter(c => c);
+    }
+
+    let series = [];
+
+    // 3. Build Series Data based on Metric
+    if (this.config.metric === "hours") {
+      // --- METRIC: HOURS PER PLAYER ---
+      entityIdsToProcess.forEach((entityId, index) => {
+        const stateObj = this._hass.states[entityId];
+        if (!stateObj) return;
+
+        const friendlyName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status/gi, "");
+        const color = activePalette[index % activePalette.length];
+
+        series.push({
+          entity: entityId,
+          name: friendlyName,
+          color: color,
+          data_generator: `const attr = entity.attributes; const val = parseFloat(attr.total_weekly_hours) || 0; return val > 0 ? [[new Date().getTime(), val]] : [];`
+        });
+      });
+
+    } else {
+      // --- METRIC: PLATFORM AGGREGATION ---
+      const platforms = [
+        { name: "Xbox", key: "Xbox", color: "rgb(11, 124, 16)" },
+        { name: "PlayStation", key: "PlayStation", color: "rgb(0, 48, 135)" },
+        { name: "Steam", key: "Steam", color: "rgb(2, 173, 239)" },
+        { name: "PC", key: "PC", color: "rgb(100, 50, 100)" }
+      ];
+
+      const targetEntitiesStr = JSON.stringify(entityIdsToProcess);
+
+      series = platforms.map((p, index) => {
+        const color = hasCustomColors ? activePalette[index % activePalette.length] : p.color;
+
+        const generator = `
+          let total = 0;
+          const targets = ${targetEntitiesStr};
+          targets.forEach(key => {
+            if (hass.states[key]) {
+              const attr = hass.states[key].attributes;
+              if (attr.platform_split && attr.platform_split['${p.key}'] && attr.total_weekly_hours) {
+                total += (parseFloat(attr.platform_split['${p.key}']) / 100) * parseFloat(attr.total_weekly_hours);
+              }
+            }
+          });
+          return total > 0 ? [[new Date().getTime(), total]] : [];
+        `;
+
+        return {
+          entity: "sensor.players_online", // Used as a global heartbeat trigger
+          name: p.name,
+          color: color,
+          data_generator: generator
+        };
+      });
+    }
+
+    // 4. Inject Configuration
     const apexConfig = {
       type: "custom:apexcharts-card",
       chart_type: "donut",
       update_interval: "5m",
+      header: {
+        show: !!this.config.title,
+        title: this.config.title || undefined,
+      },
       apex_config: {
         chart: { height: 200, fontFamily: "var(--primary-font-family)" },
         tooltip: { enabled: false },
@@ -1290,24 +1385,35 @@ class GamingStatusDonutCard extends HTMLElement {
 
 class GamingStatusDonutEditor extends HTMLElement {
   constructor() { super(); this.attachShadow({ mode: "open" }); }
-  setConfig(config) { this._config = config; this.render(); }
+  
+  setConfig(config) { 
+    let mode = config.mode || "all";
+    let single_entity = config.single_entity || config.entity || "";
+    this._config = { ...config, mode, single_entity }; 
+    this.render(); 
+  }
+  
   set hass(hass) { this._hass = hass; }
 
   render() {
     if (!this._hass) return;
 
-    // Filter states for your specific gaming sensors
+    const targetSuffix = this._config.entities_pattern || "_gaming_status";
     const entityOptions = Object.keys(this._hass.states)
-      .filter(key => key.endsWith('_gaming_status'))
+      .filter(key => key.endsWith(targetSuffix))
       .map(key => {
-        const friendlyName = this._hass.states[key].attributes.friendly_name || key;
-        return `<option value="${key}" ${this._config.entity === key ? 'selected' : ''}>${friendlyName}</option>`;
+        const rawName = this._hass.states[key].attributes.friendly_name || key;
+        const cleanName = rawName.replace(/ Gaming Status/gi, "");
+        return `<option value="${key}" ${this._config.single_entity === key ? 'selected' : ''}>${cleanName}</option>`;
       }).join('');
 
     this.shadowRoot.innerHTML = `
       <style>
         .container { display: flex; flex-direction: column; gap: 15px; color: var(--primary-text-color); }
-        select { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; }
+        select, input { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
+        label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; }
+        hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
+        .helper-text { font-size: 12px; font-weight: normal; color: var(--secondary-text-color); margin-top: 2px; }
         .warning { background: rgba(255,165,0,0.2); padding: 10px; border-radius: 4px; border-left: 4px solid orange; font-size: 13px; }
       </style>
       <div class="container">
@@ -1316,29 +1422,56 @@ class GamingStatusDonutEditor extends HTMLElement {
           <strong>Note:</strong> This wrapper card requires the popular <code>apexcharts-card</code> to be installed via HACS in order to render the graphical data.
         </div>
 
-        <label>Mode: 
-          <select id="mode" .configValue="mode">
-            <option value="all" ${this._config.mode !== 'single' ? 'selected' : ''}>All Players (Aggregate)</option>
-            <option value="single" ${this._config.mode === 'single' ? 'selected' : ''}>Single Player</option>
+        <label>Card Title (Optional):
+          <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ''}">
+        </label>
+
+        <label>Chart Metric:
+          <select id="metric" .configValue="metric">
+            <option value="platforms" ${this._config.metric === 'platforms' || !this._config.metric ? 'selected' : ''}>Platform Split (Xbox, PS, Steam, PC)</option>
+            <option value="hours" ${this._config.metric === 'hours' ? 'selected' : ''}>Most Played Hours (By Player)</option>
           </select>
         </label>
-        
-        <div id="entity-selector" style="display: ${this._config.mode === 'single' ? 'block' : 'none'}">
+
+        <label>Player Filter Mode:
+          <select id="mode" .configValue="mode">
+            <option value="all" ${this._config.mode === 'all' || !this._config.mode ? 'selected' : ''}>All Tracked Players</option>
+            <option value="single" ${this._config.mode === 'single' ? 'selected' : ''}>Single Player</option>
+            <option value="selected" ${this._config.mode === 'selected' ? 'selected' : ''}>Selected Players</option>
+          </select>
+        </label>
+
+        <div id="single-selector" style="display: ${this._config.mode === 'single' ? 'block' : 'none'}">
           <label>Select Player: 
-            <select id="entity" .configValue="entity">
-              <option value="" disabled ${!this._config.entity ? 'selected' : ''}>Select a player...</option>
+            <select id="single_entity" .configValue="single_entity">
+              <option value="" disabled ${!this._config.single_entity ? 'selected' : ''}>Select a player...</option>
               ${entityOptions}
             </select>
           </label>
         </div>
+
+        <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
+          <label>Selected Entities:
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.adam_gaming_status, ...">
+            <span class="helper-text">Enter a comma-separated list of exact entity IDs.</span>
+          </label>
+        </div>
+
+        <hr>
+
+        <label>Custom Colors (Advanced):
+          <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
+          <span class="helper-text">Leave blank to use default colors. For Platform Mode, leaving blank uses native brand colors. Override by entering a comma-separated list.</span>
+        </label>
+
       </div>
     `;
 
     // Logic to toggle visibility and save config
-    const modeSelect = this.shadowRoot.getElementById('mode');
-    const entityWrapper = this.shadowRoot.getElementById('entity-selector');
+    const singleSelector = this.shadowRoot.getElementById('single-selector');
+    const selectedSelector = this.shadowRoot.getElementById('selected-selector');
 
-    this.shadowRoot.querySelectorAll('select').forEach(el => {
+    this.shadowRoot.querySelectorAll('input, select').forEach(el => {
       el.addEventListener('change', e => {
         const field = e.target.getAttribute('.configValue');
         const value = e.target.value;
@@ -1347,7 +1480,8 @@ class GamingStatusDonutEditor extends HTMLElement {
         
         // UI Toggle
         if (field === 'mode') {
-            entityWrapper.style.display = (value === 'single') ? 'block' : 'none';
+            singleSelector.style.display = (value === 'single') ? 'block' : 'none';
+            selectedSelector.style.display = (value === 'selected') ? 'block' : 'none';
         }
 
         this.dispatchEvent(new CustomEvent("config-changed", { 
