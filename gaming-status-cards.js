@@ -212,17 +212,11 @@ class GamingStatusCard extends HTMLElement {
             flex-shrink: 0;
           }
           .player-card:active { transform: scale(0.98); }
-          .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none; }
+          .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none;background-image: linear-gradient(to right, var(--card-gradient-color) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); filter: var(--card-filter); }
           
           .player-card.online { border-right: 8px solid var(--card-accent-color); }
           .player-card.offline { border-right: none; }
           
-          /* Fully Dynamic Backgrounds driven by JS */
-          .player-card::before { 
-             background-image: linear-gradient(to right, var(--card-gradient-color) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); 
-             filter: var(--card-filter); 
-          }
-
           .content-wrapper { position: relative; z-index: 1; display: flex; align-items: center; width: 100%; gap: 12px; pointer-events: none; }
           .avatar-container { position: relative; width: 36px; height: 36px; flex-shrink: 0; }
           .avatar { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
