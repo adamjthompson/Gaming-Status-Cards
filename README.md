@@ -30,6 +30,7 @@ A clean, native-feeling list of your tracked gamers. It dynamically tints the ca
 
 **UI Configuration Options:**
 * **Mode:** Choose who to show. Show everyone, strictly online players, or filter by a specific platform (Steam, Xbox, PlayStation).
+* **Color Mode:** Select border and background fade colors based on the game's dominant color or the platform color.
 * **Sort By:** Automatically sorts players chronologically by who was `Last Online`. Actively online players are always pinned to the top. Can also be sorted alphabetically by Name or Game Title.
 * **Visibility:** Toggle the platform icon badges and text shadows to fit your dashboard theme.
 * **Maximum Visible Players:** Limit how many players will be shown at once before a scrollbar is displayed.
@@ -131,6 +132,7 @@ mode: all # Options: all, online, steam, xbox, playstation
 sort_by: last_online # Options: last_online, name, state
 show_badges: true
 show_text_shadow: true
+color_mode: platform # Options: platform, game
 max_visible_players: '' # Limit visible rows before scrollbar appears
 manual_entities: '' # Whitelist of comma-separated sensor names
 ```
@@ -163,7 +165,7 @@ title: Platform Split
 metric: platforms # Options: platforms, hours
 mode: all # Options: all, selected (single is only available with the hours metric)
 selected_entities: '' # Comma-separated sensor names (used when mode is 'selected')
-custom_colors: '' # Override the default/brand colors
+custom_colors: '' # Override the default colors
 ```
 
 **The Leaderboard Card:**
