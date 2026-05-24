@@ -146,7 +146,7 @@ class GamingStatusCard extends HTMLElement {
       } else {
           // "All Players" Mode
           if (isOffline) {
-              gradientColorCSS = "rgba(0, 0, 0, 1)"; // Black fade
+              gradientColorCSS = "rgba(0, 0, 0, 0)"; // Transparent
               filterCSS = "blur(5px) grayscale(100%) brightness(0.5)"; // Force gray/dim when offline
           } else {
               filterCSS = "blur(5px) brightness(0.8)";
