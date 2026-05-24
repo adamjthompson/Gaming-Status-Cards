@@ -163,7 +163,8 @@ class GamingStatusCard extends HTMLElement {
         cover: isOffline 
             ? (entity.attributes.entity_picture || "")
             : (entity.attributes.game_hero_art || entity.attributes.entity_picture || ""),        
-        accentColor,
+        accentColor,       // Dynamic (Game Color)
+        platformColor,     // Static (Platform Color)
         badgeIcon,
         isOffline,
       };
@@ -373,7 +374,7 @@ class GamingStatusCardEditor extends HTMLElement {
             }> Game Artwork (Dynamic)</label>
             <label><input type="radio" name="color_mode" .configValue="color_mode" value="platform" ${
               this._config.color_mode === "platform" ? "checked" : ""
-            }> Platform Native (Steam/Xbox colors)</label>
+            }> Platform Native (Pre-Defined)</label>
         </div></div><hr>
         <div><div class="section-title">Sort By</div><div class="radio-group">
             <label><input type="radio" name="sort" .configValue="sort_by" value="last_online" ${
