@@ -1386,7 +1386,7 @@ class GamingStatusDonutCard extends HTMLElement {
         tooltip: { enabled: false },
         legend: { 
           position: "left", 
-          fontSize: "16px", 
+          fontSize: "14px", 
           offsetX: -10, 
           offsetY: 0, 
           width: 140,
