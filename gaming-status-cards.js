@@ -16,7 +16,6 @@ class GamingStatusCard extends HTMLElement {
     return {
       title: "",
       mode: "all",
-      color_mode: "game",
       sort_by: "last_online",
       show_badges: true,
       show_text_shadow: true,
@@ -30,7 +29,6 @@ class GamingStatusCard extends HTMLElement {
       entities_pattern: "_gaming_status",
       title: config.title || "",
       mode: config.mode || "all",
-      color_mode: config.color_mode || "game",
       sort_by: config.sort_by || "last_online",
       show_badges: config.show_badges !== false,
       show_text_shadow: config.show_text_shadow !== false,
@@ -130,21 +128,25 @@ class GamingStatusCard extends HTMLElement {
       ).toLowerCase();
       let badgeIcon = "mdi:gamepad-variant";
       let accentColor = "rgb(100, 50, 100)";
+      let platformColor = "100, 50, 100";
       if (platform.includes("steam")) {
         badgeIcon = "mdi:steam";
         accentColor = "rgb(2, 173, 239)";
+        platformColor = "2, 173, 239";
       } else if (platform.includes("xbox")) {
         badgeIcon = "mdi:microsoft-xbox";
         accentColor = "rgb(11, 124, 16)";
+        platformColor = "11, 124, 16";
       } else if (platform.includes("playstation")) {
         badgeIcon = "mdi:sony-playstation";
         accentColor = "rgb(0, 48, 135)";
+        platformColor = "0, 48, 135";
       }
 
       // Default to the vibrant game color unless specifically told to use "platform"
       const useGameColor = this.config.color_mode !== "platform";
       if (useGameColor && entity.attributes.game_dominant_color) {
-          accentColor = entity.attributes.game_dominant_color;
+        accentColor = entity.attributes.game_dominant_color;
       }
 
       const isOffline = ["offline", "unavailable", "unknown"].includes(
@@ -160,11 +162,11 @@ class GamingStatusCard extends HTMLElement {
         state: entity.state,
         secondary: entity.attributes.secondary || "",
         picture: entity.attributes.entity_picture || "",
-        cover: isOffline 
-            ? (entity.attributes.entity_picture || "")
-            : (entity.attributes.game_hero_art || entity.attributes.entity_picture || ""),        
-        accentColor,       // Dynamic (Game Color)
-        platformColor,     // Static (Platform Color)
+        cover: isOffline
+          ? (entity.attributes.entity_picture || "")
+          : (entity.attributes.game_hero_art || entity.attributes.entity_picture || ""),
+        accentColor,
+        platformColor,
         badgeIcon,
         isOffline,
       };
@@ -200,12 +202,12 @@ class GamingStatusCard extends HTMLElement {
           .player-card:active { transform: scale(0.98); }
           .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none; }
           
-          .player-card.online { border-right: 8px solid var(--card-accent-color); }
+          .player-card.online { border-right: 8px solid rgb(var(--platform-color-raw)); }
           .player-card.offline { border-right: none; }
           .player-card.default-tint::before { background-image: linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%), var(--bg-url); }
           .player-card.default-tint.online::before { filter: blur(5px) brightness(0.7); }
           .player-card.default-tint.offline::before { filter: blur(5px) grayscale(100%) brightness(0.5); }
-          .player-card.platform-tint::before { background-image: linear-gradient(to right, var(--card-accent-color) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); filter: blur(5px); }
+          .player-card.platform-tint::before { background-image: linear-gradient(to right, rgb(var(--platform-color-raw)) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); filter: blur(5px); }
 
           .content-wrapper { position: relative; z-index: 1; display: flex; align-items: center; width: 100%; gap: 12px; pointer-events: none; }
           .avatar-container { position: relative; width: 36px; height: 36px; flex-shrink: 0; }
@@ -246,7 +248,7 @@ class GamingStatusCard extends HTMLElement {
 
     if (data.length === 0) {
       this.content.innerHTML = `
-        <div class="player-card offline default-tint" style="--bg-url: none; --card-accent-color: rgb(128, 128, 128); cursor: default;" data-entity-id="">
+        <div class="player-card offline default-tint" style="--bg-url: none; --platform-color-raw: 128, 128, 128; cursor: default;" data-entity-id="">
           <div class="content-wrapper">
             <div class="avatar-container">
               <div class="placeholder-avatar">
@@ -270,11 +272,11 @@ class GamingStatusCard extends HTMLElement {
         const tintClass = isPlatformMode ? "platform-tint" : "default-tint";
         const statusClass = player.isOffline ? "offline" : "online";
         return `
-        <div class="player-card ${statusClass} ${tintClass}" style="
-          --bg-url: url('${player.cover || "/static/icons/favicon-192x192.png"}'); 
-          --card-accent-color: ${player.accentColor}; 
-          --platform-color-raw: ${player.platformColor};" 
-          data-entity-id="${player.entity_id}">
+        <div class="player-card ${statusClass} ${tintClass}" style="--bg-url: url('${
+          player.cover || "/static/icons/favicon-192x192.png"
+        }'); --platform-color-raw: ${player.platformColor};" data-entity-id="${
+          player.entity_id
+        }">
           <div class="content-wrapper">
             <div class="avatar-container">
               <img class="avatar" src="${
@@ -367,14 +369,6 @@ class GamingStatusCardEditor extends HTMLElement {
             <label><input type="radio" name="mode" .configValue="mode" value="playstation" ${
               this._config.mode === "playstation" ? "checked" : ""
             }> PlayStation</label>
-        </div></div><hr>
-        <div><div class="section-title">Color Mode</div><div class="radio-group">
-            <label><input type="radio" name="color_mode" .configValue="color_mode" value="game" ${
-              this._config.color_mode !== "platform" ? "checked" : ""
-            }> Game Artwork (Dynamic)</label>
-            <label><input type="radio" name="color_mode" .configValue="color_mode" value="platform" ${
-              this._config.color_mode === "platform" ? "checked" : ""
-            }> Platform Native (Pre-Defined)</label>
         </div></div><hr>
         <div><div class="section-title">Sort By</div><div class="radio-group">
             <label><input type="radio" name="sort" .configValue="sort_by" value="last_online" ${
@@ -1720,8 +1714,8 @@ class GamingStatusLeaderboardCard extends HTMLElement {
             </div>
             <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
               <div style="width: ${pct}%; height: 100%; background: ${color}; 
-                   -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
-                   mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
+                   -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
+                   mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
                    border-radius: 0; transition: width 0.5s ease-out;">
               </div>
             </div>
