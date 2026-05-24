@@ -1727,8 +1727,8 @@ class GamingStatusLeaderboardCard extends HTMLElement {
             </div>
             <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
               <div style="width: ${pct}%; height: 100%; background: ${color}; 
-                   -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
-                   mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
+                   -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
+                   mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.2) 100%); 
                    border-radius: 0; transition: width 0.5s ease-out;">
               </div>
             </div>
