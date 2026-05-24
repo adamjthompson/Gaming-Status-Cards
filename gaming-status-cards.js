@@ -147,8 +147,13 @@ class GamingStatusCard extends HTMLElement {
 
       // Default to the vibrant game color unless specifically told to use "platform"
       const useGameColor = this.config.color_mode !== "platform";
-      if (useGameColor && entity.attributes.game_dominant_color) {
-        accentColor = entity.attributes.game_dominant_color;
+      
+      // Strict validation to prevent CSS crashes if the backend is temporarily empty
+      const rawColor = entity.attributes.game_dominant_color;
+      const isValidColor = rawColor && rawColor !== "null" && rawColor !== "None" && (String(rawColor).startsWith("#") || String(rawColor).startsWith("rgb"));
+
+      if (useGameColor && isValidColor) {
+        accentColor = rawColor;
       }
 
       const isOffline = ["offline", "unavailable", "unknown"].includes(
