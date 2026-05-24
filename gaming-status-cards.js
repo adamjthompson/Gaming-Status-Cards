@@ -17,6 +17,7 @@ class GamingStatusCard extends HTMLElement {
       title: "",
       mode: "all",
       color_mode: "game",
+      offline_image: "game",
       sort_by: "last_online",
       show_badges: true,
       show_text_shadow: true,
@@ -31,6 +32,7 @@ class GamingStatusCard extends HTMLElement {
       title: config.title || "",
       mode: config.mode || "all",
       color_mode: config.color_mode || "game",
+      offline_image: config.offline_image || "game",
       sort_by: config.sort_by || "last_online",
       show_badges: config.show_badges !== false,
       show_text_shadow: config.show_text_shadow !== false,
@@ -94,30 +96,26 @@ class GamingStatusCard extends HTMLElement {
     });
 
     return filtered.map((entity) => {
+      const isPlatformMode = ["steam", "xbox", "playstation"].includes(this.config.mode);
       const platform = (entity.attributes.active_platform || this.config.mode).toLowerCase();
+      
       let badgeIcon = "mdi:gamepad-variant";
       let platformColor = "100, 50, 100";
       
-      if (platform.includes("steam")) {
-        badgeIcon = "mdi:steam";
-        platformColor = "2, 173, 239";
-      } else if (platform.includes("xbox")) {
-        badgeIcon = "mdi:microsoft-xbox";
-        platformColor = "11, 124, 16";
-      } else if (platform.includes("playstation")) {
-        badgeIcon = "mdi:sony-playstation";
-        platformColor = "0, 48, 135";
-      }
+      if (platform.includes("steam")) { badgeIcon = "mdi:steam"; platformColor = "2, 173, 239"; }
+      else if (platform.includes("xbox")) { badgeIcon = "mdi:microsoft-xbox"; platformColor = "11, 124, 16"; }
+      else if (platform.includes("playstation")) { badgeIcon = "mdi:sony-playstation"; platformColor = "0, 48, 135"; }
 
-      // Format as complete CSS rgb() strings so the DOM never parses it wrong
       let platformColorCSS = `rgb(${platformColor})`;
-      let accentColorCSS = platformColorCSS;
+      let accentColorCSS = platformColorCSS; 
+      let gradientColorCSS = isPlatformMode ? platformColorCSS : "rgba(0, 0, 0, 1)"; 
       
       const useGameColor = this.config.color_mode !== "platform";
       const rawColor = entity.attributes.game_dominant_color;
 
-      // Hex to RGB parser to guarantee uniform CSS injection and prevent browser panics
-      if (useGameColor && rawColor && rawColor !== "null" && rawColor !== "None") {
+      // Hex to RGB parser for dynamic game colors (The Indestructible Fix)
+      let parsedGameColor = null;
+      if (rawColor && String(rawColor).toLowerCase() !== "null" && String(rawColor).toLowerCase() !== "none") {
           let str = String(rawColor).trim().toLowerCase();
           if (str.startsWith('#')) {
               let h = str.replace('#', '');
@@ -127,12 +125,17 @@ class GamingStatusCard extends HTMLElement {
                   const g = parseInt(h.substring(2,4), 16);
                   const b = parseInt(h.substring(4,6), 16);
                   if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
-                      accentColorCSS = `rgb(${r}, ${g}, ${b})`;
+                      parsedGameColor = `rgb(${r}, ${g}, ${b})`;
                   }
               }
           } else if (str.startsWith('rgb')) {
-              accentColorCSS = str;
+              parsedGameColor = str;
           }
+      }
+
+      if (useGameColor && parsedGameColor) {
+          accentColorCSS = parsedGameColor;
+          gradientColorCSS = parsedGameColor;
       }
 
       const isOffline = ["offline", "unavailable", "unknown"].includes(entity.state.toLowerCase());
@@ -142,14 +145,21 @@ class GamingStatusCard extends HTMLElement {
       let heroArt = isStrValid(entity.attributes.game_hero_art) ? entity.attributes.game_hero_art : "";
       let pictureArt = isStrValid(entity.attributes.entity_picture) ? entity.attributes.entity_picture : "";
       
+      // Select offline image based on the new editor configuration toggle
+      let coverArt = heroArt || pictureArt || "/static/icons/favicon-192x192.png";
+      if (isOffline && this.config.offline_image === "avatar") {
+          coverArt = pictureArt || "/static/icons/favicon-192x192.png";
+      }
+
       return {
         entity_id: entity.entity_id,
         name: friendlyName,
         state: entity.state,
         secondary: entity.attributes.secondary || "",
         picture: pictureArt || "/static/icons/favicon-192x192.png",
-        cover: isOffline ? pictureArt : (heroArt || pictureArt || "/static/icons/favicon-192x192.png"),        
+        cover: coverArt,        
         accentColorCSS,
+        gradientColorCSS,
         platformColorCSS,
         badgeIcon,
         isOffline,
@@ -170,7 +180,6 @@ class GamingStatusCard extends HTMLElement {
           .card-stack { display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; }
           .card-stack.scrollable { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
           
-          /* Custom Scrollbar */
           .card-stack::-webkit-scrollbar { width: 6px; }
           .card-stack::-webkit-scrollbar-track { background: transparent; }
           .card-stack::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, 0.4); border-radius: 3px; }
@@ -186,22 +195,25 @@ class GamingStatusCard extends HTMLElement {
           .player-card:active { transform: scale(0.98); }
           .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none; }
           
-          /* Using direct CSS variables for colors to prevent RGB wrap parsing errors */
           .player-card.online { border-right: 8px solid var(--card-accent-color); }
           .player-card.offline { border-right: none; }
           
-          .player-card.default-tint::before { background-image: linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%), var(--bg-url); }
-          .player-card.default-tint.online::before { filter: blur(5px) brightness(0.7); }
-          .player-card.default-tint.offline::before { filter: blur(5px) grayscale(100%) brightness(0.5); }
-          
-          .player-card.platform-tint::before { background-image: linear-gradient(to right, var(--card-accent-color) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); filter: blur(5px); }
+          /* Dynamic Background Gradients */
+          .player-card.online::before { 
+             background-image: linear-gradient(to right, var(--card-gradient-color) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); 
+             filter: blur(5px) brightness(0.8); 
+          }
+          .player-card.offline::before { 
+             background-image: linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%), var(--bg-url); 
+             filter: blur(5px) grayscale(100%) brightness(0.5); 
+          }
 
           .content-wrapper { position: relative; z-index: 1; display: flex; align-items: center; width: 100%; gap: 12px; pointer-events: none; }
           .avatar-container { position: relative; width: 36px; height: 36px; flex-shrink: 0; }
           .avatar { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
           
           .badge { position: absolute; top: -3px; right: -3px; width: 16px; height: 16px; background: var(--platform-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: none; }
-          .player-card.default-tint.offline .badge { background: grey; }
+          .player-card.offline .badge { background: grey; }
           .badge ha-icon { --mdc-icon-size: 12px; margin-top: -1px; color: white; }
 
           .text-content { display: flex; flex-direction: column; flex-grow: 1; min-width: 0; }
@@ -232,7 +244,7 @@ class GamingStatusCard extends HTMLElement {
 
     if (data.length === 0) {
       this.content.innerHTML = `
-        <div class="player-card offline default-tint" style="--bg-url: none; --card-accent-color: rgb(128, 128, 128); cursor: default;" data-entity-id="">
+        <div class="player-card offline" style="--bg-url: none; --card-accent-color: rgb(128, 128, 128); cursor: default;" data-entity-id="">
           <div class="content-wrapper">
             <div class="avatar-container">
               <div class="placeholder-avatar">
@@ -250,11 +262,9 @@ class GamingStatusCard extends HTMLElement {
 
     this.content.innerHTML = data
       .map((player) => {
-        const isPlatformMode = ["steam", "xbox", "playstation"].includes(this.config.mode);
-        const tintClass = isPlatformMode ? "platform-tint" : "default-tint";
         const statusClass = player.isOffline ? "offline" : "online";
         return `
-        <div class="player-card ${statusClass} ${tintClass}" style="--bg-url: url('${player.cover}'); --card-accent-color: ${player.accentColorCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
+        <div class="player-card ${statusClass}" style="--bg-url: url('${player.cover}'); --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
           <div class="content-wrapper">
             <div class="avatar-container">
               <img class="avatar" src="${player.picture}" />
@@ -348,6 +358,14 @@ class GamingStatusCardEditor extends HTMLElement {
             <label><input type="radio" name="color_mode" .configValue="color_mode" value="platform" ${
               this._config.color_mode === "platform" ? "checked" : ""
             }> Platform Native (Pre-Defined)</label>
+        </div></div><hr>
+        <div><div class="section-title">Offline Image Style</div><div class="radio-group">
+            <label><input type="radio" name="offline_image" .configValue="offline_image" value="game" ${
+              this._config.offline_image !== "avatar" ? "checked" : ""
+            }> Last Played Game Artwork</label>
+            <label><input type="radio" name="offline_image" .configValue="offline_image" value="avatar" ${
+              this._config.offline_image === "avatar" ? "checked" : ""
+            }> Player Avatar</label>
         </div></div><hr>
         <div><div class="section-title">Sort By</div><div class="radio-group">
             <label><input type="radio" name="sort" .configValue="sort_by" value="last_online" ${
