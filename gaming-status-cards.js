@@ -108,12 +108,13 @@ class GamingStatusCard extends HTMLElement {
 
       let platformColorCSS = `rgb(${platformColor})`;
       let accentColorCSS = platformColorCSS; 
-      let gradientColorCSS = isPlatformMode ? platformColorCSS : "rgba(0, 0, 0, 1)"; 
+      let gradientColorCSS = "rgba(0, 0, 0, 1)";
+      let filterCSS = "blur(5px)";
       
       const useGameColor = this.config.color_mode !== "platform";
       const rawColor = entity.attributes.game_dominant_color;
 
-      // Hex to RGB parser for dynamic game colors (The Indestructible Fix)
+      // Hex to RGB parser for dynamic game colors
       let parsedGameColor = null;
       if (rawColor && String(rawColor).toLowerCase() !== "null" && String(rawColor).toLowerCase() !== "none") {
           let str = String(rawColor).trim().toLowerCase();
@@ -133,12 +134,29 @@ class GamingStatusCard extends HTMLElement {
           }
       }
 
-      if (useGameColor && parsedGameColor) {
-          accentColorCSS = parsedGameColor;
-          gradientColorCSS = parsedGameColor;
+      const isOffline = ["offline", "unavailable", "unknown"].includes(entity.state.toLowerCase());
+
+      // --- RESTORED DISPLAY LOGIC ---
+      if (isPlatformMode) {
+          gradientColorCSS = platformColorCSS; // Always tint background with platform color
+          filterCSS = "blur(5px)"; // Never turn gray, even when offline
+          if (useGameColor && parsedGameColor && !isOffline) {
+              accentColorCSS = parsedGameColor; // Only the border uses the game color
+          }
+      } else {
+          // "All Players" Mode
+          if (isOffline) {
+              gradientColorCSS = "rgba(0, 0, 0, 1)"; // Black fade
+              filterCSS = "blur(5px) grayscale(100%) brightness(0.5)"; // Force gray/dim when offline
+          } else {
+              filterCSS = "blur(5px) brightness(0.8)";
+              if (useGameColor && parsedGameColor) {
+                  gradientColorCSS = parsedGameColor;
+                  accentColorCSS = parsedGameColor;
+              }
+          }
       }
 
-      const isOffline = ["offline", "unavailable", "unknown"].includes(entity.state.toLowerCase());
       const friendlyName = (entity.attributes.friendly_name || entity.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "");
 
       const isStrValid = (val) => val && String(val).toLowerCase() !== "null" && String(val).toLowerCase() !== "none" && val !== "unknown";
@@ -160,6 +178,7 @@ class GamingStatusCard extends HTMLElement {
         cover: coverArt,        
         accentColorCSS,
         gradientColorCSS,
+        filterCSS,
         platformColorCSS,
         badgeIcon,
         isOffline,
@@ -198,14 +217,10 @@ class GamingStatusCard extends HTMLElement {
           .player-card.online { border-right: 8px solid var(--card-accent-color); }
           .player-card.offline { border-right: none; }
           
-          /* Dynamic Background Gradients */
-          .player-card.online::before { 
+          /* Fully Dynamic Backgrounds driven by JS */
+          .player-card::before { 
              background-image: linear-gradient(to right, var(--card-gradient-color) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); 
-             filter: blur(5px) brightness(0.8); 
-          }
-          .player-card.offline::before { 
-             background-image: linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%), var(--bg-url); 
-             filter: blur(5px) grayscale(100%) brightness(0.5); 
+             filter: var(--card-filter); 
           }
 
           .content-wrapper { position: relative; z-index: 1; display: flex; align-items: center; width: 100%; gap: 12px; pointer-events: none; }
@@ -244,7 +259,7 @@ class GamingStatusCard extends HTMLElement {
 
     if (data.length === 0) {
       this.content.innerHTML = `
-        <div class="player-card offline" style="--bg-url: none; --card-accent-color: rgb(128, 128, 128); cursor: default;" data-entity-id="">
+        <div class="player-card offline" style="--bg-url: none; --card-accent-color: rgb(128, 128, 128); --card-gradient-color: rgba(0, 0, 0, 1); --card-filter: blur(5px) grayscale(100%) brightness(0.5); cursor: default;" data-entity-id="">
           <div class="content-wrapper">
             <div class="avatar-container">
               <div class="placeholder-avatar">
@@ -264,7 +279,7 @@ class GamingStatusCard extends HTMLElement {
       .map((player) => {
         const statusClass = player.isOffline ? "offline" : "online";
         return `
-        <div class="player-card ${statusClass}" style="--bg-url: url('${player.cover}'); --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
+        <div class="player-card ${statusClass}" style="--bg-url: url('${player.cover}'); --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
           <div class="content-wrapper">
             <div class="avatar-container">
               <img class="avatar" src="${player.picture}" />
