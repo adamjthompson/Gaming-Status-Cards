@@ -204,7 +204,7 @@ class GamingStatusCard extends HTMLElement {
           .player-card:active { transform: scale(0.98); }
           .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none; }
           
-          .player-card.online { border-right: 8px solid rgb(var(--platform-color-raw)); }
+          .player-card.online { border-right: 8px solid var(--card-accent-color); }
           .player-card.offline { border-right: none; }
           .player-card.default-tint::before { background-image: linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%), var(--bg-url); }
           .player-card.default-tint.online::before { filter: blur(5px) brightness(0.7); }
@@ -276,7 +276,7 @@ class GamingStatusCard extends HTMLElement {
         return `
         <div class="player-card ${statusClass} ${tintClass}" style="--bg-url: url('${
           player.cover || "/static/icons/favicon-192x192.png"
-        }'); --platform-color-raw: ${player.platformColor};" data-entity-id="${
+        }'); --card-accent-color: ${player.accentColor}; --platform-color-raw: ${player.platformColor};" data-entity-id="${
           player.entity_id
         }">
           <div class="content-wrapper">
