@@ -16,6 +16,7 @@ class GamingStatusCard extends HTMLElement {
     return {
       title: "",
       mode: "all",
+      color_mode: "game",
       sort_by: "last_online",
       show_badges: true,
       show_text_shadow: true,
@@ -29,6 +30,7 @@ class GamingStatusCard extends HTMLElement {
       entities_pattern: "_gaming_status",
       title: config.title || "",
       mode: config.mode || "all",
+      color_mode: config.color_mode || "game",
       sort_by: config.sort_by || "last_online",
       show_badges: config.show_badges !== false,
       show_text_shadow: config.show_text_shadow !== false,
@@ -369,6 +371,14 @@ class GamingStatusCardEditor extends HTMLElement {
             <label><input type="radio" name="mode" .configValue="mode" value="playstation" ${
               this._config.mode === "playstation" ? "checked" : ""
             }> PlayStation</label>
+        </div></div><hr>
+        <div><div class="section-title">Color Mode</div><div class="radio-group">
+            <label><input type="radio" name="color_mode" .configValue="color_mode" value="game" ${
+              this._config.color_mode !== "platform" ? "checked" : ""
+            }> Game Artwork (Dynamic)</label>
+            <label><input type="radio" name="color_mode" .configValue="color_mode" value="platform" ${
+              this._config.color_mode === "platform" ? "checked" : ""
+            }> Platform Native (Pre-Defined)</label>
         </div></div><hr>
         <div><div class="section-title">Sort By</div><div class="radio-group">
             <label><input type="radio" name="sort" .configValue="sort_by" value="last_online" ${
