@@ -210,6 +210,9 @@ class GamingStatusCard extends HTMLElement {
           .player-card.default-tint.online::before { filter: blur(5px) brightness(0.7); }
           .player-card.default-tint.offline::before { filter: blur(5px) grayscale(100%) brightness(0.5); }
           .player-card.platform-tint::before { background-image: linear-gradient(to right, rgb(var(--platform-color-raw)) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); filter: blur(5px); }
+          .player-card.game-tint::before { background-image: linear-gradient(to right, var(--card-accent-color) 0%, rgba(0, 0, 0, 0) 100%), var(--bg-url); }
+          .player-card.game-tint.online::before { filter: blur(5px) brightness(0.7); }
+          .player-card.game-tint.offline::before { filter: blur(5px) grayscale(100%) brightness(0.5); }
 
           .content-wrapper { position: relative; z-index: 1; display: flex; align-items: center; width: 100%; gap: 12px; pointer-events: none; }
           .avatar-container { position: relative; width: 36px; height: 36px; flex-shrink: 0; }
@@ -271,7 +274,7 @@ class GamingStatusCard extends HTMLElement {
         const isPlatformMode = ["steam", "xbox", "playstation"].includes(
           this.config.mode
         );
-        const tintClass = isPlatformMode ? "platform-tint" : "default-tint";
+        const tintClass = isPlatformMode ? "platform-tint" : (this.config.color_mode !== "platform" && !player.isOffline && player.accentColor) ? "game-tint" : "default-tint";
         const statusClass = player.isOffline ? "offline" : "online";
         return `
         <div class="player-card ${statusClass} ${tintClass}" style="--bg-url: url('${
