@@ -52,13 +52,8 @@ class GamingStatusCard extends HTMLElement {
     let currentHash = "";
     let rawEntities = [];
 
-    if (
-      this.config.manual_entities &&
-      this.config.manual_entities.trim() !== ""
-    ) {
-      const entityIds = this.config.manual_entities
-        .split(",")
-        .map((e) => e.trim());
+    if (this.config.manual_entities && this.config.manual_entities.trim() !== "") {
+      const entityIds = this.config.manual_entities.split(",").map((e) => e.trim());
       for (const id of entityIds) {
         if (hass.states[id]) {
           rawEntities.push(hass.states[id]);
@@ -69,8 +64,7 @@ class GamingStatusCard extends HTMLElement {
       for (const entityId in hass.states) {
         if (entityId.startsWith("sensor.") && entityId.includes(targetSuffix)) {
           rawEntities.push(hass.states[entityId]);
-          currentHash +=
-            hass.states[entityId].state + hass.states[entityId].last_updated;
+          currentHash += hass.states[entityId].state + hass.states[entityId].last_updated;
         }
       }
     }
@@ -115,21 +109,36 @@ class GamingStatusCard extends HTMLElement {
         platformColor = "0, 48, 135";
       }
 
-      let accentColor = `rgb(${platformColor})`;
-      const useGameColor = this.config.color_mode !== "platform";
+      // Format as complete CSS rgb() strings so the DOM never parses it wrong
+      let platformColorCSS = `rgb(${platformColor})`;
+      let accentColorCSS = platformColorCSS;
       
-      // Strict Sanitizer: Destroys literal "null" and "None" strings masquerading as data
-      const isStrValid = (val) => val && String(val).toLowerCase() !== "null" && String(val).toLowerCase() !== "none" && val !== "unknown";
-
+      const useGameColor = this.config.color_mode !== "platform";
       const rawColor = entity.attributes.game_dominant_color;
-      if (useGameColor && isStrValid(rawColor) && (String(rawColor).startsWith("#") || String(rawColor).startsWith("rgb"))) {
-          accentColor = rawColor;
+
+      // Hex to RGB parser to guarantee uniform CSS injection and prevent browser panics
+      if (useGameColor && rawColor && rawColor !== "null" && rawColor !== "None") {
+          let str = String(rawColor).trim().toLowerCase();
+          if (str.startsWith('#')) {
+              let h = str.replace('#', '');
+              if (h.length === 3) h = [...h].map(x => x + x).join('');
+              if (h.length === 6) {
+                  const r = parseInt(h.substring(0,2), 16);
+                  const g = parseInt(h.substring(2,4), 16);
+                  const b = parseInt(h.substring(4,6), 16);
+                  if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+                      accentColorCSS = `rgb(${r}, ${g}, ${b})`;
+                  }
+              }
+          } else if (str.startsWith('rgb')) {
+              accentColorCSS = str;
+          }
       }
 
       const isOffline = ["offline", "unavailable", "unknown"].includes(entity.state.toLowerCase());
       const friendlyName = (entity.attributes.friendly_name || entity.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "");
 
-      // Sanitize the image URLs so a 'null' string doesn't break the background
+      const isStrValid = (val) => val && String(val).toLowerCase() !== "null" && String(val).toLowerCase() !== "none" && val !== "unknown";
       let heroArt = isStrValid(entity.attributes.game_hero_art) ? entity.attributes.game_hero_art : "";
       let pictureArt = isStrValid(entity.attributes.entity_picture) ? entity.attributes.entity_picture : "";
       
@@ -138,10 +147,10 @@ class GamingStatusCard extends HTMLElement {
         name: friendlyName,
         state: entity.state,
         secondary: entity.attributes.secondary || "",
-        picture: pictureArt,
-        cover: isOffline ? pictureArt : (heroArt || pictureArt),        
-        accentColor,
-        platformColor,
+        picture: pictureArt || "/static/icons/favicon-192x192.png",
+        cover: isOffline ? pictureArt : (heroArt || pictureArt || "/static/icons/favicon-192x192.png"),        
+        accentColorCSS,
+        platformColorCSS,
         badgeIcon,
         isOffline,
       };
@@ -177,33 +186,30 @@ class GamingStatusCard extends HTMLElement {
           .player-card:active { transform: scale(0.98); }
           .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none; }
           
+          /* Using direct CSS variables for colors to prevent RGB wrap parsing errors */
           .player-card.online { border-right: 8px solid var(--card-accent-color); }
           .player-card.offline { border-right: none; }
+          
           .player-card.default-tint::before { background-image: linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%), var(--bg-url); }
           .player-card.default-tint.online::before { filter: blur(5px) brightness(0.7); }
           .player-card.default-tint.offline::before { filter: blur(5px) grayscale(100%) brightness(0.5); }
-          .player-card.platform-tint::before { background-image: linear-gradient(to right, rgb(var(--platform-color-raw)) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); filter: blur(5px); }
-          .player-card.game-tint::before { background-image: linear-gradient(to right, var(--card-accent-color) 0%, rgba(0, 0, 0, 0) 100%), var(--bg-url); }
-          .player-card.game-tint.online::before { filter: blur(5px) brightness(0.7); }
-          .player-card.game-tint.offline::before { filter: blur(5px) grayscale(100%) brightness(0.5); }
+          
+          .player-card.platform-tint::before { background-image: linear-gradient(to right, var(--card-accent-color) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); filter: blur(5px); }
 
           .content-wrapper { position: relative; z-index: 1; display: flex; align-items: center; width: 100%; gap: 12px; pointer-events: none; }
           .avatar-container { position: relative; width: 36px; height: 36px; flex-shrink: 0; }
           .avatar { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-          .badge { position: absolute; top: -3px; right: -3px; width: 16px; height: 16px; background: rgb(var(--platform-color-raw)); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: none; }
+          
+          .badge { position: absolute; top: -3px; right: -3px; width: 16px; height: 16px; background: var(--platform-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: none; }
           .player-card.default-tint.offline .badge { background: grey; }
           .badge ha-icon { --mdc-icon-size: 12px; margin-top: -1px; color: white; }
 
           .text-content { display: flex; flex-direction: column; flex-grow: 1; min-width: 0; }
           .primary { font-weight: 600; font-size: 14px; color: white; text-shadow: ${
-            this.config.show_text_shadow
-              ? "1px 1px 2px rgba(0,0,0,0.8)"
-              : "none"
+            this.config.show_text_shadow ? "1px 1px 2px rgba(0,0,0,0.8)" : "none"
           }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; margin-bottom: 2px; }
           .secondary { font-size: 12px; color: #ffffff; text-shadow: ${
-            this.config.show_text_shadow
-              ? "1px 1px 2px rgba(0,0,0,0.8)"
-              : "none"
+            this.config.show_text_shadow ? "1px 1px 2px rgba(0,0,0,0.8)" : "none"
           }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
           
           .placeholder-avatar { background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
@@ -226,7 +232,7 @@ class GamingStatusCard extends HTMLElement {
 
     if (data.length === 0) {
       this.content.innerHTML = `
-        <div class="player-card offline default-tint" style="--bg-url: none; --platform-color-raw: 128, 128, 128; cursor: default;" data-entity-id="">
+        <div class="player-card offline default-tint" style="--bg-url: none; --card-accent-color: rgb(128, 128, 128); cursor: default;" data-entity-id="">
           <div class="content-wrapper">
             <div class="avatar-container">
               <div class="placeholder-avatar">
@@ -244,33 +250,19 @@ class GamingStatusCard extends HTMLElement {
 
     this.content.innerHTML = data
       .map((player) => {
-        const isPlatformMode = ["steam", "xbox", "playstation"].includes(
-          this.config.mode
-        );
-        const tintClass = isPlatformMode ? "platform-tint" : (this.config.color_mode !== "platform" && !player.isOffline && player.accentColor) ? "game-tint" : "default-tint";
+        const isPlatformMode = ["steam", "xbox", "playstation"].includes(this.config.mode);
+        const tintClass = isPlatformMode ? "platform-tint" : "default-tint";
         const statusClass = player.isOffline ? "offline" : "online";
         return `
-        <div class="player-card ${statusClass} ${tintClass}" style="--bg-url: url('${
-          player.cover || "/static/icons/favicon-192x192.png"
-        }'); --card-accent-color: ${player.accentColor}; --platform-color-raw: ${player.platformColor};" data-entity-id="${
-          player.entity_id
-        }">
+        <div class="player-card ${statusClass} ${tintClass}" style="--bg-url: url('${player.cover}'); --card-accent-color: ${player.accentColorCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
           <div class="content-wrapper">
             <div class="avatar-container">
-              <img class="avatar" src="${
-                player.picture || "/static/icons/favicon-192x192.png"
-              }" />
-              ${
-                this.config.show_badges
-                  ? `<div class="badge"><ha-icon icon="${player.badgeIcon}"></ha-icon></div>`
-                  : ""
-              }
+              <img class="avatar" src="${player.picture}" />
+              ${this.config.show_badges ? `<div class="badge"><ha-icon icon="${player.badgeIcon}"></ha-icon></div>` : ""}
             </div>
             <div class="text-content">
               <div class="primary">${player.name}</div>
-              <div class="secondary">${
-                player.state !== "Offline" ? player.state + " " : ""
-              }${player.secondary}</div>
+              <div class="secondary">${player.state !== "Offline" ? player.state + " " : ""}${player.secondary}</div>
             </div>
           </div>
         </div>`;
@@ -297,6 +289,7 @@ class GamingStatusCard extends HTMLElement {
     this.dispatchEvent(event);
     return event;
   }
+  
   getCardSize() {
     return Object.keys(this._hass.states).length > 0 ? 3 : 1;
   }
