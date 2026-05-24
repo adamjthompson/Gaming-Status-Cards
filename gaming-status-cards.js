@@ -210,7 +210,7 @@ class GamingStatusCard extends HTMLElement {
           .content-wrapper { position: relative; z-index: 1; display: flex; align-items: center; width: 100%; gap: 12px; pointer-events: none; }
           .avatar-container { position: relative; width: 36px; height: 36px; flex-shrink: 0; }
           .avatar { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-          .badge { position: absolute; top: -3px; right: -3px; width: 16px; height: 16px; background: var(--card-accent-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: none; }
+          .badge { position: absolute; top: -3px; right: -3px; width: 16px; height: 16px; background: rgb(var(--platform-color-raw)); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: none; }
           .player-card.default-tint.offline .badge { background: grey; }
           .badge ha-icon { --mdc-icon-size: 12px; margin-top: -1px; color: white; }
 
@@ -270,11 +270,11 @@ class GamingStatusCard extends HTMLElement {
         const tintClass = isPlatformMode ? "platform-tint" : "default-tint";
         const statusClass = player.isOffline ? "offline" : "online";
         return `
-        <div class="player-card ${statusClass} ${tintClass}" style="--bg-url: url('${
-          player.cover || "/static/icons/favicon-192x192.png"
-        }'); --card-accent-color: ${player.accentColor};" data-entity-id="${
-          player.entity_id
-        }">
+        <div class="player-card ${statusClass} ${tintClass}" style="
+          --bg-url: url('${player.cover || "/static/icons/favicon-192x192.png"}'); 
+          --card-accent-color: ${player.accentColor}; 
+          --platform-color-raw: ${player.platformColor};" 
+          data-entity-id="${player.entity_id}">
           <div class="content-wrapper">
             <div class="avatar-container">
               <img class="avatar" src="${
