@@ -95,83 +95,51 @@ class GamingStatusCard extends HTMLElement {
       const stateB = b.state.toLowerCase();
       const isOfflineA = ["offline", "unavailable", "unknown"].includes(stateA);
       const isOfflineB = ["offline", "unavailable", "unknown"].includes(stateB);
-
       if (isOfflineA !== isOfflineB) return isOfflineA ? 1 : -1;
-      if (this.config.sort_by === "name") {
-        const nameA = a.attributes.friendly_name || a.entity_id;
-        const nameB = b.attributes.friendly_name || b.entity_id;
-        return nameA.localeCompare(nameB);
-      }
-      if (this.config.sort_by === "state") return stateA.localeCompare(stateB);
-
-      const getValidTime = (entity) => {
-        const isCurrentlyOffline = ["offline", "unavailable", "unknown"].includes(entity.state.toLowerCase());
-
-        if (!isCurrentlyOffline && entity.attributes.play_start_time) {
-          return new Date(entity.attributes.play_start_time).getTime();
-        }
-
-        if (entity.attributes.last_online_valid_timestamp) {
-          return new Date(entity.attributes.last_online_valid_timestamp).getTime();
-        }
-        
-        if (isCurrentlyOffline) return 0;
-        return new Date(entity.last_changed).getTime();
-      };
-
-      const timeA = getValidTime(a);
-      const timeB = getValidTime(b);
-      return timeB - timeA;
+      return 0; 
     });
 
     return filtered.map((entity) => {
-      const platform = (
-        entity.attributes.active_platform || this.config.mode
-      ).toLowerCase();
+      const platform = (entity.attributes.active_platform || this.config.mode).toLowerCase();
       let badgeIcon = "mdi:gamepad-variant";
-      let accentColor = "rgb(100, 50, 100)";
       let platformColor = "100, 50, 100";
+      
       if (platform.includes("steam")) {
         badgeIcon = "mdi:steam";
-        accentColor = "rgb(2, 173, 239)";
         platformColor = "2, 173, 239";
       } else if (platform.includes("xbox")) {
         badgeIcon = "mdi:microsoft-xbox";
-        accentColor = "rgb(11, 124, 16)";
         platformColor = "11, 124, 16";
       } else if (platform.includes("playstation")) {
         badgeIcon = "mdi:sony-playstation";
-        accentColor = "rgb(0, 48, 135)";
         platformColor = "0, 48, 135";
       }
 
-      // Default to the vibrant game color unless specifically told to use "platform"
+      let accentColor = `rgb(${platformColor})`;
       const useGameColor = this.config.color_mode !== "platform";
       
-      // Strict validation to prevent CSS crashes if the backend is temporarily empty
-      const rawColor = entity.attributes.game_dominant_color;
-      const isValidColor = rawColor && rawColor !== "null" && rawColor !== "None" && (String(rawColor).startsWith("#") || String(rawColor).startsWith("rgb"));
+      // Strict Sanitizer: Destroys literal "null" and "None" strings masquerading as data
+      const isStrValid = (val) => val && String(val).toLowerCase() !== "null" && String(val).toLowerCase() !== "none" && val !== "unknown";
 
-      if (useGameColor && isValidColor) {
-        accentColor = rawColor;
+      const rawColor = entity.attributes.game_dominant_color;
+      if (useGameColor && isStrValid(rawColor) && (String(rawColor).startsWith("#") || String(rawColor).startsWith("rgb"))) {
+          accentColor = rawColor;
       }
 
-      const isOffline = ["offline", "unavailable", "unknown"].includes(
-        entity.state.toLowerCase()
-      );
-      const friendlyName = (
-        entity.attributes.friendly_name || entity.entity_id
-      ).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "");
+      const isOffline = ["offline", "unavailable", "unknown"].includes(entity.state.toLowerCase());
+      const friendlyName = (entity.attributes.friendly_name || entity.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "");
 
+      // Sanitize the image URLs so a 'null' string doesn't break the background
+      let heroArt = isStrValid(entity.attributes.game_hero_art) ? entity.attributes.game_hero_art : "";
+      let pictureArt = isStrValid(entity.attributes.entity_picture) ? entity.attributes.entity_picture : "";
+      
       return {
         entity_id: entity.entity_id,
         name: friendlyName,
         state: entity.state,
         secondary: entity.attributes.secondary || "",
-        picture: entity.attributes.entity_picture || "",
-        cover: isOffline
-          ? (entity.attributes.entity_picture || "")
-          : (entity.attributes.game_hero_art || entity.attributes.entity_picture || ""),
+        picture: pictureArt,
+        cover: isOffline ? pictureArt : (heroArt || pictureArt),        
         accentColor,
         platformColor,
         badgeIcon,
