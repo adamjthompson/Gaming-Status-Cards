@@ -105,32 +105,59 @@ class GamingStatusCard extends HTMLElement {
          return nameA.localeCompare(nameB);
       } 
       else if (sortBy === "state") {
-         // Pull directly from the native attributes, no string splitting required!
-         let gameA = isOfflineA ? String(a.attributes.last_played_game || "").toLowerCase() : stateA;
-         let gameB = isOfflineB ? String(b.attributes.last_played_game || "").toLowerCase() : stateB;
+         let gameA = isOfflineA ? (a.attributes.last_played_game || "") : a.state;
+         let gameB = isOfflineB ? (b.attributes.last_played_game || "") : b.state;
+         
+         // Sanitize and normalize the titles
+         gameA = String(gameA).toLowerCase().trim();
+         gameB = String(gameB).toLowerCase().trim();
+         if (["none", "unknown", "null", "offline", "idle", ""].includes(gameA)) gameA = "";
+         if (["none", "unknown", "null", "offline", "idle", ""].includes(gameB)) gameB = "";
          
          // Push empty/unknown games to the very bottom
          if (!gameA && !gameB) return nameA.localeCompare(nameB);
-         if (!gameA || gameA === "none" || gameA === "unknown") return 1;
-         if (!gameB || gameB === "none" || gameB === "unknown") return -1;
+         if (!gameA) return 1;
+         if (!gameB) return -1;
          
          return gameA.localeCompare(gameB);
       } 
       else { 
          // "last_online" (default)
          const getSortTime = (ent, isOff) => {
-             // 1. Point directly to the machine-readable ISO timestamp provided by the backend!
+             // A: Try the native timestamp, but safely strip the 6-digit microseconds so browsers don't crash
              if (isOff && ent.attributes && ent.attributes.last_online_valid_timestamp) {
-                 const t = new Date(ent.attributes.last_online_valid_timestamp).getTime();
+                 const cleanIso = String(ent.attributes.last_online_valid_timestamp).replace(/\.\d+/, "");
+                 const t = new Date(cleanIso).getTime();
                  if (!isNaN(t)) return t;
              }
-             // 2. Active Session fallback
+             
+             // B: If timestamp is missing entirely (older players), safely parse the secondary text
+             if (isOff && ent.attributes && ent.attributes.secondary) {
+                 const sec = String(ent.attributes.secondary).toLowerCase();
+                 const match = sec.match(/(\d+)\s*(mo|m|h|d|w|y)/);
+                 if (match) {
+                     const val = parseInt(match[1]);
+                     const unit = match[2];
+                     let seconds = val * 60;
+                     if (unit === 'h') seconds = val * 3600;
+                     if (unit === 'd') seconds = val * 86400;
+                     if (unit === 'w') seconds = val * 604800;
+                     if (unit === 'mo') seconds = val * 2592000;
+                     if (unit === 'y') seconds = val * 31536000;
+                     return Date.now() - (seconds * 1000);
+                 }
+             }
+
+             // C: Active session tracking for online players
              if (!isOff && ent.attributes && ent.attributes.play_start_time) {
-                 const t = new Date(ent.attributes.play_start_time).getTime();
+                 const cleanIso = String(ent.attributes.play_start_time).replace(/\.\d+/, "");
+                 const t = new Date(cleanIso).getTime();
                  if (!isNaN(t)) return t;
              }
-             // 3. Absolute fallback
-             const tFallback = new Date(ent.last_changed || ent.last_updated).getTime();
+
+             // D: Ultimate fallback
+             const fallbackIso = String(ent.last_changed || ent.last_updated || "").replace(/\.\d+/, "");
+             const tFallback = new Date(fallbackIso).getTime();
              return isNaN(tFallback) ? 0 : tFallback;
          };
 
