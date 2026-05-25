@@ -95,46 +95,75 @@ class GamingStatusCard extends HTMLElement {
       // 1. Primary Sort: Online players always float to the top
       if (isOfflineA !== isOfflineB) return isOfflineA ? 1 : -1;
       
-      // 2. Secondary Sort: Based on the UI Editor config
+      // Setup Name Helpers for tie-breakers
+      const nameA = (a.attributes.friendly_name || a.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "").trim().toLowerCase();
+      const nameB = (b.attributes.friendly_name || b.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "").trim().toLowerCase();
+      
       const sortBy = this.config.sort_by || "last_online";
       
       if (sortBy === "name") {
-         // Strip out the suffixes so it sorts accurately by their actual displayed name
-         const nameA = (a.attributes.friendly_name || a.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "").trim().toLowerCase();
-         const nameB = (b.attributes.friendly_name || b.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "").trim().toLowerCase();
          return nameA.localeCompare(nameB);
       } 
       else if (sortBy === "state") {
-         // Online: Sort alphabetically by active game title
-         // Offline: Fall back to their last played game to maintain logical groupings
-         const gameA = isOfflineA ? String(a.attributes.last_played_game || "").toLowerCase() : stateA;
-         const gameB = isOfflineB ? String(b.attributes.last_played_game || "").toLowerCase() : stateB;
+         let gameA = isOfflineA ? String(a.attributes.last_played_game || "").toLowerCase() : stateA;
+         let gameB = isOfflineB ? String(b.attributes.last_played_game || "").toLowerCase() : stateB;
+         
+         // Smart Scraper: Extract the game title directly from the "Last seen..." text string
+         if (!gameA && isOfflineA && a.attributes.secondary) {
+             const s = String(a.attributes.secondary);
+             if (s.includes(":")) gameA = s.substring(s.indexOf(":") + 1).replace(/\(.*?\)/g, "").trim().toLowerCase();
+         }
+         if (!gameB && isOfflineB && b.attributes.secondary) {
+             const s = String(b.attributes.secondary);
+             if (s.includes(":")) gameB = s.substring(s.indexOf(":") + 1).replace(/\(.*?\)/g, "").trim().toLowerCase();
+         }
+         
+         // Push empty/unknown games to the very bottom
+         if (!gameA && !gameB) return nameA.localeCompare(nameB);
+         if (!gameA) return 1;
+         if (!gameB) return -1;
+         
          return gameA.localeCompare(gameB);
       } 
       else { 
-         // "last_online" (default) - Most recently changed floats to the top
-         
-         // Helper to extract an accurate timestamp that survives HA reboots and background syncs
+         // "last_online" (default)
          const getSortTime = (ent, isOff) => {
-             // If they are offline, strictly parse the backend's persistent "Last seen X ago" string
-             if (isOff && ent.attributes.secondary) {
-                 const match = ent.attributes.secondary.match(/seen (\d+)(m|h|d) ago/i);
+             // 1. Indestructible Regex: Hunts for a number followed by m, h, d, w, mo, y anywhere in the string
+             if (isOff && ent.attributes && ent.attributes.secondary) {
+                 const sec = String(ent.attributes.secondary).toLowerCase();
+                 const match = sec.match(/(\d+)\s*(mo|m|h|d|w|y)/);
                  if (match) {
                      const val = parseInt(match[1]);
-                     const unit = match[2].toLowerCase();
-                     let seconds = val * 60;
+                     const unit = match[2];
+                     let seconds = val * 60; // default to minutes
                      if (unit === 'h') seconds = val * 3600;
                      if (unit === 'd') seconds = val * 86400;
+                     if (unit === 'w') seconds = val * 604800;
+                     if (unit === 'mo') seconds = val * 2592000;
+                     if (unit === 'y') seconds = val * 31536000;
                      return Date.now() - (seconds * 1000);
                  }
              }
-             // If online (or if string parsing fails), use last_changed 
-             // (NEVER use last_updated, as it fires randomly on background syncs)
-             return new Date(ent.last_changed || ent.last_updated).getTime() || 0;
+             
+             // 2. Active Session fallback
+             if (ent.attributes && ent.attributes.play_start_time) {
+                 const t = new Date(ent.attributes.play_start_time).getTime();
+                 if (!isNaN(t)) return t;
+             }
+             
+             // 3. Absolute fallback to HA state changes
+             if (ent.last_changed || ent.last_updated) {
+                 const t = new Date(ent.last_changed || ent.last_updated).getTime();
+                 if (!isNaN(t)) return t;
+             }
+             return 0;
          };
 
          const timeA = getSortTime(a, isOfflineA);
          const timeB = getSortTime(b, isOfflineB);
+         
+         if (timeA === timeB) return nameA.localeCompare(nameB);
+         
          return timeB - timeA;
       }
     });
