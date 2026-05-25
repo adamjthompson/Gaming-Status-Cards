@@ -81,7 +81,7 @@ class GamingStatusCard extends HTMLElement {
   processData(entities) {
     let filtered = entities.filter((entity) => {
       const state = entity.state.toLowerCase();
-      const isOffline = ["offline", "unavailable", "unknown"].includes(state);
+      const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(state);
       if (this.config.mode === "online" && isOffline) return false;
       return true;
     });
@@ -89,8 +89,8 @@ class GamingStatusCard extends HTMLElement {
     filtered.sort((a, b) => {
       const stateA = a.state.toLowerCase();
       const stateB = b.state.toLowerCase();
-      const isOfflineA = ["offline", "unavailable", "unknown"].includes(stateA);
-      const isOfflineB = ["offline", "unavailable", "unknown"].includes(stateB);
+      const isOfflineA = ["offline", "unavailable", "unknown", "idle"].includes(stateA);
+      const isOfflineB = ["offline", "unavailable", "unknown", "idle"].includes(stateB);
       
       // 1. Primary Sort: Online players always float to the top
       if (isOfflineA !== isOfflineB) return isOfflineA ? 1 : -1;
@@ -105,65 +105,39 @@ class GamingStatusCard extends HTMLElement {
          return nameA.localeCompare(nameB);
       } 
       else if (sortBy === "state") {
+         // Pull directly from the native attributes, no string splitting required!
          let gameA = isOfflineA ? String(a.attributes.last_played_game || "").toLowerCase() : stateA;
          let gameB = isOfflineB ? String(b.attributes.last_played_game || "").toLowerCase() : stateB;
          
-         // Smart Scraper: Extract the game title directly from the "Last seen..." text string
-         if (!gameA && isOfflineA && a.attributes.secondary) {
-             const s = String(a.attributes.secondary);
-             if (s.includes(":")) gameA = s.substring(s.indexOf(":") + 1).replace(/\(.*?\)/g, "").trim().toLowerCase();
-         }
-         if (!gameB && isOfflineB && b.attributes.secondary) {
-             const s = String(b.attributes.secondary);
-             if (s.includes(":")) gameB = s.substring(s.indexOf(":") + 1).replace(/\(.*?\)/g, "").trim().toLowerCase();
-         }
-         
          // Push empty/unknown games to the very bottom
          if (!gameA && !gameB) return nameA.localeCompare(nameB);
-         if (!gameA) return 1;
-         if (!gameB) return -1;
+         if (!gameA || gameA === "none" || gameA === "unknown") return 1;
+         if (!gameB || gameB === "none" || gameB === "unknown") return -1;
          
          return gameA.localeCompare(gameB);
       } 
       else { 
          // "last_online" (default)
          const getSortTime = (ent, isOff) => {
-             // 1. Indestructible Regex: Hunts for a number followed by m, h, d, w, mo, y anywhere in the string
-             if (isOff && ent.attributes && ent.attributes.secondary) {
-                 const sec = String(ent.attributes.secondary).toLowerCase();
-                 const match = sec.match(/(\d+)\s*(mo|m|h|d|w|y)/);
-                 if (match) {
-                     const val = parseInt(match[1]);
-                     const unit = match[2];
-                     let seconds = val * 60; // default to minutes
-                     if (unit === 'h') seconds = val * 3600;
-                     if (unit === 'd') seconds = val * 86400;
-                     if (unit === 'w') seconds = val * 604800;
-                     if (unit === 'mo') seconds = val * 2592000;
-                     if (unit === 'y') seconds = val * 31536000;
-                     return Date.now() - (seconds * 1000);
-                 }
+             // 1. Point directly to the machine-readable ISO timestamp provided by the backend!
+             if (isOff && ent.attributes && ent.attributes.last_online_valid_timestamp) {
+                 const t = new Date(ent.attributes.last_online_valid_timestamp).getTime();
+                 if (!isNaN(t)) return t;
              }
-             
              // 2. Active Session fallback
-             if (ent.attributes && ent.attributes.play_start_time) {
+             if (!isOff && ent.attributes && ent.attributes.play_start_time) {
                  const t = new Date(ent.attributes.play_start_time).getTime();
                  if (!isNaN(t)) return t;
              }
-             
-             // 3. Absolute fallback to HA state changes
-             if (ent.last_changed || ent.last_updated) {
-                 const t = new Date(ent.last_changed || ent.last_updated).getTime();
-                 if (!isNaN(t)) return t;
-             }
-             return 0;
+             // 3. Absolute fallback
+             const tFallback = new Date(ent.last_changed || ent.last_updated).getTime();
+             return isNaN(tFallback) ? 0 : tFallback;
          };
 
          const timeA = getSortTime(a, isOfflineA);
          const timeB = getSortTime(b, isOfflineB);
          
          if (timeA === timeB) return nameA.localeCompare(nameB);
-         
          return timeB - timeA;
       }
     });
@@ -207,9 +181,10 @@ class GamingStatusCard extends HTMLElement {
           }
       }
 
-      const isOffline = ["offline", "unavailable", "unknown"].includes(entity.state.toLowerCase());
+      const stateStr = entity.state.toLowerCase();
+      const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(stateStr);
 
-      // --- RESTORED DISPLAY LOGIC ---
+      // --- DISPLAY LOGIC ---
       if (isPlatformMode) {
           gradientColorCSS = platformColorCSS; 
           filterCSS = "blur(5px)"; 
@@ -244,8 +219,8 @@ class GamingStatusCard extends HTMLElement {
       return {
         entity_id: entity.entity_id,
         name: friendlyName,
-        state: entity.state,
-        secondary: entity.attributes.secondary || "",
+        state: entity.state, 
+        secondary: entity.attributes.secondary || "",       
         picture: pictureArt || "/static/icons/favicon-192x192.png",
         cover: coverArt,        
         accentColorCSS,
