@@ -105,13 +105,36 @@ class GamingStatusCard extends HTMLElement {
          return nameA.localeCompare(nameB);
       } 
       else if (sortBy === "state") {
-         // Sorts alphabetically by the game they are playing
-         return stateA.localeCompare(stateB);
+         // Online: Sort alphabetically by active game title
+         // Offline: Fall back to their last played game to maintain logical groupings
+         const gameA = isOfflineA ? String(a.attributes.last_played_game || "").toLowerCase() : stateA;
+         const gameB = isOfflineB ? String(b.attributes.last_played_game || "").toLowerCase() : stateB;
+         return gameA.localeCompare(gameB);
       } 
       else { 
-         // "last_online" (default) - Most recently updated floats to the top of their respective groups
-         const timeA = new Date(a.last_updated).getTime() || 0;
-         const timeB = new Date(b.last_updated).getTime() || 0;
+         // "last_online" (default) - Most recently changed floats to the top
+         
+         // Helper to extract an accurate timestamp that survives HA reboots and background syncs
+         const getSortTime = (ent, isOff) => {
+             // If they are offline, strictly parse the backend's persistent "Last seen X ago" string
+             if (isOff && ent.attributes.secondary) {
+                 const match = ent.attributes.secondary.match(/seen (\d+)(m|h|d) ago/i);
+                 if (match) {
+                     const val = parseInt(match[1]);
+                     const unit = match[2].toLowerCase();
+                     let seconds = val * 60;
+                     if (unit === 'h') seconds = val * 3600;
+                     if (unit === 'd') seconds = val * 86400;
+                     return Date.now() - (seconds * 1000);
+                 }
+             }
+             // If online (or if string parsing fails), use last_changed 
+             // (NEVER use last_updated, as it fires randomly on background syncs)
+             return new Date(ent.last_changed || ent.last_updated).getTime() || 0;
+         };
+
+         const timeA = getSortTime(a, isOfflineA);
+         const timeB = getSortTime(b, isOfflineB);
          return timeB - timeA;
       }
     });
