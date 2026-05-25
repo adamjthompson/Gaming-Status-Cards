@@ -87,81 +87,90 @@ class GamingStatusCard extends HTMLElement {
     });
 
     filtered.sort((a, b) => {
-      const stateA = a.state.toLowerCase();
-      const stateB = b.state.toLowerCase();
-      const isOfflineA = ["offline", "unavailable", "unknown", "idle"].includes(stateA);
-      const isOfflineB = ["offline", "unavailable", "unknown", "idle"].includes(stateB);
+      const isOfflineA = ["offline", "unavailable", "unknown", "idle"].includes(a.state.toLowerCase());
+      const isOfflineB = ["offline", "unavailable", "unknown", "idle"].includes(b.state.toLowerCase());
       
-      // 1. Primary Sort: Online players always float to the top
+      // 1. Primary: Always keep Online players at the top
       if (isOfflineA !== isOfflineB) return isOfflineA ? 1 : -1;
       
-      // Setup Name Helpers for tie-breakers
-      const nameA = (a.attributes.friendly_name || a.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "").trim().toLowerCase();
-      const nameB = (b.attributes.friendly_name || b.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "").trim().toLowerCase();
-      
       const sortBy = this.config.sort_by || "last_online";
-      
-      if (sortBy === "name") {
-         return nameA.localeCompare(nameB);
-      } 
-      else if (sortBy === "state") { 
-         // Pull directly from native attributes!
-         let gameA = isOfflineA ? String(a.attributes.last_played_game || "").toLowerCase() : stateA;
-         let gameB = isOfflineB ? String(b.attributes.last_played_game || "").toLowerCase() : stateB;
-         
-         gameA = gameA.trim();
-         gameB = gameB.trim();
-         
-         if (["none", "unknown", "null", "offline", "idle", ""].includes(gameA)) gameA = "";
-         if (["none", "unknown", "null", "offline", "idle", ""].includes(gameB)) gameB = "";
-         
-         // Push empty/unknown games to the very bottom
-         if (!gameA && !gameB) return nameA.localeCompare(nameB);
-         if (!gameA) return 1;
-         if (!gameB) return -1;
-         
-         return gameA.localeCompare(gameB);
-      } 
-      else { 
-         const getSortTime = (ent, isOff) => {
-             // A: Online Session (strip microseconds for Safari/WebKit safety)
-             if (!isOff && ent.attributes && ent.attributes.play_start_time) {
-                 const t = new Date(String(ent.attributes.play_start_time).replace(/\.\d+/, "")).getTime();
-                 if (!isNaN(t)) return t;
-             }
-             // B: Offline Target (directly use your native Python timestamp)
-             if (isOff && ent.attributes && ent.attributes.last_online_valid_timestamp) {
-                 const t = new Date(String(ent.attributes.last_online_valid_timestamp).replace(/\.\d+/, "")).getTime();
-                 if (!isNaN(t)) return t;
-             }
-             // C: Legacy fallback (for players like Mike without the new backend attributes yet)
-             if (isOff && ent.attributes && ent.attributes.secondary) {
-                 const sec = String(ent.attributes.secondary).toLowerCase();
-                 const match = sec.match(/(\d+)\s*(mo|m|h|d|w|y)/);
-                 if (match) {
-                     const val = parseInt(match[1]);
-                     const unit = match[2];
-                     let seconds = val * 60;
-                     if (unit === 'h') seconds = val * 3600;
-                     if (unit === 'd') seconds = val * 86400;
-                     if (unit === 'w') seconds = val * 604800;
-                     if (unit === 'mo') seconds = val * 2592000;
-                     if (unit === 'y') seconds = val * 31536000;
-                     return Date.now() - (seconds * 1000);
-                 }
-             }
-             // D: Absolute last resort
-             const fallback = new Date(String(ent.last_changed || ent.last_updated || "").replace(/\.\d+/, "")).getTime();
-             return isNaN(fallback) ? 0 : fallback;
-         };
 
-         const timeA = getSortTime(a, isOfflineA);
-         const timeB = getSortTime(b, isOfflineB);
-         
-         if (timeA === timeB) return nameA.localeCompare(nameB);
-         return timeB - timeA;
+      if (sortBy === "name") {
+        const nameA = (a.attributes.friendly_name || a.entity_id).toLowerCase();
+        const nameB = (b.attributes.friendly_name || b.entity_id).toLowerCase();
+        return nameA.localeCompare(nameB);
+      } 
+      else if (sortBy === "state") { // Sort by Game Title
+        // Use last_played_game attribute for offline players, state for online
+        let gameA = isOfflineA ? (a.attributes.last_played_game || "") : a.state;
+        let gameB = isOfflineB ? (b.attributes.last_played_game || "") : b.state;
+        
+        gameA = String(gameA).toLowerCase().trim();
+        gameB = String(gameB).toLowerCase().trim();
+        
+        // Push unknown/empty games to bottom
+        if (["none", "unknown", "null", "offline", "idle", ""].includes(gameA)) gameA = "zzzzzz";
+        if (["none", "unknown", "null", "offline", "idle", ""].includes(gameB)) gameB = "zzzzzz";
+        
+        return gameA.localeCompare(gameB);
+      } 
+      else { // Last Online
+        const getSortTime = (ent, isOff) => {
+            // Online: use play_start_time
+            if (!isOff && ent.attributes.play_start_time) return new Date(ent.attributes.play_start_time).getTime();
+            // Offline: use the reliable timestamp attribute
+            if (isOff && ent.attributes.last_online_valid_timestamp) return new Date(ent.attributes.last_online_valid_timestamp).getTime();
+            // Fallback
+            return new Date(ent.last_changed || ent.last_updated).getTime() || 0;
+        };
+
+        return getSortTime(b, isOfflineB) - getSortTime(a, isOfflineA);
       }
     });
+
+    return filtered.map((entity) => {
+      const platform = (entity.attributes.active_platform || this.config.mode).toLowerCase();
+      let badgeIcon = "mdi:gamepad-variant";
+      let accentColor = "rgb(100, 50, 100)";
+      let platformColor = "100, 50, 100";
+      
+      if (platform.includes("steam")) {
+        badgeIcon = "mdi:steam";
+        accentColor = "rgb(2, 173, 239)";
+        platformColor = "2, 173, 239";
+      } else if (platform.includes("xbox")) {
+        badgeIcon = "mdi:microsoft-xbox";
+        accentColor = "rgb(11, 124, 16)";
+        platformColor = "11, 124, 16";
+      } else if (platform.includes("playstation")) {
+        badgeIcon = "mdi:sony-playstation";
+        accentColor = "rgb(0, 48, 135)";
+        platformColor = "0, 48, 135";
+      }
+
+      if (this.config.color_mode !== "platform" && entity.attributes.game_dominant_color) {
+        accentColor = entity.attributes.game_dominant_color;
+      }
+
+      const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(entity.state.toLowerCase());
+      const friendlyName = (entity.attributes.friendly_name || entity.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "");
+
+      return {
+        entity_id: entity.entity_id,
+        name: friendlyName,
+        state: entity.state,
+        secondary: entity.attributes.secondary || "",
+        picture: entity.attributes.entity_picture || "",
+        cover: isOffline
+          ? (entity.attributes.entity_picture || "")
+          : (entity.attributes.game_hero_art || entity.attributes.entity_picture || ""),
+        accentColor,
+        platformColor,
+        badgeIcon,
+        isOffline,
+      };
+    });
+  }
 
     return filtered.map((entity) => {
       const isPlatformMode = ["steam", "xbox", "playstation"].includes(this.config.mode);
