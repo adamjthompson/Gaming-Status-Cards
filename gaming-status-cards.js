@@ -91,8 +91,29 @@ class GamingStatusCard extends HTMLElement {
       const stateB = b.state.toLowerCase();
       const isOfflineA = ["offline", "unavailable", "unknown"].includes(stateA);
       const isOfflineB = ["offline", "unavailable", "unknown"].includes(stateB);
+      
+      // 1. Primary Sort: Online players always float to the top
       if (isOfflineA !== isOfflineB) return isOfflineA ? 1 : -1;
-      return 0; 
+      
+      // 2. Secondary Sort: Based on the UI Editor config
+      const sortBy = this.config.sort_by || "last_online";
+      
+      if (sortBy === "name") {
+         // Strip out the suffixes so it sorts accurately by their actual displayed name
+         const nameA = (a.attributes.friendly_name || a.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "").trim().toLowerCase();
+         const nameB = (b.attributes.friendly_name || b.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "").trim().toLowerCase();
+         return nameA.localeCompare(nameB);
+      } 
+      else if (sortBy === "state") {
+         // Sorts alphabetically by the game they are playing
+         return stateA.localeCompare(stateB);
+      } 
+      else { 
+         // "last_online" (default) - Most recently updated floats to the top of their respective groups
+         const timeA = new Date(a.last_updated).getTime() || 0;
+         const timeB = new Date(b.last_updated).getTime() || 0;
+         return timeB - timeA;
+      }
     });
 
     return filtered.map((entity) => {
@@ -138,16 +159,16 @@ class GamingStatusCard extends HTMLElement {
 
       // --- RESTORED DISPLAY LOGIC ---
       if (isPlatformMode) {
-          gradientColorCSS = platformColorCSS; // Always tint background with platform color
-          filterCSS = "blur(5px)"; // Never turn gray, even when offline
+          gradientColorCSS = platformColorCSS; 
+          filterCSS = "blur(5px)"; 
           if (useGameColor && parsedGameColor && !isOffline) {
-              accentColorCSS = parsedGameColor; // Only the border uses the game color
+              accentColorCSS = parsedGameColor; 
           }
       } else {
           // "All Players" Mode
           if (isOffline) {
-              gradientColorCSS = "rgba(0, 0, 0, 0)"; // Transparent
-              filterCSS = "blur(5px) grayscale(100%) brightness(0.5)"; // Force gray/dim when offline
+              gradientColorCSS = "rgba(0, 0, 0, 0)"; 
+              filterCSS = "blur(5px) grayscale(100%) brightness(0.5)"; 
           } else {
               filterCSS = "blur(5px) brightness(0.8)";
               if (useGameColor && parsedGameColor) {
@@ -163,7 +184,6 @@ class GamingStatusCard extends HTMLElement {
       let heroArt = isStrValid(entity.attributes.game_hero_art) ? entity.attributes.game_hero_art : "";
       let pictureArt = isStrValid(entity.attributes.entity_picture) ? entity.attributes.entity_picture : "";
       
-      // Select offline image based on the new editor configuration toggle
       let coverArt = heroArt || pictureArt || "/static/icons/favicon-192x192.png";
       if (isOffline && this.config.offline_image === "avatar") {
           coverArt = pictureArt || "/static/icons/favicon-192x192.png";
