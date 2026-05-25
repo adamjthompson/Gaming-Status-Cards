@@ -104,13 +104,14 @@ class GamingStatusCard extends HTMLElement {
       if (sortBy === "name") {
          return nameA.localeCompare(nameB);
       } 
-      else if (sortBy === "state") {
-         let gameA = isOfflineA ? (a.attributes.last_played_game || "") : a.state;
-         let gameB = isOfflineB ? (b.attributes.last_played_game || "") : b.state;
+      else if (sortBy === "state") { 
+         // Pull directly from native attributes!
+         let gameA = isOfflineA ? String(a.attributes.last_played_game || "").toLowerCase() : stateA;
+         let gameB = isOfflineB ? String(b.attributes.last_played_game || "").toLowerCase() : stateB;
          
-         // Sanitize and normalize the titles
-         gameA = String(gameA).toLowerCase().trim();
-         gameB = String(gameB).toLowerCase().trim();
+         gameA = gameA.trim();
+         gameB = gameB.trim();
+         
          if (["none", "unknown", "null", "offline", "idle", ""].includes(gameA)) gameA = "";
          if (["none", "unknown", "null", "offline", "idle", ""].includes(gameB)) gameB = "";
          
@@ -122,16 +123,18 @@ class GamingStatusCard extends HTMLElement {
          return gameA.localeCompare(gameB);
       } 
       else { 
-         // "last_online" (default)
          const getSortTime = (ent, isOff) => {
-             // A: Try the native timestamp, but safely strip the 6-digit microseconds so browsers don't crash
-             if (isOff && ent.attributes && ent.attributes.last_online_valid_timestamp) {
-                 const cleanIso = String(ent.attributes.last_online_valid_timestamp).replace(/\.\d+/, "");
-                 const t = new Date(cleanIso).getTime();
+             // A: Online Session (strip microseconds for Safari/WebKit safety)
+             if (!isOff && ent.attributes && ent.attributes.play_start_time) {
+                 const t = new Date(String(ent.attributes.play_start_time).replace(/\.\d+/, "")).getTime();
                  if (!isNaN(t)) return t;
              }
-             
-             // B: If timestamp is missing entirely (older players), safely parse the secondary text
+             // B: Offline Target (directly use your native Python timestamp)
+             if (isOff && ent.attributes && ent.attributes.last_online_valid_timestamp) {
+                 const t = new Date(String(ent.attributes.last_online_valid_timestamp).replace(/\.\d+/, "")).getTime();
+                 if (!isNaN(t)) return t;
+             }
+             // C: Legacy fallback (for players like Mike without the new backend attributes yet)
              if (isOff && ent.attributes && ent.attributes.secondary) {
                  const sec = String(ent.attributes.secondary).toLowerCase();
                  const match = sec.match(/(\d+)\s*(mo|m|h|d|w|y)/);
@@ -147,18 +150,9 @@ class GamingStatusCard extends HTMLElement {
                      return Date.now() - (seconds * 1000);
                  }
              }
-
-             // C: Active session tracking for online players
-             if (!isOff && ent.attributes && ent.attributes.play_start_time) {
-                 const cleanIso = String(ent.attributes.play_start_time).replace(/\.\d+/, "");
-                 const t = new Date(cleanIso).getTime();
-                 if (!isNaN(t)) return t;
-             }
-
-             // D: Ultimate fallback
-             const fallbackIso = String(ent.last_changed || ent.last_updated || "").replace(/\.\d+/, "");
-             const tFallback = new Date(fallbackIso).getTime();
-             return isNaN(tFallback) ? 0 : tFallback;
+             // D: Absolute last resort
+             const fallback = new Date(String(ent.last_changed || ent.last_updated || "").replace(/\.\d+/, "")).getTime();
+             return isNaN(fallback) ? 0 : fallback;
          };
 
          const timeA = getSortTime(a, isOfflineA);
@@ -188,7 +182,6 @@ class GamingStatusCard extends HTMLElement {
       const useGameColor = this.config.color_mode !== "platform";
       const rawColor = entity.attributes.game_dominant_color;
 
-      // Hex to RGB parser for dynamic game colors
       let parsedGameColor = null;
       if (rawColor && String(rawColor).toLowerCase() !== "null" && String(rawColor).toLowerCase() !== "none") {
           let str = String(rawColor).trim().toLowerCase();
@@ -211,7 +204,6 @@ class GamingStatusCard extends HTMLElement {
       const stateStr = entity.state.toLowerCase();
       const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(stateStr);
 
-      // --- DISPLAY LOGIC ---
       if (isPlatformMode) {
           gradientColorCSS = platformColorCSS; 
           filterCSS = "blur(5px)"; 
@@ -219,7 +211,6 @@ class GamingStatusCard extends HTMLElement {
               accentColorCSS = parsedGameColor; 
           }
       } else {
-          // "All Players" Mode
           if (isOffline) {
               gradientColorCSS = "rgba(0, 0, 0, 0)"; 
               filterCSS = "blur(5px) grayscale(100%) brightness(0.5)"; 
