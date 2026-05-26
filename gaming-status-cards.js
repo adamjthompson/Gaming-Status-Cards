@@ -81,12 +81,11 @@ class GamingStatusCard extends HTMLElement {
   processData(entities) {
     let filtered = entities.filter((entity) => {
       const state = entity.state.toLowerCase();
-      const isOffline = ["offline", "unavailable", "unknown"].includes(state);
+      const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(state);
       if (this.config.mode === "online" && isOffline) return false;
       return true;
     });
 
-    // --- NEW SORTING ENGINE START ---
     filtered.sort((a, b) => {
       const stateA = a.state.toLowerCase();
       const stateB = b.state.toLowerCase();
@@ -174,7 +173,6 @@ class GamingStatusCard extends HTMLElement {
         return timeB - timeA;
       }
     });
-    // --- NEW SORTING ENGINE END ---
 
     return filtered.map((entity) => {
       const isPlatformMode = ["steam", "xbox", "playstation"].includes(this.config.mode);
@@ -215,20 +213,20 @@ class GamingStatusCard extends HTMLElement {
           }
       }
 
-      const isOffline = ["offline", "unavailable", "unknown"].includes(entity.state.toLowerCase());
+      const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(entity.state.toLowerCase());
 
       // --- RESTORED DISPLAY LOGIC ---
       if (isPlatformMode) {
-          gradientColorCSS = platformColorCSS; // Always tint background with platform color
-          filterCSS = "blur(5px)"; // Never turn gray, even when offline
+          gradientColorCSS = platformColorCSS; 
+          filterCSS = "blur(5px)"; 
           if (useGameColor && parsedGameColor && !isOffline) {
-              accentColorCSS = parsedGameColor; // Only the border uses the game color
+              accentColorCSS = parsedGameColor; 
           }
       } else {
           // "All Players" Mode
           if (isOffline) {
-              gradientColorCSS = "rgba(0, 0, 0, 0)"; // Transparent
-              filterCSS = "blur(5px) grayscale(100%) brightness(0.5)"; // Force gray/dim when offline
+              gradientColorCSS = "rgba(0, 0, 0, 0)"; 
+              filterCSS = "blur(5px) grayscale(100%) brightness(0.5)"; 
           } else {
               filterCSS = "blur(5px) brightness(0.8)";
               if (useGameColor && parsedGameColor) {
@@ -391,7 +389,7 @@ class GamingStatusCard extends HTMLElement {
   }
   
   getCardSize() {
-    return (this._hass && Object.keys(this._hass.states).length > 0) ? 3 : 1;
+    return Object.keys(this._hass.states).length > 0 ? 3 : 1;
   }
 }
 
