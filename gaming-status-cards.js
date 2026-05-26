@@ -1441,7 +1441,12 @@ class GamingStatusDonutCard extends HTMLElement {
               labels: { 
                 show: true, 
                 name: { show: false }, 
-                value: { show: true, offsetY: 8, fontSize: "22px" }, 
+                value: { 
+                  show: true, 
+                  offsetY: 8, 
+                  fontSize: "22px",
+                  formatter: "EVAL:function(val) { return parseFloat(val).toFixed(1) + 'h'; }"
+                }, 
                 total: { 
                   show: true, 
                   showAlways: true, 
