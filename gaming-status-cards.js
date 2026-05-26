@@ -14,7 +14,6 @@ class GamingStatusCard extends HTMLElement {
 
   static getStubConfig() {
     return {
-      title: "",
       mode: "all",
       color_mode: "game",
       offline_image: "game",
@@ -27,11 +26,9 @@ class GamingStatusCard extends HTMLElement {
   }
 
   setConfig(config) {
-    // Apply raw config first, then strictly enforce defaults to prevent YAML overrides
     this.config = {
       ...config,
       entities_pattern: config.entities_pattern || "_gaming_status",
-      title: config.title || "",
       mode: config.mode || "all",
       color_mode: config.color_mode || "game",
       offline_image: config.offline_image || "game",
@@ -41,7 +38,7 @@ class GamingStatusCard extends HTMLElement {
       max_visible_players: config.max_visible_players || "",
       manual_entities: config.manual_entities || "",
     };
-    this._lastHash = ""; // Force re-render immediately on setting change
+    this._lastHash = ""; 
   }
 
   set hass(hass) {
@@ -270,11 +267,6 @@ class GamingStatusCard extends HTMLElement {
       this.shadowRoot.innerHTML = `
         <style>
           :host { display: block; }
-          .card-header {
-            font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px;
-            color: var(--ha-card-header-color, var(--primary-text-color)); padding: 8px 16px 16px;
-            display: ${this.config.title ? "block" : "none"};
-          }
           .card-stack { display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; }
           .card-stack.scrollable { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
           
@@ -314,7 +306,6 @@ class GamingStatusCard extends HTMLElement {
           
           .placeholder-avatar { background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
         </style>
-        <div class="card-header">${this.config.title}</div>
         <div id="players-container" class="card-stack"></div>
       `;
       this.content = this.shadowRoot.getElementById("players-container");
@@ -422,9 +413,6 @@ class GamingStatusCardEditor extends HTMLElement {
         .helper-text { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 8px; line-height: 1.4; }
       </style>
       <div class="editor-container">
-        <div><div class="section-title">Card Title</div><input type="text" id="title-input" data-field="title" value="${
-          this._config.title || ""
-        }"></div><hr>
         <div><div class="section-title">Mode</div><div class="radio-group">
             <label><input type="radio" name="mode" data-field="mode" value="all" ${
               this._config.mode === "all" || !this._config.mode ? "checked" : ""
@@ -1258,8 +1246,14 @@ class GamingStatusDonutCard extends HTMLElement {
   constructor() { 
     super(); 
     this.attachShadow({ mode: "open" });
-    this.shadowRoot.innerHTML = `<div id="container"></div>`;
+    this.shadowRoot.innerHTML = `
+      <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
+        <div id="card-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none;"></div>
+        <div id="container" style="--ha-card-background: transparent; --ha-card-box-shadow: none; --ha-card-border-width: 0px; --ha-card-border-radius: 0px;"></div>
+      </ha-card>
+    `;
     this.container = this.shadowRoot.getElementById("container");
+    this.titleEl = this.shadowRoot.getElementById("card-title");
     this.defaultPalette = [
       "rgb(255, 190, 11)",
       "rgb(251, 86, 7)",
@@ -1302,6 +1296,12 @@ class GamingStatusDonutCard extends HTMLElement {
       entities_pattern: config.entities_pattern || "_gaming_status",
       ...config 
     };
+    
+    if (this.titleEl) {
+        this.titleEl.innerText = this.config.title;
+        this.titleEl.style.display = this.config.title ? "block" : "none";
+    }
+    
     this.renderChart();
   }
 
@@ -1405,8 +1405,7 @@ class GamingStatusDonutCard extends HTMLElement {
       chart_type: "donut",
       update_interval: "5m",
       header: {
-        show: !!this.config.title,
-        title: this.config.title || undefined,
+        show: false
       },
       apex_config: {
         chart: { 
