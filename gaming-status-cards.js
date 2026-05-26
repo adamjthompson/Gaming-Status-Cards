@@ -164,19 +164,15 @@ class GamingStatusCard extends HTMLElement {
               }
           }
           
-          // D: Absolute fallback to database changes
-          const fb = ent.last_changed || ent.last_updated || "";
-          if (fb) {
-             const tFallback = Date.parse(fb);
-             if (!isNaN(tFallback)) return tFallback;
-          }
+          // D: They are completely "Offline". 
+          // By returning 0, they plummet to the bottom of the list instead of reading the database reboot time!
           return 0;
         };
 
         const timeA = getSafeTime(a, isOfflineA);
         const timeB = getSafeTime(b, isOfflineB);
         
-        // Break exact time ties alphabetically so the list order never randomly jumps
+        // Break exact time ties alphabetically so pure "Offline" players sort by name at the bottom
         if (timeA === timeB) return nameA.localeCompare(nameB);
         return timeB - timeA;
       }
@@ -356,10 +352,13 @@ class GamingStatusCard extends HTMLElement {
       .map((player) => {
         const statusClass = player.isOffline ? "offline" : "online";
         return `
-        <div class="player-card ${statusClass}" style="--bg-url: url('${player.cover}'); --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
+        <div class="player-card ${statusClass}" style="--bg-url: ${player.cover ? `url('${player.cover}')` : 'none'}; --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
           <div class="content-wrapper">
             <div class="avatar-container">
-              <img class="avatar" src="${player.picture}" />
+              ${player.picture 
+                ? `<img class="avatar" src="${player.picture}" />` 
+                : `<div class="placeholder-avatar"><ha-icon icon="mdi:controller" style="color: #888; --mdc-icon-size: 24px;"></ha-icon></div>`
+              }
               ${this.config.show_badges ? `<div class="badge"><ha-icon icon="${player.badgeIcon}"></ha-icon></div>` : ""}
             </div>
             <div class="text-content">
