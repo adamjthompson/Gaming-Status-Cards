@@ -40,6 +40,8 @@ class GamingStatusCard extends HTMLElement {
       manual_entities: config.manual_entities || "",
       ...config,
     };
+    // Force a re-render when the config changes
+    this._lastHash = ""; 
   }
 
   set hass(hass) {
@@ -112,7 +114,6 @@ class GamingStatusCard extends HTMLElement {
         gameA = gameA.trim();
         gameB = gameB.trim();
 
-        // Push empty or unknown games to the absolute bottom 
         const emptyStates = ["none", "unknown", "null", "offline", "idle", ""];
         if (emptyStates.includes(gameA)) gameA = "zzzzzz";
         if (emptyStates.includes(gameB)) gameB = "zzzzzz";
@@ -123,21 +124,16 @@ class GamingStatusCard extends HTMLElement {
       // --- LAST ONLINE SORT ---
       else { 
         const getValidTime = (entity, isOff) => {
-          // A: Active Session (strip microseconds for iOS/Safari safety)
           if (!isOff && entity.attributes.play_start_time) {
             const cleanIso = String(entity.attributes.play_start_time).replace(/\.\d+/, "");
             const t = new Date(cleanIso).getTime();
             if (!isNaN(t)) return t;
           }
-
-          // B: Offline Target (directly use the native timestamp, stripping microseconds)
           if (isOff && entity.attributes.last_online_valid_timestamp) {
             const cleanIso = String(entity.attributes.last_online_valid_timestamp).replace(/\.\d+/, "");
             const t = new Date(cleanIso).getTime();
             if (!isNaN(t)) return t;
           }
-
-          // C: Legacy fallback string parser (for older player profiles)
           if (isOff && entity.attributes.secondary) {
               const sec = String(entity.attributes.secondary).toLowerCase();
               const match = sec.match(/(\d+)\s*(mo|m|h|d|w|y)/);
@@ -153,8 +149,6 @@ class GamingStatusCard extends HTMLElement {
                   return Date.now() - (seconds * 1000);
               }
           }
-          
-          // D: Absolute fallback to database changes
           const fallbackIso = String(entity.last_changed || entity.last_updated || "").replace(/\.\d+/, "");
           const tFallback = new Date(fallbackIso).getTime();
           return isNaN(tFallback) ? 0 : tFallback;
@@ -163,7 +157,6 @@ class GamingStatusCard extends HTMLElement {
         const timeA = getValidTime(a, isOfflineA);
         const timeB = getValidTime(b, isOfflineB);
         
-        // Break exact time ties alphabetically so the list order never randomly jumps
         if (timeA === timeB) {
           const nameA = (a.attributes.friendly_name || a.entity_id).toLowerCase();
           const nameB = (b.attributes.friendly_name || b.entity_id).toLowerCase();
@@ -193,7 +186,6 @@ class GamingStatusCard extends HTMLElement {
       const useGameColor = this.config.color_mode !== "platform";
       const rawColor = entity.attributes.game_dominant_color;
 
-      // Hex to RGB parser for dynamic game colors
       let parsedGameColor = null;
       if (rawColor && String(rawColor).toLowerCase() !== "null" && String(rawColor).toLowerCase() !== "none") {
           let str = String(rawColor).trim().toLowerCase();
@@ -215,7 +207,6 @@ class GamingStatusCard extends HTMLElement {
 
       const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(entity.state.toLowerCase());
 
-      // --- RESTORED DISPLAY LOGIC ---
       if (isPlatformMode) {
           gradientColorCSS = platformColorCSS; 
           filterCSS = "blur(5px)"; 
@@ -223,7 +214,6 @@ class GamingStatusCard extends HTMLElement {
               accentColorCSS = parsedGameColor; 
           }
       } else {
-          // "All Players" Mode
           if (isOffline) {
               gradientColorCSS = "rgba(0, 0, 0, 0)"; 
               filterCSS = "blur(5px) grayscale(100%) brightness(0.5)"; 
@@ -242,7 +232,6 @@ class GamingStatusCard extends HTMLElement {
       let heroArt = isStrValid(entity.attributes.game_hero_art) ? entity.attributes.game_hero_art : "";
       let pictureArt = isStrValid(entity.attributes.entity_picture) ? entity.attributes.entity_picture : "";
       
-      // Select offline image based on the new editor configuration toggle
       let coverArt = heroArt || pictureArt || "/static/icons/favicon-192x192.png";
       if (isOffline && this.config.offline_image === "avatar") {
           coverArt = pictureArt || "/static/icons/favicon-192x192.png";
@@ -419,137 +408,98 @@ class GamingStatusCardEditor extends HTMLElement {
         .helper-text { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 8px; line-height: 1.4; }
       </style>
       <div class="editor-container">
-        <div><div class="section-title">Card Title</div><input type="text" id="title-input" .configValue="title" value="${
+        <div><div class="section-title">Card Title</div><input type="text" id="title-input" data-field="title" value="${
           this._config.title || ""
         }"></div><hr>
         <div><div class="section-title">Mode</div><div class="radio-group">
-            <label><input type="radio" name="mode" .configValue="mode" value="all" ${
+            <label><input type="radio" name="mode" data-field="mode" value="all" ${
               this._config.mode === "all" || !this._config.mode ? "checked" : ""
             }> All Players</label>
-            <label><input type="radio" name="mode" .configValue="mode" value="online" ${
+            <label><input type="radio" name="mode" data-field="mode" value="online" ${
               this._config.mode === "online" ? "checked" : ""
             }> Online Only</label>
-            <label><input type="radio" name="mode" .configValue="mode" value="steam" ${
+            <label><input type="radio" name="mode" data-field="mode" value="steam" ${
               this._config.mode === "steam" ? "checked" : ""
             }> Steam</label>
-            <label><input type="radio" name="mode" .configValue="mode" value="xbox" ${
+            <label><input type="radio" name="mode" data-field="mode" value="xbox" ${
               this._config.mode === "xbox" ? "checked" : ""
             }> Xbox</label>
-            <label><input type="radio" name="mode" .configValue="mode" value="playstation" ${
+            <label><input type="radio" name="mode" data-field="mode" value="playstation" ${
               this._config.mode === "playstation" ? "checked" : ""
             }> PlayStation</label>
         </div></div><hr>
         <div><div class="section-title">Color Mode</div><div class="radio-group">
-            <label><input type="radio" name="color_mode" .configValue="color_mode" value="game" ${
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="game" ${
               this._config.color_mode !== "platform" ? "checked" : ""
             }> Game Artwork (Dynamic)</label>
-            <label><input type="radio" name="color_mode" .configValue="color_mode" value="platform" ${
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="platform" ${
               this._config.color_mode === "platform" ? "checked" : ""
             }> Platform Native (Pre-Defined)</label>
         </div></div><hr>
         <div><div class="section-title">Offline Image Style</div><div class="radio-group">
-            <label><input type="radio" name="offline_image" .configValue="offline_image" value="game" ${
+            <label><input type="radio" name="offline_image" data-field="offline_image" value="game" ${
               this._config.offline_image !== "avatar" ? "checked" : ""
             }> Last Played Game Artwork</label>
-            <label><input type="radio" name="offline_image" .configValue="offline_image" value="avatar" ${
+            <label><input type="radio" name="offline_image" data-field="offline_image" value="avatar" ${
               this._config.offline_image === "avatar" ? "checked" : ""
             }> Player Avatar</label>
         </div></div><hr>
         <div><div class="section-title">Sort By</div><div class="radio-group">
-            <label><input type="radio" name="sort" .configValue="sort_by" value="last_online" ${
+            <label><input type="radio" name="sort" data-field="sort_by" value="last_online" ${
               this._config.sort_by === "last_online" || !this._config.sort_by
                 ? "checked"
                 : ""
             }> Last Online</label>
-            <label><input type="radio" name="sort" .configValue="sort_by" value="name" ${
+            <label><input type="radio" name="sort" data-field="sort_by" value="name" ${
               this._config.sort_by === "name" ? "checked" : ""
             }> Name</label>
-            <label><input type="radio" name="sort" .configValue="sort_by" value="state" ${
+            <label><input type="radio" name="sort" data-field="sort_by" value="state" ${
               this._config.sort_by === "state" ? "checked" : ""
             }> Game Title</label>
         </div></div><hr>
         <div><div class="section-title">Visibility Options</div>
-          <label><input type="checkbox" .configValue="show_badges" ${
+          <label><input type="checkbox" data-field="show_badges" ${
             this._config.show_badges !== false ? "checked" : ""
           }> Show Platform Badges</label>
-          <label style="margin-top: 10px;"><input type="checkbox" .configValue="show_text_shadow" ${
+          <label style="margin-top: 10px;"><input type="checkbox" data-field="show_text_shadow" ${
             this._config.show_text_shadow !== false ? "checked" : ""
           }> Show Text Shadow</label>
         </div><hr>
         <div>
           <div class="section-title">Maximum Visible Players</div>
           <div class="helper-text">Leave blank to show all players. Enter a number to restrict the visible height and enable a dynamic scrollbar.</div>
-          <input type="number" id="max-players-input" .configValue="max_visible_players" value="${
+          <input type="number" id="max-players-input" data-field="max_visible_players" value="${
             this._config.max_visible_players || ""
           }" placeholder="e.g. 3" min="1">
         </div><hr>
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
           <div class="helper-text">Leave blank to automatically grab all sensors. To restrict this card to specific people, enter a comma-separated list of exact entity IDs (e.g. <code>sensor.adam_gaming_status, sensor.liv_gaming_status</code>).</div>
-          <input type="text" id="manual-entities-input" .configValue="manual_entities" value="${
+          <input type="text" id="manual-entities-input" data-field="manual_entities" value="${
             this._config.manual_entities || ""
           }" placeholder="sensor.adam_gaming_status, ...">
         </div>
       </div>
     `;
 
-    const titleInput = this.shadowRoot.getElementById("title-input");
-    titleInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, title: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    const maxPlayersInput = this.shadowRoot.getElementById("max-players-input");
-    maxPlayersInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, max_visible_players: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    const manualInput = this.shadowRoot.getElementById("manual-entities-input");
-    manualInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, manual_entities: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    this.shadowRoot
-      .querySelectorAll('input[type="radio"], input[type="checkbox"]')
-      .forEach((input) => {
-        input.addEventListener("change", (ev) => {
-          if (!this._config) return;
-          const target = ev.target;
-          let value =
-            target.type === "checkbox" ? target.checked : target.value;
-          this._config = {
-            ...this._config,
-            [target.getAttribute(".configValue")]: value,
-          };
-          this.dispatchEvent(
-            new CustomEvent("config-changed", {
-              detail: { config: this._config },
-              bubbles: true,
-              composed: true,
-            })
-          );
-        });
+    this.shadowRoot.querySelectorAll('input').forEach((input) => {
+      input.addEventListener("change", (ev) => {
+        if (!this._config) return;
+        const target = ev.target;
+        let value = target.type === "checkbox" ? target.checked : target.value;
+        this._config = {
+          ...this._config,
+          [target.dataset.field]: value,
+        };
+        this.dispatchEvent(
+          new CustomEvent("config-changed", {
+            detail: { config: this._config },
+            bubbles: true,
+            composed: true,
+          })
+        );
       });
+    });
   }
 }
 
@@ -596,6 +546,7 @@ class GamingSlideshowCard extends HTMLElement {
       entities_pattern: config.entities_pattern || "_gaming_status",
       ...config,
     };
+    this._lastHash = "";
   }
 
   set hass(hass) {
@@ -877,7 +828,7 @@ class GamingSlideshowCardEditor extends HTMLElement {
         
         <div>
           <div class="section-title">Artwork Type</div>
-          <select id="artwork-type-input" .configValue="artwork_type">
+          <select id="artwork-type-input" data-field="artwork_type">
             <option value="hero" ${this._config.artwork_type === "hero" || !this._config.artwork_type ? "selected" : ""}>Hero (Horizontal Landscape)</option>
             <option value="cover" ${this._config.artwork_type === "cover" ? "selected" : ""}>Cover/Grid (Vertical Portrait)</option>
             <option value="logo" ${this._config.artwork_type === "logo" ? "selected" : ""}>Logo (Transparent Title)</option>
@@ -888,129 +839,62 @@ class GamingSlideshowCardEditor extends HTMLElement {
         <div>
           <div class="section-title">Aspect Ratio Override</div>
           <div class="helper-text">Leave blank to automatically use the default ratio for your selected artwork style.</div>
-          <input type="text" id="aspect-input" .configValue="aspect_ratio" value="${
+          <input type="text" id="aspect-input" data-field="aspect_ratio" value="${
             this._config.aspect_ratio || ""
           }" placeholder="e.g. 16/9">
         </div>
 
-        <div><div class="section-title">Time Per Slide (Seconds)</div><input type="number" id="time-input" .configValue="time_per_slide" value="${
+        <div><div class="section-title">Time Per Slide (Seconds)</div><input type="number" id="time-input" data-field="time_per_slide" value="${
           this._config.time_per_slide !== undefined
             ? this._config.time_per_slide
             : 5
         }" min="1"></div>
-        <div><div class="section-title">Transition Fade Time (Seconds)</div><input type="number" id="transition-input" .configValue="transition_time" value="${
+        <div><div class="section-title">Transition Fade Time (Seconds)</div><input type="number" id="transition-input" data-field="transition_time" value="${
           this._config.transition_time !== undefined
             ? this._config.transition_time
             : 1
         }" min="0"></div>
         <hr>
         <div>
-          <label><input type="checkbox" .configValue="show_avatars" ${
+          <label><input type="checkbox" data-field="show_avatars" ${
             this._config.show_avatars !== false ? "checked" : ""
           }> Show Player Avatars</label>
-          <label style="margin-top: 10px;"><input type="checkbox" .configValue="auto_hide" ${
+          <label style="margin-top: 10px;"><input type="checkbox" data-field="auto_hide" ${
             this._config.auto_hide !== false ? "checked" : ""
           }> Auto-hide card when empty</label>
-          <label style="margin-top: 10px;"><input type="checkbox" .configValue="include_plex" ${
+          <label style="margin-top: 10px;"><input type="checkbox" data-field="include_plex" ${
             this._config.include_plex === true ? "checked" : ""
           }> Include Plex/Tautulli Sessions</label>
         </div><hr>
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
           <div class="helper-text">Leave blank to automatically grab all sensors, or restrict by entering comma-separated IDs.</div>
-          <input type="text" id="manual-entities-input-slide" .configValue="manual_entities" value="${
+          <input type="text" id="manual-entities-input-slide" data-field="manual_entities" value="${
             this._config.manual_entities || ""
           }" placeholder="sensor.adam_gaming_status, ...">
         </div>
       </div>
     `;
 
-    const typeInput = this.shadowRoot.getElementById("artwork-type-input");
-    typeInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, artwork_type: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    const aspectInput = this.shadowRoot.getElementById("aspect-input");
-    aspectInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, aspect_ratio: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    const timeInput = this.shadowRoot.getElementById("time-input");
-    timeInput.addEventListener("change", (ev) => {
-      this._config = {
-        ...this._config,
-        time_per_slide: parseFloat(ev.target.value),
-      };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    const transInput = this.shadowRoot.getElementById("transition-input");
-    transInput.addEventListener("change", (ev) => {
-      this._config = {
-        ...this._config,
-        transition_time: parseFloat(ev.target.value),
-      };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    const manualInput = this.shadowRoot.getElementById(
-      "manual-entities-input-slide"
-    );
-    manualInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, manual_entities: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    this.shadowRoot
-      .querySelectorAll('input[type="checkbox"]')
-      .forEach((input) => {
-        input.addEventListener("change", (ev) => {
-          if (!this._config) return;
-          this._config = {
-            ...this._config,
-            [ev.target.getAttribute(".configValue")]: ev.target.checked,
-          };
-          this.dispatchEvent(
-            new CustomEvent("config-changed", {
-              detail: { config: this._config },
-              bubbles: true,
-              composed: true,
-            })
-          );
-        });
+    this.shadowRoot.querySelectorAll('input, select').forEach((input) => {
+      input.addEventListener("change", (ev) => {
+        if (!this._config) return;
+        const target = ev.target;
+        let value = target.type === "checkbox" ? target.checked : target.value;
+        if (target.type === "number") value = parseFloat(value);
+        this._config = {
+          ...this._config,
+          [target.dataset.field]: value,
+        };
+        this.dispatchEvent(
+          new CustomEvent("config-changed", {
+            detail: { config: this._config },
+            bubbles: true,
+            composed: true,
+          })
+        );
       });
+    });
   }
 }
 
@@ -1052,6 +936,7 @@ class GamingStatusChartCard extends HTMLElement {
       entities_pattern: config.entities_pattern || "_gaming_status",
       ...config,
     };
+    this._lastRoster = "";
   }
 
   set hass(hass) {
@@ -1216,7 +1101,7 @@ class GamingStatusChartEditor extends HTMLElement {
 
         <div>
           <div class="section-title">Chart Title (Optional)</div>
-          <input type="text" id="title-input-chart" .configValue="title" value="${
+          <input type="text" id="title-input-chart" data-field="title" value="${
             this._config.title || ""
           }">
         </div>
@@ -1226,7 +1111,7 @@ class GamingStatusChartEditor extends HTMLElement {
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
           <div class="helper-text">Leave blank to automatically chart all sensors, or restrict by entering comma-separated IDs.</div>
-          <input type="text" id="manual-entities-input-chart" .configValue="manual_entities" value="${
+          <input type="text" id="manual-entities-input-chart" data-field="manual_entities" value="${
             this._config.manual_entities || ""
           }" placeholder="sensor.adam_gaming_status, ...">
         </div>
@@ -1236,7 +1121,7 @@ class GamingStatusChartEditor extends HTMLElement {
         <div>
           <div class="section-title">Custom Colors (Advanced)</div>
           <div class="helper-text">Leave blank to use the default vibrant palette. Override by entering a comma-separated list of colors (Hex, RGB, or names like <code>red, #00FF00, rgb(0,0,255)</code>).</div>
-          <input type="text" id="custom-colors-input-chart" .configValue="custom_colors" value="${
+          <input type="text" id="custom-colors-input-chart" data-field="custom_colors" value="${
             this._config.custom_colors || ""
           }" placeholder="#ffbe0b, #fb5607, ...">
         </div>
@@ -1244,44 +1129,21 @@ class GamingStatusChartEditor extends HTMLElement {
       </div>
     `;
 
-    const titleInput = this.shadowRoot.getElementById("title-input-chart");
-    titleInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, title: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    const manualInput = this.shadowRoot.getElementById(
-      "manual-entities-input-chart"
-    );
-    manualInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, manual_entities: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    const colorInput = this.shadowRoot.getElementById(
-      "custom-colors-input-chart"
-    );
-    colorInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, custom_colors: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
+    this.shadowRoot.querySelectorAll('input').forEach((input) => {
+      input.addEventListener("change", (ev) => {
+        if (!this._config) return;
+        this._config = {
+          ...this._config,
+          [ev.target.dataset.field]: ev.target.value,
+        };
+        this.dispatchEvent(
+          new CustomEvent("config-changed", {
+            detail: { config: this._config },
+            bubbles: true,
+            composed: true,
+          })
+        );
+      });
     });
   }
 }
@@ -1543,18 +1405,18 @@ class GamingStatusDonutEditor extends HTMLElement {
         </div>
 
         <label>Card Title (Optional):
-          <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ''}">
+          <input type="text" id="title" data-field="title" value="${this._config.title !== undefined ? this._config.title : ''}">
         </label>
 
         <label>Chart Metric:
-          <select id="metric" .configValue="metric">
+          <select id="metric" data-field="metric">
             <option value="platforms" ${this._config.metric === 'platforms' || !this._config.metric ? 'selected' : ''}>Platform Split (Xbox, PS, Steam, PC)</option>
             <option value="hours" ${isHoursMetric ? 'selected' : ''}>Most Played Hours (By Player)</option>
           </select>
         </label>
 
         <label>Player Filter Mode:
-          <select id="mode" .configValue="mode">
+          <select id="mode" data-field="mode">
             <option value="all" ${this._config.mode === 'all' || !this._config.mode ? 'selected' : ''}>All Tracked Players</option>
             <option value="single" ${this._config.mode === 'single' ? 'selected' : ''} ${isHoursMetric ? 'disabled hidden' : ''}>Single Player</option>
             <option value="selected" ${this._config.mode === 'selected' ? 'selected' : ''}>Selected Players</option>
@@ -1563,7 +1425,7 @@ class GamingStatusDonutEditor extends HTMLElement {
 
         <div id="single-selector" style="display: ${this._config.mode === 'single' ? 'block' : 'none'}">
           <label>Select Player: 
-            <select id="single_entity" .configValue="single_entity">
+            <select id="single_entity" data-field="single_entity">
               <option value="" disabled ${!this._config.single_entity ? 'selected' : ''}>Select a player...</option>
               ${entityOptions}
             </select>
@@ -1572,7 +1434,7 @@ class GamingStatusDonutEditor extends HTMLElement {
 
         <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.adam_gaming_status, ...">
+            <input type="text" id="selected_entities" data-field="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.adam_gaming_status, ...">
             <span class="helper-text">Enter a comma-separated list of exact entity IDs.</span>
           </label>
         </div>
@@ -1580,7 +1442,7 @@ class GamingStatusDonutEditor extends HTMLElement {
         <hr>
 
         <label>Custom Colors (Advanced):
-          <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
+          <input type="text" id="custom_colors" data-field="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
           <span class="helper-text">Leave blank to use default colors. For Platform Mode, leaving blank uses native brand colors. Override by entering a comma-separated list.</span>
         </label>
 
@@ -1589,7 +1451,7 @@ class GamingStatusDonutEditor extends HTMLElement {
 
     this.shadowRoot.querySelectorAll('input, select').forEach(el => {
       el.addEventListener('change', e => {
-        const field = e.target.getAttribute('.configValue');
+        const field = e.target.dataset.field;
         let value = e.target.value;
         
         if (field === 'metric' && value === 'hours' && this._config.mode === 'single') {
@@ -1860,11 +1722,11 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         </div>
 
         <label>Card Title:
-          <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ''}">
+          <input type="text" id="title" data-field="title" value="${this._config.title !== undefined ? this._config.title : ''}">
         </label>
         
         <label>Leaderboard Metric:
-          <select id="metric" .configValue="metric">
+          <select id="metric" data-field="metric">
             <option value="hours" ${this._config.metric === 'hours' ? 'selected' : ''}>Top Players: Most Played Hours (Weekly)</option>
             <option value="longest" ${this._config.metric === 'longest' ? 'selected' : ''}>Top Players: Longest Gaming Session</option>
             <option value="games" ${this._config.metric === 'games' ? 'selected' : ''}>Top Players: Most Different Games Played</option>
@@ -1873,7 +1735,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         </label>
 
         <label>Player Filter Mode:
-          <select id="mode" .configValue="mode">
+          <select id="mode" data-field="mode">
             <option value="all" ${this._config.mode === 'all' || !this._config.mode ? 'selected' : ''}>All Tracked Players</option>
             <option value="single" ${this._config.mode === 'single' ? 'selected' : ''}>Single Player</option>
             <option value="selected" ${this._config.mode === 'selected' ? 'selected' : ''}>Selected Players</option>
@@ -1882,7 +1744,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
         <div id="single-selector" style="display: ${this._config.mode === 'single' ? 'block' : 'none'}">
           <label>Select Player: 
-            <select id="single_entity" .configValue="single_entity">
+            <select id="single_entity" data-field="single_entity">
               <option value="" disabled ${!this._config.single_entity ? 'selected' : ''}>Select a player...</option>
               ${entityOptions}
             </select>
@@ -1891,19 +1753,19 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
         <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.adam_gaming_status, ...">
+            <input type="text" id="selected_entities" data-field="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.adam_gaming_status, ...">
             <span class="helper-text">Enter a comma-separated list of exact entity IDs.</span>
           </label>
         </div>
 
         <label>Items to Display (Rows):
-          <input type="number" id="max_players" .configValue="max_players" value="${this._config.max_players || '3'}" min="1" max="20">
+          <input type="number" id="max_players" data-field="max_players" value="${this._config.max_players || '3'}" min="1" max="20">
         </label>
         
         <hr>
 
         <label>Custom Colors (Advanced):
-          <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
+          <input type="text" id="custom_colors" data-field="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
           <span class="helper-text">Leave blank to use the default vibrant palette. Override by entering a comma-separated list of colors.</span>
         </label>
       </div>
@@ -1914,7 +1776,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
     this.shadowRoot.querySelectorAll('input, select').forEach(el => {
       el.addEventListener('change', e => {
-        const field = e.target.getAttribute('.configValue');
+        const field = e.target.dataset.field;
         const value = e.target.value;
         
         this._config = { ...this._config, [field]: value };
@@ -1934,38 +1796,28 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 // REGISTRATION
 // ====================================================================
 
-// Card 1
 customElements.define("gaming-status-card", GamingStatusCard);
 customElements.define("gaming-status-card-editor", GamingStatusCardEditor);
 
-// Card 2
 customElements.define("gaming-slideshow-card", GamingSlideshowCard);
-customElements.define(
-  "gaming-slideshow-card-editor",
-  GamingSlideshowCardEditor
-);
+customElements.define("gaming-slideshow-card-editor", GamingSlideshowCardEditor);
 
-// Card 3
 customElements.define("gaming-status-chart-card", GamingStatusChartCard);
 customElements.define("gaming-status-chart-editor", GamingStatusChartEditor);
 
-// Card 4
 customElements.define("gaming-status-donut-card", GamingStatusDonutCard);
 customElements.define("gaming-status-donut-editor", GamingStatusDonutEditor);
 
-// Card 5
 customElements.define("gaming-status-leaderboard-card", GamingStatusLeaderboardCard);
 customElements.define("gaming-status-leaderboard-editor", GamingStatusLeaderboardEditor);
 
-// Inject into UI
 window.customCards = window.customCards || [];
 
 window.customCards.push({
   type: "gaming-status-card",
   name: "Gaming Status - List",
   preview: true,
-  description:
-    "A dependency-free unified dashboard list card for gaming status.",
+  description: "A dependency-free unified dashboard list card for gaming status.",
 });
 
 window.customCards.push({
@@ -1979,8 +1831,7 @@ window.customCards.push({
   type: "gaming-status-chart-card",
   name: "Gaming Status - Chart",
   preview: true,
-  description:
-    "An automated wrapper that builds a historical gaming ApexChart.",
+  description: "An automated wrapper that builds a historical gaming ApexChart.",
 });
 
 window.customCards.push({
