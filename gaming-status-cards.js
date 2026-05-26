@@ -17,6 +17,7 @@ class GamingStatusCard extends HTMLElement {
       title: "",
       mode: "all",
       color_mode: "game",
+      offline_image: "game",
       sort_by: "last_online",
       show_badges: true,
       show_text_shadow: true,
@@ -31,6 +32,7 @@ class GamingStatusCard extends HTMLElement {
       title: config.title || "",
       mode: config.mode || "all",
       color_mode: config.color_mode || "game",
+      offline_image: config.offline_image || "game",
       sort_by: config.sort_by || "last_online",
       show_badges: config.show_badges !== false,
       show_text_shadow: config.show_text_shadow !== false,
@@ -52,13 +54,8 @@ class GamingStatusCard extends HTMLElement {
     let currentHash = "";
     let rawEntities = [];
 
-    if (
-      this.config.manual_entities &&
-      this.config.manual_entities.trim() !== ""
-    ) {
-      const entityIds = this.config.manual_entities
-        .split(",")
-        .map((e) => e.trim());
+    if (this.config.manual_entities && this.config.manual_entities.trim() !== "") {
+      const entityIds = this.config.manual_entities.split(",").map((e) => e.trim());
       for (const id of entityIds) {
         if (hass.states[id]) {
           rawEntities.push(hass.states[id]);
@@ -69,8 +66,7 @@ class GamingStatusCard extends HTMLElement {
       for (const entityId in hass.states) {
         if (entityId.startsWith("sensor.") && entityId.includes(targetSuffix)) {
           rawEntities.push(hass.states[entityId]);
-          currentHash +=
-            hass.states[entityId].state + hass.states[entityId].last_updated;
+          currentHash += hass.states[entityId].state + hass.states[entityId].last_updated;
         }
       }
     }
@@ -85,11 +81,12 @@ class GamingStatusCard extends HTMLElement {
   processData(entities) {
     let filtered = entities.filter((entity) => {
       const state = entity.state.toLowerCase();
-      const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(state);
+      const isOffline = ["offline", "unavailable", "unknown"].includes(state);
       if (this.config.mode === "online" && isOffline) return false;
       return true;
     });
 
+    // --- NEW SORTING ENGINE START ---
     filtered.sort((a, b) => {
       const stateA = a.state.toLowerCase();
       const stateB = b.state.toLowerCase();
@@ -101,118 +98,169 @@ class GamingStatusCard extends HTMLElement {
 
       const sortBy = this.config.sort_by || "last_online";
 
+      // --- ALPHABETICAL SORT ---
       if (sortBy === "name") {
         const nameA = (a.attributes.friendly_name || a.entity_id).toLowerCase();
         const nameB = (b.attributes.friendly_name || b.entity_id).toLowerCase();
         return nameA.localeCompare(nameB);
       }
+      
+      // --- GAME TITLE SORT ---
       else if (sortBy === "state") {
-         // Pull directly from the native last_played_game attribute
-         let gameA = isOfflineA ? String(a.attributes.last_played_game || "").toLowerCase() : stateA;
-         let gameB = isOfflineB ? String(b.attributes.last_played_game || "").toLowerCase() : stateB;
+        let gameA = isOfflineA ? String(a.attributes.last_played_game || "").toLowerCase() : stateA;
+        let gameB = isOfflineB ? String(b.attributes.last_played_game || "").toLowerCase() : stateB;
+        
+        gameA = gameA.trim();
+        gameB = gameB.trim();
 
-         gameA = gameA.trim();
-         gameB = gameB.trim();
+        // Push empty or unknown games to the absolute bottom 
+        const emptyStates = ["none", "unknown", "null", "offline", "idle", ""];
+        if (emptyStates.includes(gameA)) gameA = "zzzzzz";
+        if (emptyStates.includes(gameB)) gameB = "zzzzzz";
 
-         // Push unknown/empty games to the very bottom (zzzzzz forces alphabetical drop)
-         if (["none", "unknown", "null", "offline", "idle", ""].includes(gameA)) gameA = "zzzzzz";
-         if (["none", "unknown", "null", "offline", "idle", ""].includes(gameB)) gameB = "zzzzzz";
-
-         return gameA.localeCompare(gameB);
+        return gameA.localeCompare(gameB);
       }
+      
+      // --- LAST ONLINE SORT ---
       else { 
-         // "last_online"
-         const getSortTime = (ent, isOff) => {
-             // A: Active Session fallback (strip microseconds for Safari/WebKit safety)
-             if (!isOff && ent.attributes && ent.attributes.play_start_time) {
-                 const t = new Date(String(ent.attributes.play_start_time).replace(/\.\d+/, "")).getTime();
-                 if (!isNaN(t)) return t;
-             }
-             // B: Offline Target (directly use the native timestamp, stripping microseconds)
-             if (isOff && ent.attributes && ent.attributes.last_online_valid_timestamp) {
-                 const t = new Date(String(ent.attributes.last_online_valid_timestamp).replace(/\.\d+/, "")).getTime();
-                 if (!isNaN(t)) return t;
-             }
-             // C: Legacy fallback string parser (for older player profiles without new backend attributes)
-             if (isOff && ent.attributes && ent.attributes.secondary) {
-                 const sec = String(ent.attributes.secondary).toLowerCase();
-                 const match = sec.match(/(\d+)\s*(mo|m|h|d|w|y)/);
-                 if (match) {
-                     const val = parseInt(match[1]);
-                     const unit = match[2];
-                     let seconds = val * 60;
-                     if (unit === 'h') seconds = val * 3600;
-                     if (unit === 'd') seconds = val * 86400;
-                     if (unit === 'w') seconds = val * 604800;
-                     if (unit === 'mo') seconds = val * 2592000;
-                     if (unit === 'y') seconds = val * 31536000;
-                     return Date.now() - (seconds * 1000);
-                 }
-             }
-             // D: Absolute last resort fallback to Home Assistant database timestamps
-             const fallback = new Date(String(ent.last_changed || ent.last_updated || "").replace(/\.\d+/, "")).getTime();
-             return isNaN(fallback) ? 0 : fallback;
-         };
+        const getValidTime = (entity, isOff) => {
+          // A: Active Session (strip microseconds for iOS/Safari safety)
+          if (!isOff && entity.attributes.play_start_time) {
+            const cleanIso = String(entity.attributes.play_start_time).replace(/\.\d+/, "");
+            const t = new Date(cleanIso).getTime();
+            if (!isNaN(t)) return t;
+          }
 
-         const timeA = getSortTime(a, isOfflineA);
-         const timeB = getSortTime(b, isOfflineB);
+          // B: Offline Target (directly use the native timestamp, stripping microseconds)
+          if (isOff && entity.attributes.last_online_valid_timestamp) {
+            const cleanIso = String(entity.attributes.last_online_valid_timestamp).replace(/\.\d+/, "");
+            const t = new Date(cleanIso).getTime();
+            if (!isNaN(t)) return t;
+          }
 
-         // Break exact time ties alphabetically so the list order isn't randomized
-         if (timeA === timeB) {
-             const nameA = (a.attributes.friendly_name || a.entity_id).toLowerCase();
-             const nameB = (b.attributes.friendly_name || b.entity_id).toLowerCase();
-             return nameA.localeCompare(nameB);
-         }
-         return timeB - timeA;
+          // C: Legacy fallback string parser (for older player profiles)
+          if (isOff && entity.attributes.secondary) {
+              const sec = String(entity.attributes.secondary).toLowerCase();
+              const match = sec.match(/(\d+)\s*(mo|m|h|d|w|y)/);
+              if (match) {
+                  const val = parseInt(match[1]);
+                  const unit = match[2];
+                  let seconds = val * 60;
+                  if (unit === 'h') seconds = val * 3600;
+                  if (unit === 'd') seconds = val * 86400;
+                  if (unit === 'w') seconds = val * 604800;
+                  if (unit === 'mo') seconds = val * 2592000;
+                  if (unit === 'y') seconds = val * 31536000;
+                  return Date.now() - (seconds * 1000);
+              }
+          }
+          
+          // D: Absolute fallback to database changes
+          const fallbackIso = String(entity.last_changed || entity.last_updated || "").replace(/\.\d+/, "");
+          const tFallback = new Date(fallbackIso).getTime();
+          return isNaN(tFallback) ? 0 : tFallback;
+        };
+
+        const timeA = getValidTime(a, isOfflineA);
+        const timeB = getValidTime(b, isOfflineB);
+        
+        // Break exact time ties alphabetically so the list order never randomly jumps
+        if (timeA === timeB) {
+          const nameA = (a.attributes.friendly_name || a.entity_id).toLowerCase();
+          const nameB = (b.attributes.friendly_name || b.entity_id).toLowerCase();
+          return nameA.localeCompare(nameB);
+        }
+        
+        return timeB - timeA;
       }
     });
+    // --- NEW SORTING ENGINE END ---
 
     return filtered.map((entity) => {
-      const platform = (
-        entity.attributes.active_platform || this.config.mode
-      ).toLowerCase();
+      const isPlatformMode = ["steam", "xbox", "playstation"].includes(this.config.mode);
+      const platform = (entity.attributes.active_platform || this.config.mode).toLowerCase();
+      
       let badgeIcon = "mdi:gamepad-variant";
-      let accentColor = "rgb(100, 50, 100)";
       let platformColor = "100, 50, 100";
       
-      if (platform.includes("steam")) {
-        badgeIcon = "mdi:steam";
-        accentColor = "rgb(2, 173, 239)";
-        platformColor = "2, 173, 239";
-      } else if (platform.includes("xbox")) {
-        badgeIcon = "mdi:microsoft-xbox";
-        accentColor = "rgb(11, 124, 16)";
-        platformColor = "11, 124, 16";
-      } else if (platform.includes("playstation")) {
-        badgeIcon = "mdi:sony-playstation";
-        accentColor = "rgb(0, 48, 135)";
-        platformColor = "0, 48, 135";
-      }
+      if (platform.includes("steam")) { badgeIcon = "mdi:steam"; platformColor = "2, 173, 239"; }
+      else if (platform.includes("xbox")) { badgeIcon = "mdi:microsoft-xbox"; platformColor = "11, 124, 16"; }
+      else if (platform.includes("playstation")) { badgeIcon = "mdi:sony-playstation"; platformColor = "0, 48, 135"; }
 
-      // Default to the vibrant game color unless specifically told to use "platform"
+      let platformColorCSS = `rgb(${platformColor})`;
+      let accentColorCSS = platformColorCSS; 
+      let gradientColorCSS = "rgba(0, 0, 0, 1)";
+      let filterCSS = "blur(5px)";
+      
       const useGameColor = this.config.color_mode !== "platform";
-      if (useGameColor && entity.attributes.game_dominant_color) {
-        accentColor = entity.attributes.game_dominant_color;
+      const rawColor = entity.attributes.game_dominant_color;
+
+      // Hex to RGB parser for dynamic game colors
+      let parsedGameColor = null;
+      if (rawColor && String(rawColor).toLowerCase() !== "null" && String(rawColor).toLowerCase() !== "none") {
+          let str = String(rawColor).trim().toLowerCase();
+          if (str.startsWith('#')) {
+              let h = str.replace('#', '');
+              if (h.length === 3) h = [...h].map(x => x + x).join('');
+              if (h.length === 6) {
+                  const r = parseInt(h.substring(0,2), 16);
+                  const g = parseInt(h.substring(2,4), 16);
+                  const b = parseInt(h.substring(4,6), 16);
+                  if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+                      parsedGameColor = `rgb(${r}, ${g}, ${b})`;
+                  }
+              }
+          } else if (str.startsWith('rgb')) {
+              parsedGameColor = str;
+          }
       }
 
-      const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(
-        entity.state.toLowerCase()
-      );
-      const friendlyName = (
-        entity.attributes.friendly_name || entity.entity_id
-      ).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "");
+      const isOffline = ["offline", "unavailable", "unknown"].includes(entity.state.toLowerCase());
+
+      // --- RESTORED DISPLAY LOGIC ---
+      if (isPlatformMode) {
+          gradientColorCSS = platformColorCSS; // Always tint background with platform color
+          filterCSS = "blur(5px)"; // Never turn gray, even when offline
+          if (useGameColor && parsedGameColor && !isOffline) {
+              accentColorCSS = parsedGameColor; // Only the border uses the game color
+          }
+      } else {
+          // "All Players" Mode
+          if (isOffline) {
+              gradientColorCSS = "rgba(0, 0, 0, 0)"; // Transparent
+              filterCSS = "blur(5px) grayscale(100%) brightness(0.5)"; // Force gray/dim when offline
+          } else {
+              filterCSS = "blur(5px) brightness(0.8)";
+              if (useGameColor && parsedGameColor) {
+                  gradientColorCSS = parsedGameColor;
+                  accentColorCSS = parsedGameColor;
+              }
+          }
+      }
+
+      const friendlyName = (entity.attributes.friendly_name || entity.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "");
+
+      const isStrValid = (val) => val && String(val).toLowerCase() !== "null" && String(val).toLowerCase() !== "none" && val !== "unknown";
+      let heroArt = isStrValid(entity.attributes.game_hero_art) ? entity.attributes.game_hero_art : "";
+      let pictureArt = isStrValid(entity.attributes.entity_picture) ? entity.attributes.entity_picture : "";
+      
+      // Select offline image based on the new editor configuration toggle
+      let coverArt = heroArt || pictureArt || "/static/icons/favicon-192x192.png";
+      if (isOffline && this.config.offline_image === "avatar") {
+          coverArt = pictureArt || "/static/icons/favicon-192x192.png";
+      }
 
       return {
         entity_id: entity.entity_id,
         name: friendlyName,
         state: entity.state,
         secondary: entity.attributes.secondary || "",
-        picture: entity.attributes.entity_picture || "",
-        cover: isOffline
-          ? (entity.attributes.entity_picture || "")
-          : (entity.attributes.game_hero_art || entity.attributes.entity_picture || ""),
-        accentColor,
-        platformColor,
+        picture: pictureArt || "/static/icons/favicon-192x192.png",
+        cover: coverArt,        
+        accentColorCSS,
+        gradientColorCSS,
+        filterCSS,
+        platformColorCSS,
         badgeIcon,
         isOffline,
       };
@@ -232,7 +280,6 @@ class GamingStatusCard extends HTMLElement {
           .card-stack { display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; }
           .card-stack.scrollable { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
           
-          /* Custom Scrollbar */
           .card-stack::-webkit-scrollbar { width: 6px; }
           .card-stack::-webkit-scrollbar-track { background: transparent; }
           .card-stack::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, 0.4); border-radius: 3px; }
@@ -246,35 +293,25 @@ class GamingStatusCard extends HTMLElement {
             flex-shrink: 0;
           }
           .player-card:active { transform: scale(0.98); }
-          .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none; }
+          .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none;background-image: linear-gradient(to right, var(--card-gradient-color) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); filter: var(--card-filter); }
           
           .player-card.online { border-right: 8px solid var(--card-accent-color); }
           .player-card.offline { border-right: none; }
-          .player-card.default-tint::before { background-image: linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%), var(--bg-url); }
-          .player-card.default-tint.online::before { filter: blur(5px) brightness(0.7); }
-          .player-card.default-tint.offline::before { filter: blur(5px) grayscale(100%) brightness(0.5); }
-          .player-card.platform-tint::before { background-image: linear-gradient(to right, rgb(var(--platform-color-raw)) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); filter: blur(5px); }
-          .player-card.game-tint::before { background-image: linear-gradient(to right, var(--card-accent-color) 0%, rgba(0, 0, 0, 0) 100%), var(--bg-url); }
-          .player-card.game-tint.online::before { filter: blur(5px) brightness(0.7); }
-          .player-card.game-tint.offline::before { filter: blur(5px) grayscale(100%) brightness(0.5); }
-
+          
           .content-wrapper { position: relative; z-index: 1; display: flex; align-items: center; width: 100%; gap: 12px; pointer-events: none; }
           .avatar-container { position: relative; width: 36px; height: 36px; flex-shrink: 0; }
           .avatar { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-          .badge { position: absolute; top: -3px; right: -3px; width: 16px; height: 16px; background: rgb(var(--platform-color-raw)); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: none; }
-          .player-card.default-tint.offline .badge { background: grey; }
+          
+          .badge { position: absolute; top: -3px; right: -3px; width: 16px; height: 16px; background: var(--platform-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: none; }
+          .player-card.offline .badge { background: grey; }
           .badge ha-icon { --mdc-icon-size: 12px; margin-top: -1px; color: white; }
 
           .text-content { display: flex; flex-direction: column; flex-grow: 1; min-width: 0; }
           .primary { font-weight: 600; font-size: 14px; color: white; text-shadow: ${
-            this.config.show_text_shadow
-              ? "1px 1px 2px rgba(0,0,0,0.8)"
-              : "none"
+            this.config.show_text_shadow ? "1px 1px 2px rgba(0,0,0,0.8)" : "none"
           }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; margin-bottom: 2px; }
           .secondary { font-size: 12px; color: #ffffff; text-shadow: ${
-            this.config.show_text_shadow
-              ? "1px 1px 2px rgba(0,0,0,0.8)"
-              : "none"
+            this.config.show_text_shadow ? "1px 1px 2px rgba(0,0,0,0.8)" : "none"
           }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
           
           .placeholder-avatar { background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
@@ -297,7 +334,7 @@ class GamingStatusCard extends HTMLElement {
 
     if (data.length === 0) {
       this.content.innerHTML = `
-        <div class="player-card offline default-tint" style="--bg-url: none; --platform-color-raw: 128, 128, 128; cursor: default;" data-entity-id="">
+        <div class="player-card offline" style="--bg-url: none; --card-accent-color: rgb(128, 128, 128); --card-gradient-color: rgba(0, 0, 0, 1); --card-filter: blur(5px) grayscale(100%) brightness(0.5); cursor: default;" data-entity-id="">
           <div class="content-wrapper">
             <div class="avatar-container">
               <div class="placeholder-avatar">
@@ -315,33 +352,17 @@ class GamingStatusCard extends HTMLElement {
 
     this.content.innerHTML = data
       .map((player) => {
-        const isPlatformMode = ["steam", "xbox", "playstation"].includes(
-          this.config.mode
-        );
-        const tintClass = isPlatformMode ? "platform-tint" : (this.config.color_mode !== "platform" && !player.isOffline && player.accentColor) ? "game-tint" : "default-tint";
         const statusClass = player.isOffline ? "offline" : "online";
         return `
-        <div class="player-card ${statusClass} ${tintClass}" style="--bg-url: url('${
-          player.cover || "/static/icons/favicon-192x192.png"
-        }'); --card-accent-color: ${player.accentColor}; --platform-color-raw: ${player.platformColor};" data-entity-id="${
-          player.entity_id
-        }">
+        <div class="player-card ${statusClass}" style="--bg-url: url('${player.cover}'); --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
           <div class="content-wrapper">
             <div class="avatar-container">
-              <img class="avatar" src="${
-                player.picture || "/static/icons/favicon-192x192.png"
-              }" />
-              ${
-                this.config.show_badges
-                  ? `<div class="badge"><ha-icon icon="${player.badgeIcon}"></ha-icon></div>`
-                  : ""
-              }
+              <img class="avatar" src="${player.picture}" />
+              ${this.config.show_badges ? `<div class="badge"><ha-icon icon="${player.badgeIcon}"></ha-icon></div>` : ""}
             </div>
             <div class="text-content">
               <div class="primary">${player.name}</div>
-              <div class="secondary">${
-                player.state !== "Offline" ? player.state + " " : ""
-              }${player.secondary}</div>
+              <div class="secondary">${player.state !== "Offline" ? player.state + " " : ""}${player.secondary}</div>
             </div>
           </div>
         </div>`;
