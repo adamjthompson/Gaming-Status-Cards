@@ -27,19 +27,21 @@ class GamingStatusCard extends HTMLElement {
   }
 
   setConfig(config) {
+    // Apply raw config first, then strictly enforce defaults to prevent YAML overrides
     this.config = {
-      entities_pattern: "_gaming_status",
+      ...config,
+      entities_pattern: config.entities_pattern || "_gaming_status",
       title: config.title || "",
       mode: config.mode || "all",
       color_mode: config.color_mode || "game",
       offline_image: config.offline_image || "game",
-      sort_by: config.sort_by || "last_online",
+      sort_by: config.sort_by || config.sort || "last_online",
       show_badges: config.show_badges !== false,
       show_text_shadow: config.show_text_shadow !== false,
       max_visible_players: config.max_visible_players || "",
       manual_entities: config.manual_entities || "",
-      ...config,
     };
+    this._lastHash = ""; // Force re-render immediately on setting change
   }
 
   set hass(hass) {
@@ -71,8 +73,6 @@ class GamingStatusCard extends HTMLElement {
       }
     }
 
-    currentHash += (this.config.sort_by || "") + (this.config.mode || "") + (this.config.color_mode || "") + (this.config.offline_image || "");
-
     if (this._lastHash === currentHash) return;
     this._lastHash = currentHash;
 
@@ -97,81 +97,87 @@ class GamingStatusCard extends HTMLElement {
       // 1. Primary Sort: Online players always float to the top
       if (isOfflineA !== isOfflineB) return isOfflineA ? 1 : -1;
 
-      const sortBy = this.config.sort_by || "last_online";
+      const sortBy = this.config.sort_by;
+      const nameA = (a.attributes.friendly_name || a.entity_id).toLowerCase();
+      const nameB = (b.attributes.friendly_name || b.entity_id).toLowerCase();
 
       // --- ALPHABETICAL SORT ---
       if (sortBy === "name") {
-        const nameA = (a.attributes.friendly_name || a.entity_id).toLowerCase();
-        const nameB = (b.attributes.friendly_name || b.entity_id).toLowerCase();
         return nameA.localeCompare(nameB);
       }
       
       // --- GAME TITLE SORT ---
       else if (sortBy === "state") {
-        let gameA = isOfflineA ? String(a.attributes.last_played_game || "").toLowerCase() : stateA;
-        let gameB = isOfflineB ? String(b.attributes.last_played_game || "").toLowerCase() : stateB;
-        
-        gameA = gameA.trim();
-        gameB = gameB.trim();
+        const getGame = (ent, isOff, st) => {
+            if (!isOff) return st;
+            if (ent.attributes.last_played_game) return String(ent.attributes.last_played_game);
+            if (ent.attributes.secondary && String(ent.attributes.secondary).includes(":")) {
+                let sec = String(ent.attributes.secondary);
+                return sec.substring(sec.indexOf(":") + 1).replace(/\(.*?\)/g, "").trim();
+            }
+            return "";
+        };
+
+        let gameA = String(getGame(a, isOfflineA, stateA)).toLowerCase().trim();
+        let gameB = String(getGame(b, isOfflineB, stateB)).toLowerCase().trim();
 
         // Push empty or unknown games to the absolute bottom 
         const emptyStates = ["none", "unknown", "null", "offline", "idle", ""];
         if (emptyStates.includes(gameA)) gameA = "zzzzzz";
         if (emptyStates.includes(gameB)) gameB = "zzzzzz";
 
+        if (gameA === gameB) return nameA.localeCompare(nameB);
         return gameA.localeCompare(gameB);
       }
       
-      // --- LAST ONLINE SORT ---
+      // --- LAST ONLINE SORT (Default) ---
       else { 
-        const getValidTime = (entity, isOff) => {
-          // A: Active Session (strip microseconds for iOS/Safari safety)
-          if (!isOff && entity.attributes.play_start_time) {
-            const cleanIso = String(entity.attributes.play_start_time).replace(/\.\d+/, "");
-            const t = new Date(cleanIso).getTime();
+        const getSafeTime = (ent, isOff) => {
+          let ts = null;
+          if (!isOff && ent.attributes.play_start_time) ts = ent.attributes.play_start_time;
+          else if (isOff && ent.attributes.last_online_valid_timestamp) ts = ent.attributes.last_online_valid_timestamp;
+
+          if (ts) {
+            // A: Standard parse
+            const t = Date.parse(ts);
             if (!isNaN(t)) return t;
+            
+            // B: Manual Regex Parse (Indestructible fallback for WebKit/Safari timezone rejections)
+            const match = String(ts).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+            if (match) return Date.UTC(match[1], match[2]-1, match[3], match[4], match[5], match[6]);
           }
 
-          // B: Offline Target (directly use the native timestamp, stripping microseconds)
-          if (isOff && entity.attributes.last_online_valid_timestamp) {
-            const cleanIso = String(entity.attributes.last_online_valid_timestamp).replace(/\.\d+/, "");
-            const t = new Date(cleanIso).getTime();
-            if (!isNaN(t)) return t;
-          }
-
-          // C: Legacy fallback string parser (for older player profiles)
-          if (isOff && entity.attributes.secondary) {
-              const sec = String(entity.attributes.secondary).toLowerCase();
+          // C: Legacy string parsing fallback (for profiles without timestamps)
+          if (isOff && ent.attributes.secondary) {
+              const sec = String(ent.attributes.secondary).toLowerCase();
               const match = sec.match(/(\d+)\s*(mo|m|h|d|w|y)/);
               if (match) {
                   const val = parseInt(match[1]);
                   const unit = match[2];
-                  let seconds = val * 60;
-                  if (unit === 'h') seconds = val * 3600;
-                  if (unit === 'd') seconds = val * 86400;
-                  if (unit === 'w') seconds = val * 604800;
-                  if (unit === 'mo') seconds = val * 2592000;
-                  if (unit === 'y') seconds = val * 31536000;
-                  return Date.now() - (seconds * 1000);
+                  let s = val * 60;
+                  if (unit === 'h') s = val * 3600;
+                  if (unit === 'd') s = val * 86400;
+                  if (unit === 'w') s = val * 604800;
+                  if (unit === 'mo') s = val * 2592000;
+                  if (unit === 'y') s = val * 31536000;
+                  return Date.now() - (s * 1000);
               }
           }
           
           // D: Absolute fallback to database changes
-          const fallbackIso = String(entity.last_changed || entity.last_updated || "").replace(/\.\d+/, "");
-          const tFallback = new Date(fallbackIso).getTime();
-          return isNaN(tFallback) ? 0 : tFallback;
+          const fb = ent.last_changed || ent.last_updated || "";
+          if (fb) {
+             const tFallback = Date.parse(fb);
+             if (!isNaN(tFallback)) return tFallback;
+          }
+          return 0;
         };
 
-        const timeA = getValidTime(a, isOfflineA);
-        const timeB = getValidTime(b, isOfflineB);
+        const timeA = getSafeTime(a, isOfflineA);
+        const timeB = getSafeTime(b, isOfflineB);
         
         // Break exact time ties alphabetically so the list order never randomly jumps
-        if (timeA === timeB) {
-          const nameA = (a.attributes.friendly_name || a.entity_id).toLowerCase();
-          const nameB = (b.attributes.friendly_name || b.entity_id).toLowerCase();
-          return nameA.localeCompare(nameB);
-        }
-        
+        if (timeA === timeB) return nameA.localeCompare(nameB);
         return timeB - timeA;
       }
     });
@@ -195,7 +201,6 @@ class GamingStatusCard extends HTMLElement {
       const useGameColor = this.config.color_mode !== "platform";
       const rawColor = entity.attributes.game_dominant_color;
 
-      // Hex to RGB parser for dynamic game colors
       let parsedGameColor = null;
       if (rawColor && String(rawColor).toLowerCase() !== "null" && String(rawColor).toLowerCase() !== "none") {
           let str = String(rawColor).trim().toLowerCase();
@@ -217,7 +222,6 @@ class GamingStatusCard extends HTMLElement {
 
       const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(entity.state.toLowerCase());
 
-      // --- RESTORED DISPLAY LOGIC ---
       if (isPlatformMode) {
           gradientColorCSS = platformColorCSS; 
           filterCSS = "blur(5px)"; 
@@ -225,7 +229,6 @@ class GamingStatusCard extends HTMLElement {
               accentColorCSS = parsedGameColor; 
           }
       } else {
-          // "All Players" Mode
           if (isOffline) {
               gradientColorCSS = "rgba(0, 0, 0, 0)"; 
               filterCSS = "blur(5px) grayscale(100%) brightness(0.5)"; 
@@ -244,7 +247,6 @@ class GamingStatusCard extends HTMLElement {
       let heroArt = isStrValid(entity.attributes.game_hero_art) ? entity.attributes.game_hero_art : "";
       let pictureArt = isStrValid(entity.attributes.entity_picture) ? entity.attributes.entity_picture : "";
       
-      // Select offline image based on the new editor configuration toggle
       let coverArt = heroArt || pictureArt || "/static/icons/favicon-192x192.png";
       if (isOffline && this.config.offline_image === "avatar") {
           coverArt = pictureArt || "/static/icons/favicon-192x192.png";
@@ -421,137 +423,98 @@ class GamingStatusCardEditor extends HTMLElement {
         .helper-text { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 8px; line-height: 1.4; }
       </style>
       <div class="editor-container">
-        <div><div class="section-title">Card Title</div><input type="text" id="title-input" .configValue="title" value="${
+        <div><div class="section-title">Card Title</div><input type="text" id="title-input" data-field="title" value="${
           this._config.title || ""
         }"></div><hr>
         <div><div class="section-title">Mode</div><div class="radio-group">
-            <label><input type="radio" name="mode" .configValue="mode" value="all" ${
+            <label><input type="radio" name="mode" data-field="mode" value="all" ${
               this._config.mode === "all" || !this._config.mode ? "checked" : ""
             }> All Players</label>
-            <label><input type="radio" name="mode" .configValue="mode" value="online" ${
+            <label><input type="radio" name="mode" data-field="mode" value="online" ${
               this._config.mode === "online" ? "checked" : ""
             }> Online Only</label>
-            <label><input type="radio" name="mode" .configValue="mode" value="steam" ${
+            <label><input type="radio" name="mode" data-field="mode" value="steam" ${
               this._config.mode === "steam" ? "checked" : ""
             }> Steam</label>
-            <label><input type="radio" name="mode" .configValue="mode" value="xbox" ${
+            <label><input type="radio" name="mode" data-field="mode" value="xbox" ${
               this._config.mode === "xbox" ? "checked" : ""
             }> Xbox</label>
-            <label><input type="radio" name="mode" .configValue="mode" value="playstation" ${
+            <label><input type="radio" name="mode" data-field="mode" value="playstation" ${
               this._config.mode === "playstation" ? "checked" : ""
             }> PlayStation</label>
         </div></div><hr>
         <div><div class="section-title">Color Mode</div><div class="radio-group">
-            <label><input type="radio" name="color_mode" .configValue="color_mode" value="game" ${
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="game" ${
               this._config.color_mode !== "platform" ? "checked" : ""
             }> Game Artwork (Dynamic)</label>
-            <label><input type="radio" name="color_mode" .configValue="color_mode" value="platform" ${
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="platform" ${
               this._config.color_mode === "platform" ? "checked" : ""
             }> Platform Native (Pre-Defined)</label>
         </div></div><hr>
         <div><div class="section-title">Offline Image Style</div><div class="radio-group">
-            <label><input type="radio" name="offline_image" .configValue="offline_image" value="game" ${
+            <label><input type="radio" name="offline_image" data-field="offline_image" value="game" ${
               this._config.offline_image !== "avatar" ? "checked" : ""
             }> Last Played Game Artwork</label>
-            <label><input type="radio" name="offline_image" .configValue="offline_image" value="avatar" ${
+            <label><input type="radio" name="offline_image" data-field="offline_image" value="avatar" ${
               this._config.offline_image === "avatar" ? "checked" : ""
             }> Player Avatar</label>
         </div></div><hr>
         <div><div class="section-title">Sort By</div><div class="radio-group">
-            <label><input type="radio" name="sort" .configValue="sort_by" value="last_online" ${
+            <label><input type="radio" name="sort" data-field="sort_by" value="last_online" ${
               this._config.sort_by === "last_online" || !this._config.sort_by
                 ? "checked"
                 : ""
             }> Last Online</label>
-            <label><input type="radio" name="sort" .configValue="sort_by" value="name" ${
+            <label><input type="radio" name="sort" data-field="sort_by" value="name" ${
               this._config.sort_by === "name" ? "checked" : ""
             }> Name</label>
-            <label><input type="radio" name="sort" .configValue="sort_by" value="state" ${
+            <label><input type="radio" name="sort" data-field="sort_by" value="state" ${
               this._config.sort_by === "state" ? "checked" : ""
             }> Game Title</label>
         </div></div><hr>
         <div><div class="section-title">Visibility Options</div>
-          <label><input type="checkbox" .configValue="show_badges" ${
+          <label><input type="checkbox" data-field="show_badges" ${
             this._config.show_badges !== false ? "checked" : ""
           }> Show Platform Badges</label>
-          <label style="margin-top: 10px;"><input type="checkbox" .configValue="show_text_shadow" ${
+          <label style="margin-top: 10px;"><input type="checkbox" data-field="show_text_shadow" ${
             this._config.show_text_shadow !== false ? "checked" : ""
           }> Show Text Shadow</label>
         </div><hr>
         <div>
           <div class="section-title">Maximum Visible Players</div>
           <div class="helper-text">Leave blank to show all players. Enter a number to restrict the visible height and enable a dynamic scrollbar.</div>
-          <input type="number" id="max-players-input" .configValue="max_visible_players" value="${
+          <input type="number" id="max-players-input" data-field="max_visible_players" value="${
             this._config.max_visible_players || ""
           }" placeholder="e.g. 3" min="1">
         </div><hr>
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
           <div class="helper-text">Leave blank to automatically grab all sensors. To restrict this card to specific people, enter a comma-separated list of exact entity IDs (e.g. <code>sensor.adam_gaming_status, sensor.liv_gaming_status</code>).</div>
-          <input type="text" id="manual-entities-input" .configValue="manual_entities" value="${
+          <input type="text" id="manual-entities-input" data-field="manual_entities" value="${
             this._config.manual_entities || ""
           }" placeholder="sensor.adam_gaming_status, ...">
         </div>
       </div>
     `;
 
-    const titleInput = this.shadowRoot.getElementById("title-input");
-    titleInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, title: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    const maxPlayersInput = this.shadowRoot.getElementById("max-players-input");
-    maxPlayersInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, max_visible_players: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    const manualInput = this.shadowRoot.getElementById("manual-entities-input");
-    manualInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, manual_entities: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    this.shadowRoot
-      .querySelectorAll('input[type="radio"], input[type="checkbox"]')
-      .forEach((input) => {
-        input.addEventListener("change", (ev) => {
-          if (!this._config) return;
-          const target = ev.target;
-          let value =
-            target.type === "checkbox" ? target.checked : target.value;
-          this._config = {
-            ...this._config,
-            [target.getAttribute(".configValue")]: value,
-          };
-          this.dispatchEvent(
-            new CustomEvent("config-changed", {
-              detail: { config: this._config },
-              bubbles: true,
-              composed: true,
-            })
-          );
-        });
+    this.shadowRoot.querySelectorAll('input').forEach((input) => {
+      input.addEventListener("change", (ev) => {
+        if (!this._config) return;
+        const target = ev.target;
+        let value = target.type === "checkbox" ? target.checked : target.value;
+        this._config = {
+          ...this._config,
+          [target.dataset.field]: value,
+        };
+        this.dispatchEvent(
+          new CustomEvent("config-changed", {
+            detail: { config: this._config },
+            bubbles: true,
+            composed: true,
+          })
+        );
       });
+    });
   }
 }
 
