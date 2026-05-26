@@ -391,7 +391,7 @@ class GamingStatusCard extends HTMLElement {
   }
   
   getCardSize() {
-    return Object.keys(this._hass.states).length > 0 ? 3 : 1;
+    return (this._hass && Object.keys(this._hass.states).length > 0) ? 3 : 1;
   }
 }
 
