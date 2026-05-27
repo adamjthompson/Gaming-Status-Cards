@@ -765,10 +765,12 @@ class GamingSlideshowCard extends HTMLElement {
     const t_trans = parseFloat(this.config.transition_time);
     const loop_duration = data.length * t_slide;
     
-    // Smooth Crossfade Math
+    // Advanced Crossfade Math with Z-Index Swapping to fix the loop wrap "pop"
     const a = (t_trans / loop_duration) * 100;
     const b = (t_slide / loop_duration) * 100;
-    const c = Math.min(((t_slide + t_trans) / loop_duration) * 100, 99.9);
+    const b_drop = Math.min(b + 0.001, 99.8);
+    const c = Math.min(Math.max(((t_slide + t_trans) / loop_duration) * 100, b_drop + 0.001), 99.9);
+    const c_hide = Math.min(c + 0.001, 100);
 
     const item_ids = data
       .map((g) => g.name.replace(/[^a-zA-Z0-9]/g, ""))
@@ -783,19 +785,20 @@ class GamingSlideshowCard extends HTMLElement {
 
     let html = `<style>
       @keyframes ${anim_name} {
-        0% { opacity: 0; }
-        ${a}% { opacity: 1; }
-        ${b}% { opacity: 1; }
-        ${c}% { opacity: 1; }
-        ${c + 0.01}% { opacity: 0; }
-        100% { opacity: 0; }
+        0% { opacity: 0; z-index: 2; }
+        ${a}% { opacity: 1; z-index: 2; }
+        ${b}% { opacity: 1; z-index: 2; }
+        ${b_drop}% { opacity: 1; z-index: 1; }
+        ${c}% { opacity: 1; z-index: 1; }
+        ${c_hide}% { opacity: 0; z-index: 1; }
+        100% { opacity: 0; z-index: 1; }
       }
     </style>`;
 
     data.forEach((g, index) => {
       const delay = index * t_slide;
       html += `
-        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; animation: ${anim_name} ${loop_duration}s infinite; animation-delay: ${delay}s;">
+        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; z-index: 1; animation: ${anim_name} ${loop_duration}s infinite; animation-delay: ${delay}s;">
           <div style="width: 100%; height: 100%; background-image: url('${g.art}'); background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
           ${getAvatarHtml(g.players)}
         </div>`;
