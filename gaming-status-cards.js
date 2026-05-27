@@ -554,7 +554,6 @@ class GamingSlideshowCard extends HTMLElement {
     this._hass = hass;
     if (!this.config) return;
 
-    let currentHash = "";
     let rawEntities = [];
 
     if (
@@ -567,7 +566,6 @@ class GamingSlideshowCard extends HTMLElement {
       for (const id of entityIds) {
         if (hass.states[id]) {
           rawEntities.push(hass.states[id]);
-          currentHash += hass.states[id].state + hass.states[id].last_updated;
         }
       }
     } else {
@@ -577,8 +575,6 @@ class GamingSlideshowCard extends HTMLElement {
           entityId.includes(this.config.entities_pattern)
         ) {
           rawEntities.push(hass.states[entityId]);
-          currentHash +=
-            hass.states[entityId].state + hass.states[entityId].last_updated;
         }
       }
     }
@@ -591,17 +587,18 @@ class GamingSlideshowCard extends HTMLElement {
         ) {
           if (!rawEntities.some((e) => e.entity_id === entityId)) {
             rawEntities.push(hass.states[entityId]);
-            currentHash +=
-              hass.states[entityId].state + hass.states[entityId].last_updated;
           }
         }
       }
     }
 
-    if (this._lastHash === currentHash) return;
-    this._lastHash = currentHash;
-
     const processedData = this.processData(rawEntities);
+    
+    // Hash the actual visual output to prevent animation resets when timestamps tick
+    const dataHash = JSON.stringify(processedData);
+    if (this._lastHash === dataHash) return;
+    this._lastHash = dataHash;
+
     this.render(processedData);
   }
 
@@ -767,19 +764,30 @@ class GamingSlideshowCard extends HTMLElement {
     const t_slide = parseFloat(this.config.time_per_slide);
     const t_trans = parseFloat(this.config.transition_time);
     const loop_duration = data.length * t_slide;
-    const pct_fade = (t_trans / loop_duration) * 100;
-    const pct_visible = ((t_slide - t_trans) / loop_duration) * 100;
+    
+    // Smooth Crossfade Math
+    const a = (t_trans / loop_duration) * 100;
+    const b = (t_slide / loop_duration) * 100;
+    const c = Math.min(((t_slide + t_trans) / loop_duration) * 100, 99.9);
+
     const item_ids = data
       .map((g) => g.name.replace(/[^a-zA-Z0-9]/g, ""))
       .join("");
     const anim_name = `anim_${item_ids}`;
 
+    // Eliminate first-load flash by setting the first slide as the static container background
+    this.content.style.backgroundImage = `url('${data[0].art}')`;
+    this.content.style.backgroundSize = bgSize;
+    this.content.style.backgroundPosition = "center";
+    this.content.style.backgroundRepeat = bgRepeat;
+
     let html = `<style>
       @keyframes ${anim_name} {
         0% { opacity: 0; }
-        ${pct_fade}% { opacity: 1; }
-        ${pct_fade + pct_visible}% { opacity: 1; }
-        ${pct_fade + pct_visible + pct_fade}% { opacity: 0; }
+        ${a}% { opacity: 1; }
+        ${b}% { opacity: 1; }
+        ${c}% { opacity: 1; }
+        ${c + 0.01}% { opacity: 0; }
         100% { opacity: 0; }
       }
     </style>`;
