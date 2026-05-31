@@ -1371,7 +1371,7 @@ class GamingStatusDonutCard extends HTMLElement {
           entity: entityId,
           name: friendlyName,
           color: color,
-          data_generator: `const attr = entity.attributes; const val = parseFloat(attr.total_weekly_hours) || 0; return val > 0 ? [[new Date().getTime(), val]] : [];`
+          data_generator: `const attr = entity.attributes; const val = parseFloat(attr.rolling_weekly_hours) || 0; return val > 0 ? [[new Date().getTime(), val]] : [];`
         });
       });
 
@@ -1394,8 +1394,8 @@ class GamingStatusDonutCard extends HTMLElement {
           targets.forEach(key => {
             if (hass.states[key]) {
               const attr = hass.states[key].attributes;
-              if (attr.platform_split && attr.platform_split['${p.key}'] && attr.total_weekly_hours) {
-                total += (parseFloat(attr.platform_split['${p.key}']) / 100) * parseFloat(attr.total_weekly_hours);
+              if (attr.platform_split && attr.platform_split['${p.key}'] && attr.rolling_weekly_hours) {
+                total += (parseFloat(attr.platform_split['${p.key}']) / 100) * parseFloat(attr.rolling_weekly_hours);
               }
             }
           });
@@ -1719,7 +1719,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
         const friendlyName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status/gi, "");
 
         if (this.config.metric === "hours") {
-          const hours = parseFloat(stateObj.attributes.total_weekly_hours) || 0;
+          const hours = parseFloat(stateObj.attributes.rolling_weekly_hours) || 0;
           finalData.push({ name: friendlyName, value: hours, displayValue: `${hours}h` });
         } 
         else if (this.config.metric === "games") {
