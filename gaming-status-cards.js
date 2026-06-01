@@ -1661,6 +1661,28 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       this.content = this.shadowRoot.getElementById("chart-container");
     }
 
+    let entityIdsToProcess = [];
+    if (this.config.mode === "single" && this.config.single_entity) {
+      if (hass.states[this.config.single_entity]) entityIdsToProcess.push(this.config.single_entity);
+    } else if (this.config.mode === "selected" && this.config.selected_entities) {
+      entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => hass.states[e]);
+    } else {
+      const targetSuffix = this.config.entities_pattern || "_gaming_status";
+      for (const key in hass.states) {
+        if (key.startsWith("sensor.") && key.endsWith(targetSuffix)) {
+          entityIdsToProcess.push(key);
+        }
+      }
+    }
+
+    let currentHash = "";
+    for (const id of entityIdsToProcess) {
+      currentHash += hass.states[id].state + hass.states[id].last_updated;
+    }
+
+    if (this._lastHash === currentHash) return;
+    this._lastHash = currentHash;
+
     this.updateLeaderboard();
   }
 
