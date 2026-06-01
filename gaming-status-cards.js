@@ -1371,7 +1371,7 @@ class GamingStatusDonutCard extends HTMLElement {
           entity: entityId,
           name: friendlyName,
           color: color,
-          data_generator: `const attr = entity.attributes; const val = parseFloat(attr.rolling_weekly_hours) || 0; return val > 0 ? [[new Date().getTime(), val]] : [];`
+          data_generator: `const attr = entity.attributes; const val = parseFloat(attr.${this.config.window === "calendar" ? "total_weekly_hours" : "rolling_weekly_hours"}) || 0; return val > 0 ? [[new Date().getTime(), val]] : [];`
         });
       });
 
@@ -1394,8 +1394,9 @@ class GamingStatusDonutCard extends HTMLElement {
           targets.forEach(key => {
             if (hass.states[key]) {
               const attr = hass.states[key].attributes;
-              if (attr.platform_split && attr.platform_split['${p.key}'] && attr.rolling_weekly_hours) {
-                total += (parseFloat(attr.platform_split['${p.key}']) / 100) * parseFloat(attr.rolling_weekly_hours);
+              const hours_target = '${this.config.window === "calendar" ? "total_weekly_hours" : "rolling_weekly_hours"}';
+              if (attr.platform_split && attr.platform_split['${p.key}'] && attr[hours_target]) {
+                total += (parseFloat(attr.platform_split['${p.key}']) / 100) * parseFloat(attr[hours_target]);
               }
             }
           });
@@ -1529,6 +1530,13 @@ class GamingStatusDonutEditor extends HTMLElement {
           <select id="metric" .configValue="metric">
             <option value="platforms" ${this._config.metric === 'platforms' || !this._config.metric ? 'selected' : ''}>Platform Split (Xbox, PS, Steam, PC)</option>
             <option value="hours" ${isHoursMetric ? 'selected' : ''}>Most Played Hours (By Player)</option>
+          </select>
+        </label>
+
+        <label>Time Window:
+          <select id="window" .configValue="window">
+            <option value="rolling" ${this._config.window !== 'calendar' ? 'selected' : ''}>Rolling (Past 7 Days)</option>
+            <option value="calendar" ${this._config.window === 'calendar' ? 'selected' : ''}>Calendar (Since Sunday)</option>
           </select>
         </label>
 
@@ -1697,11 +1705,13 @@ class GamingStatusLeaderboardCard extends HTMLElement {
 
     let finalData = [];
 
+    const isCal = this.config.window === "calendar";
     if (this.config.metric === "game_hours") {
       let gamesMap = {};
       for (const entityId of entityIdsToProcess) {
         const stateObj = this._hass.states[entityId];
-        const breakdown = stateObj.attributes.weekly_breakdown || stateObj.attributes.weekly_game_breakdown || {};
+        const attrTarget = isCal ? "calendar_weekly_breakdown" : "rolling_weekly_breakdown";
+        const breakdown = stateObj.attributes[attrTarget] || stateObj.attributes.weekly_breakdown || stateObj.attributes.weekly_game_breakdown || {};
         for (const [game, timeStr] of Object.entries(breakdown)) {
           gamesMap[game] = (gamesMap[game] || 0) + this.extractMinutes(timeStr);
         }
@@ -1719,16 +1729,18 @@ class GamingStatusLeaderboardCard extends HTMLElement {
         const friendlyName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status/gi, "");
 
         if (this.config.metric === "hours") {
-          const hours = parseFloat(stateObj.attributes.rolling_weekly_hours) || 0;
+          const hours = parseFloat(stateObj.attributes[isCal ? "total_weekly_hours" : "rolling_weekly_hours"]) || 0;
           finalData.push({ name: friendlyName, value: hours, displayValue: `${hours}h` });
         } 
         else if (this.config.metric === "games") {
-          const breakdown = stateObj.attributes.weekly_breakdown || stateObj.attributes.weekly_game_breakdown || {};
+          const attrTarget = isCal ? "calendar_weekly_breakdown" : "rolling_weekly_breakdown";
+          const breakdown = stateObj.attributes[attrTarget] || stateObj.attributes.weekly_breakdown || stateObj.attributes.weekly_game_breakdown || {};
           const count = Object.keys(breakdown).length;
           finalData.push({ name: friendlyName, value: count, displayValue: `${count}` });
         } 
         else if (this.config.metric === "longest") {
-          const longestStr = stateObj.attributes.longest_session || "None";
+          const attrTarget = isCal ? "calendar_longest_session" : "rolling_longest_session";
+          const longestStr = stateObj.attributes[attrTarget] || stateObj.attributes.longest_session || "None";
           const mins = this.extractMinutes(longestStr);
           finalData.push({ name: friendlyName, value: mins, displayValue: String(longestStr) });
         }
@@ -1844,10 +1856,17 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         
         <label>Leaderboard Metric:
           <select id="metric" .configValue="metric">
-            <option value="hours" ${this._config.metric === 'hours' ? 'selected' : ''}>Top Players: Most Played Hours (Weekly)</option>
+            <option value="hours" ${this._config.metric === 'hours' ? 'selected' : ''}>Top Players: Most Played Hours</option>
             <option value="longest" ${this._config.metric === 'longest' ? 'selected' : ''}>Top Players: Longest Gaming Session</option>
             <option value="games" ${this._config.metric === 'games' ? 'selected' : ''}>Top Players: Most Different Games Played</option>
             <option value="game_hours" ${this._config.metric === 'game_hours' ? 'selected' : ''}>Top Games: Hours Per Game (Aggregate)</option>
+          </select>
+        </label>
+
+        <label>Time Window:
+          <select id="window" .configValue="window">
+            <option value="rolling" ${this._config.window !== 'calendar' ? 'selected' : ''}>Rolling (Past 7 Days)</option>
+            <option value="calendar" ${this._config.window === 'calendar' ? 'selected' : ''}>Calendar (Since Sunday)</option>
           </select>
         </label>
 
