@@ -63,7 +63,7 @@ A dynamic, CSS-animated slideshow that cycles through the high-resolution cover 
 ---
 
 ### 3. Gaming Status - Chart
-An automated wrapper that builds a beautiful rolling 8-day historical chart of your gamers' habits.
+An automated wrapper that builds a beautiful rolling 7-day historical chart of your gamers' habits.
 
 *⚠️ **Note:** This card requires the popular [apexcharts-card](https://github.com/RomRider/apexcharts-card) to be installed via HACS.*
 
@@ -83,6 +83,7 @@ An ApexCharts-powered donut chart for visualizing platform usage or per-player h
 
 **UI Configuration Options:**
 * **Chart Metric:** Choose what the donut visualizes. **Platform Split** breaks down total weekly hours across Xbox, PlayStation, Steam, and PC. **Most Played Hours (By Player)** shows a slice per player.
+* **Time Window:** Choose the time period to display - **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**
 * **Player Filter Mode:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Custom Colors:** Leave blank to use native platform brand colors (in Platform Split mode) or the default vibrant palette. Override with a comma-separated list of CSS colors.
 
@@ -100,6 +101,7 @@ A dependency-free native CSS bar chart that ranks your squad across a variety of
   * **Longest Gaming Session** — who had the single longest unbroken session.
   * **Most Different Games Played** — who has the broadest taste.
   * **Top Games: Hours Per Game (Aggregate)** — ranks games instead of players, showing which titles consumed the most time across your whole squad.
+* **Time Window:** Choose the time period to display - **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**
 * **Player Filter Mode:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Items to Display (Rows):** Set how many ranked entries are shown (default: 3, max: 20).
 * **Custom Colors:** Override the default vibrant palette with a comma-separated list of CSS colors.
@@ -133,29 +135,29 @@ sort_by: last_online # Options: last_online, name, state
 show_badges: true
 show_text_shadow: true
 color_mode: platform # Options: platform, game
-max_visible_players: '' # Limit visible rows before scrollbar appears
-manual_entities: '' # Whitelist of comma-separated sensor names
+max_visible_players: " " # Limit visible rows before scrollbar appears
+manual_entities: " " # Whitelist of comma-separated sensor names
 ```
 
 **The Slideshow Card:**
 ```yaml
 type: custom:gaming-slideshow-card
 artwork_type: hero # Options: hero, cover, logo, icon
-aspect_ratio: '' # Leave blank to use the default for your artwork type
+aspect_ratio: " " # Leave blank to use the default for your artwork type
 time_per_slide: 5 # Display time for each slide (seconds)
 transition_time: 1 # Transition time (seconds)
 show_avatars: true
 auto_hide: true
 include_plex: false
-manual_entities: '' # Whitelist of comma-separated sensor names
+manual_entities: " " # Whitelist of comma-separated sensor names
 ```
 
 **The Chart Card:**
 ```yaml
 type: custom:gaming-status-chart-card
 title: Weekly Playtime
-manual_entities: '' # Whitelist of comma-separated sensor names
-custom_colors: '#ffbe0b, #fb5607, #ff006e' # Override the default colors
+manual_entities: " " # Whitelist of comma-separated sensor names
+custom_colors: "#ffbe0b, #fb5607, #ff006e" # Override the default colors
 ```
 
 **The Donut Card:**
@@ -163,9 +165,10 @@ custom_colors: '#ffbe0b, #fb5607, #ff006e' # Override the default colors
 type: custom:gaming-status-donut-card
 title: Platform Split
 metric: platforms # Options: platforms, hours
+window: rolling # Options: rolling, calendar
 mode: all # Options: all, selected (single is only available with the hours metric)
-selected_entities: '' # Comma-separated sensor names (used when mode is 'selected')
-custom_colors: '' # Override the default colors
+selected_entities: " " # Comma-separated sensor names (used when mode is 'selected')
+custom_colors: " " # Override the default colors
 ```
 
 **The Leaderboard Card:**
@@ -173,9 +176,10 @@ custom_colors: '' # Override the default colors
 type: custom:gaming-status-leaderboard-card
 title: Gaming Leaderboard
 metric: hours # Options: hours, longest, games, game_hours
+window: rolling # Options: rolling, calendar
 mode: all # Options: all, single, selected
-single_entity: '' # A single sensor ID (used when mode is 'single')
-selected_entities: '' # Comma-separated sensor names (used when mode is 'selected')
+single_entity: " " # A single sensor ID (used when mode is 'single')
+selected_entities: " " # Comma-separated sensor names (used when mode is 'selected')
 max_players: 3 # Number of ranked rows to display
-custom_colors: '' # Override the default colors
+custom_colors: " " # Override the default colors
 ```
