@@ -63,9 +63,12 @@ class GamingStatusCard extends HTMLElement {
       }
     } else {
       for (const entityId in hass.states) {
-        if (entityId.startsWith("sensor.") && entityId.includes(targetSuffix)) {
-          rawEntities.push(hass.states[entityId]);
-          currentHash += hass.states[entityId].state + hass.states[entityId].last_updated;
+        if (entityId.startsWith("sensor.") && entityId.endsWith(targetSuffix)) {
+          // Bulletproof check: Ensure it belongs to the integration by verifying a unique attribute
+          if (hass.states[entityId].attributes.secondary !== undefined) {
+            rawEntities.push(hass.states[entityId]);
+            currentHash += hass.states[entityId].state + hass.states[entityId].last_updated;
+          }
         }
       }
     }
@@ -235,7 +238,7 @@ class GamingStatusCard extends HTMLElement {
           }
       }
 
-      const friendlyName = (entity.attributes.friendly_name || entity.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation/gi, "");
+      const friendlyName = (entity.attributes.friendly_name || entity.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation| PC| Custom| Discord/gi, "");
 
       const isStrValid = (val) => val && String(val).toLowerCase() !== "null" && String(val).toLowerCase() !== "none" && val !== "unknown";
       let heroArt = isStrValid(entity.attributes.game_hero_art) ? entity.attributes.game_hero_art : "";
@@ -582,7 +585,8 @@ class GamingSlideshowCard extends HTMLElement {
       for (const entityId in hass.states) {
         if (
           entityId.startsWith("sensor.") &&
-          entityId.includes(this.config.entities_pattern)
+          entityId.endsWith(this.config.entities_pattern) &&
+          hass.states[entityId].attributes.secondary !== undefined
         ) {
           rawEntities.push(hass.states[entityId]);
         }
@@ -1044,7 +1048,8 @@ class GamingStatusChartCard extends HTMLElement {
       targetEntities = Object.keys(hass.states).filter(
         (key) =>
           key.startsWith("sensor.") &&
-          key.includes(this.config.entities_pattern)
+          key.endsWith(this.config.entities_pattern) &&
+          hass.states[key].attributes.secondary !== undefined
       );
     }
     targetEntities.sort();
@@ -1354,7 +1359,7 @@ class GamingStatusDonutCard extends HTMLElement {
     } else {
       const targetSuffix = this.config.entities_pattern || "_gaming_status";
       for (const key in this._hass.states) {
-        if (key.startsWith("sensor.") && key.endsWith(targetSuffix)) {
+        if (key.startsWith("sensor.") && key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined) {
           entityIdsToProcess.push(key);
         }
       }
@@ -1507,7 +1512,7 @@ class GamingStatusDonutEditor extends HTMLElement {
 
     const targetSuffix = this._config.entities_pattern || "_gaming_status";
     const entityOptions = Object.keys(this._hass.states)
-      .filter(key => key.endsWith(targetSuffix))
+      .filter(key => key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined)
       .map(key => {
         const rawName = this._hass.states[key].attributes.friendly_name || key;
         const cleanName = rawName.replace(/ Gaming Status/gi, "");
@@ -1677,8 +1682,9 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => hass.states[e]);
     } else {
       const targetSuffix = this.config.entities_pattern || "_gaming_status";
-      for (const key in hass.states) {
-        if (key.startsWith("sensor.") && key.endsWith(targetSuffix)) {
+      const stateObj = hass.states || this._hass.states;
+      for (const key in stateObj) {
+        if (key.startsWith("sensor.") && key.endsWith(targetSuffix) && stateObj[key].attributes.secondary !== undefined) {
           entityIdsToProcess.push(key);
         }
       }
@@ -1727,8 +1733,9 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => this._hass.states[e]);
     } else {
       const targetSuffix = this.config.entities_pattern || "_gaming_status";
-      for (const key in this._hass.states) {
-        if (key.startsWith("sensor.") && key.endsWith(targetSuffix)) {
+      const stateObj = hass.states || this._hass.states;
+      for (const key in stateObj) {
+        if (key.startsWith("sensor.") && key.endsWith(targetSuffix) && stateObj[key].attributes.secondary !== undefined) {
           entityIdsToProcess.push(key);
         }
       }
@@ -1859,7 +1866,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
     const targetSuffix = this._config.entities_pattern || "_gaming_status";
     const entityOptions = Object.keys(this._hass.states)
-      .filter(key => key.endsWith(targetSuffix))
+      .filter(key => key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined)
       .map(key => {
         const rawName = this._hass.states[key].attributes.friendly_name || key;
         const cleanName = rawName.replace(/ Gaming Status/gi, "");
