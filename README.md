@@ -29,7 +29,7 @@ When you edit a dashboard and click **Add Card**, you will now see five new opti
 A clean, native-feeling list of your tracked gamers. It dynamically tints the card backgrounds based on the active platform and gracefully handles offline states.
 
 **UI Configuration Options:**
-* **Mode:** Choose who to show. Show everyone, strictly online players, or filter by a specific platform (Steam, Xbox, PlayStation).
+* **Mode:** Choose who to show. Show everyone, strictly online players, or filter by a specific platform (PC, Custom, Discord, Steam, Xbox, PlayStation).
 * **Color Mode:** Select border and background fade colors based on the game's dominant color or the platform color.
 * **Sort By:** Automatically sorts players chronologically by who was `Last Online`. Actively online players are always pinned to the top. Can also be sorted alphabetically by Name or Game Title.
 * **Visibility:** Toggle the platform icon badges and text shadows to fit your dashboard theme.
@@ -82,7 +82,7 @@ An ApexCharts-powered donut chart for visualizing platform usage or per-player h
 *⚠️ **Note:** This card requires the popular [apexcharts-card](https://github.com/RomRider/apexcharts-card) to be installed via HACS.*
 
 **UI Configuration Options:**
-* **Chart Metric:** Choose what the donut visualizes. **Platform Split** breaks down total weekly hours across Xbox, PlayStation, Steam, and PC. **Most Played Hours (By Player)** shows a slice per player.
+* **Chart Metric:** Choose what the donut visualizes. **Platform Split** breaks down total weekly hours across Xbox, PlayStation, and PC. **Most Played Hours (By Player)** shows a slice per player.
 * **Time Window:** Choose the time period to display - **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**
 * **Player Filter Mode:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Custom Colors:** Leave blank to use native platform brand colors (in Platform Split mode) or the default vibrant palette. Override with a comma-separated list of CSS colors.
@@ -130,7 +130,7 @@ For advanced users who prefer to write YAML, here are the base configurations fo
 ```yaml
 type: custom:gaming-status-card
 title: The Squad # Can be left blank to omit the title
-mode: all # Options: all, online, steam, xbox, playstation
+mode: all # Options: all, online, pc, custom, discord, steam, xbox, playstation
 sort_by: last_online # Options: last_online, name, state
 show_badges: true
 show_text_shadow: true

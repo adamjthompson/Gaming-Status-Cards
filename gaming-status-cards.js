@@ -46,7 +46,7 @@ class GamingStatusCard extends HTMLElement {
     if (!this.config) return;
 
     let targetSuffix = "_gaming_status";
-    if (["steam", "xbox", "playstation"].includes(this.config.mode)) {
+    if (["steam", "xbox", "playstation", "pc", "custom", "discord"].includes(this.config.mode)) {
       targetSuffix = `_${this.config.mode}`;
     }
 
@@ -176,15 +176,16 @@ class GamingStatusCard extends HTMLElement {
     });
 
     return filtered.map((entity) => {
-      const isPlatformMode = ["steam", "xbox", "playstation"].includes(this.config.mode);
+      const isPlatformMode = ["steam", "xbox", "playstation", "pc", "custom", "discord"].includes(this.config.mode);
       const platform = (entity.attributes.active_platform || this.config.mode).toLowerCase();
       
-      let badgeIcon = "mdi:gamepad-variant";
+      let badgeIcon = "mdi:controller";
       let platformColor = "100, 50, 100";
       
       if (platform.includes("steam")) { badgeIcon = "mdi:steam"; platformColor = "2, 173, 239"; }
       else if (platform.includes("xbox")) { badgeIcon = "mdi:microsoft-xbox"; platformColor = "11, 124, 16"; }
       else if (platform.includes("playstation")) { badgeIcon = "mdi:sony-playstation"; platformColor = "0, 48, 135"; }
+      else if (platform.includes("discord") || platform.includes("custom") || platform.includes("pc")) { badgeIcon = "mdi:controller"; platformColor = "100, 50, 100"; }
 
       let platformColorCSS = `rgb(${platformColor})`;
       let accentColorCSS = platformColorCSS; 
@@ -420,6 +421,15 @@ class GamingStatusCardEditor extends HTMLElement {
             <label><input type="radio" name="mode" data-field="mode" value="online" ${
               this._config.mode === "online" ? "checked" : ""
             }> Online Only</label>
+            <label><input type="radio" name="mode" data-field="mode" value="pc" ${
+              this._config.mode === "pc" ? "checked" : ""
+            }> PC (Steam, Discord, & Custom)</label>
+            <label><input type="radio" name="mode" data-field="mode" value="custom" ${
+              this._config.mode === "custom" ? "checked" : ""
+            }> Custom</label>
+            <label><input type="radio" name="mode" data-field="mode" value="discord" ${
+              this._config.mode === "discord" ? "checked" : ""
+            }> Discord</label>
             <label><input type="radio" name="mode" data-field="mode" value="steam" ${
               this._config.mode === "steam" ? "checked" : ""
             }> Steam</label>
@@ -1379,8 +1389,7 @@ class GamingStatusDonutCard extends HTMLElement {
       const platforms = [
         { name: "Xbox", key: "Xbox", color: "rgb(11, 124, 16)" },
         { name: "PlayStation", key: "PlayStation", color: "rgb(0, 48, 135)" },
-        { name: "Steam", key: "Steam", color: "rgb(2, 173, 239)" },
-        { name: "PC", key: "PC", color: "rgb(100, 50, 100)" }
+        { name: "PC", key: "PC", color: "rgb(2, 173, 239)" }
       ];
 
       const targetEntitiesStr = JSON.stringify(entityIdsToProcess);
@@ -1528,7 +1537,7 @@ class GamingStatusDonutEditor extends HTMLElement {
 
         <label>Chart Metric:
           <select id="metric" .configValue="metric">
-            <option value="platforms" ${this._config.metric === 'platforms' || !this._config.metric ? 'selected' : ''}>Platform Split (Xbox, PS, Steam, PC)</option>
+            <option value="platforms" ${this._config.metric === 'platforms' || !this._config.metric ? 'selected' : ''}>Platform Split (Xbox, PlayStation, PC)</option>
             <option value="hours" ${isHoursMetric ? 'selected' : ''}>Most Played Hours (By Player)</option>
           </select>
         </label>
