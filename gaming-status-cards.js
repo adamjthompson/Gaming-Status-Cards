@@ -1682,9 +1682,8 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => hass.states[e]);
     } else {
       const targetSuffix = this.config.entities_pattern || "_gaming_status";
-      const stateObj = hass.states || this._hass.states;
-      for (const key in stateObj) {
-        if (key.startsWith("sensor.") && key.endsWith(targetSuffix) && stateObj[key].attributes.secondary !== undefined) {
+      for (const key in hass.states) {
+        if (key.startsWith("sensor.") && key.endsWith(targetSuffix) && hass.states[key].attributes.secondary !== undefined) {
           entityIdsToProcess.push(key);
         }
       }
@@ -1733,9 +1732,8 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => this._hass.states[e]);
     } else {
       const targetSuffix = this.config.entities_pattern || "_gaming_status";
-      const stateObj = hass.states || this._hass.states;
-      for (const key in stateObj) {
-        if (key.startsWith("sensor.") && key.endsWith(targetSuffix) && stateObj[key].attributes.secondary !== undefined) {
+      for (const key in this._hass.states) {
+        if (key.startsWith("sensor.") && key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined) {
           entityIdsToProcess.push(key);
         }
       }
