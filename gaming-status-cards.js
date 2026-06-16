@@ -298,7 +298,7 @@ class GamingStatusCard extends HTMLElement {
           
           .badge { position: absolute; top: -3px; right: -3px; width: 16px; height: 16px; background: var(--platform-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: none; }
           .player-card.offline .badge { background: grey; }
-          .badge ha-icon { --mdc-icon-size: 12px; margin-top: -1px; color: white; }
+          .badge ha-icon { --mdc-icon-size: 12px; margin-top: -2px; color: white; }
 
           .text-content { display: flex; flex-direction: column; flex-grow: 1; min-width: 0; }
           .primary { font-weight: 600; font-size: 14px; color: white; text-shadow: ${
