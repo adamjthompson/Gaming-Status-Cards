@@ -28,7 +28,7 @@ class GamingStatusCard extends HTMLElement {
   setConfig(config) {
     this.config = {
       ...config,
-      entities_pattern: config.entities_pattern || "_gaming_status",
+      entities_pattern: config.entities_pattern || "_master",
       mode: config.mode || "all",
       color_mode: config.color_mode || "game",
       offline_image: config.offline_image || "game",
@@ -45,7 +45,7 @@ class GamingStatusCard extends HTMLElement {
     this._hass = hass;
     if (!this.config) return;
 
-    let targetSuffix = "_gaming_status";
+    let targetSuffix = "_master";
     if (["steam", "xbox", "playstation", "pc", "custom", "discord"].includes(this.config.mode)) {
       targetSuffix = `_${this.config.mode}`;
     }
@@ -63,7 +63,7 @@ class GamingStatusCard extends HTMLElement {
       }
     } else {
       for (const entityId in hass.states) {
-        if (entityId.startsWith("sensor.") && entityId.endsWith(targetSuffix)) {
+        if ((entityId.startsWith("sensor.gaming_status_") || entityId.startsWith("binary_sensor.gaming_status_")) && (entityId.endsWith(targetSuffix) || entityId.includes("anyone_gaming"))) {
           // Bulletproof check: Ensure it belongs to the integration by verifying a unique attribute
           if (hass.states[entityId].attributes.secondary !== undefined) {
             rawEntities.push(hass.states[entityId]);
@@ -238,7 +238,7 @@ class GamingStatusCard extends HTMLElement {
           }
       }
 
-      const friendlyName = (entity.attributes.friendly_name || entity.entity_id).replace(/ Gaming Status| Steam| Xbox| PlayStation| PC| Custom| Discord/gi, "");
+      const friendlyName = (entity.attributes.friendly_name || entity.entity_id).replace(/ Gaming Status| Master| Steam| Xbox| PlayStation| PC| Custom| Discord/gi, "")
 
       const isStrValid = (val) => val && String(val).toLowerCase() !== "null" && String(val).toLowerCase() !== "none" && val !== "unknown";
       let heroArt = isStrValid(entity.attributes.game_hero_art) ? entity.attributes.game_hero_art : "";
@@ -489,10 +489,10 @@ class GamingStatusCardEditor extends HTMLElement {
         </div><hr>
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
-          <div class="helper-text">Leave blank to automatically grab all sensors. To restrict this card to specific people, enter a comma-separated list of exact entity IDs (e.g. <code>sensor.adam_gaming_status, sensor.liv_gaming_status</code>).</div>
+          <div class="helper-text">Leave blank to automatically grab all sensors. To restrict this card to specific people, enter a comma-separated list of exact entity IDs (e.g. <code>sensor.gaming_status_jack_master, sensor.gaming_status_jill_master</code>).</div>
           <input type="text" id="manual-entities-input" data-field="manual_entities" value="${
             this._config.manual_entities || ""
-          }" placeholder="sensor.adam_gaming_status, ...">
+          }" placeholder="sensor.gaming_status_jack_master, ...">
         </div>
       </div>
     `;
@@ -542,7 +542,7 @@ class GamingSlideshowCard extends HTMLElement {
       auto_hide: true,
       include_plex: false,
       manual_entities: "",
-      entities_pattern: "_gaming_status",
+      entities_pattern: "_master",
     };
   }
 
@@ -558,7 +558,7 @@ class GamingSlideshowCard extends HTMLElement {
       auto_hide: config.auto_hide !== false,
       include_plex: config.include_plex === true,
       manual_entities: config.manual_entities || "",
-      entities_pattern: config.entities_pattern || "_gaming_status",
+      entities_pattern: config.entities_pattern || "_master",
       ...config,
     };
   }
@@ -584,8 +584,8 @@ class GamingSlideshowCard extends HTMLElement {
     } else {
       for (const entityId in hass.states) {
         if (
-          entityId.startsWith("sensor.") &&
-          entityId.endsWith(this.config.entities_pattern) &&
+          (entityId.startsWith("sensor.gaming_status_") || entityId.startsWith("binary_sensor.gaming_status_")) &&
+          (entityId.endsWith(this.config.entities_pattern) || entityId.includes("anyone_gaming")) &&
           hass.states[entityId].attributes.secondary !== undefined
         ) {
           rawEntities.push(hass.states[entityId]);
@@ -897,7 +897,7 @@ class GamingSlideshowCardEditor extends HTMLElement {
           <div class="helper-text">Leave blank to automatically grab all sensors, or restrict by entering comma-separated IDs.</div>
           <input type="text" id="manual-entities-input-slide" .configValue="manual_entities" value="${
             this._config.manual_entities || ""
-          }" placeholder="sensor.adam_gaming_status, ...">
+          }" placeholder="sensor.gaming_status_jack_master, ...">
         </div>
       </div>
     `;
@@ -1017,7 +1017,7 @@ class GamingStatusChartCard extends HTMLElement {
       title: "",
       manual_entities: "",
       custom_colors: "",
-      entities_pattern: "_gaming_status",
+      entities_pattern: "_master",
     };
   }
 
@@ -1026,7 +1026,7 @@ class GamingStatusChartCard extends HTMLElement {
       title: config.title || "",
       manual_entities: config.manual_entities || "",
       custom_colors: config.custom_colors || "",
-      entities_pattern: config.entities_pattern || "_gaming_status",
+      entities_pattern: config.entities_pattern || "_master",
       ...config,
     };
   }
@@ -1047,8 +1047,8 @@ class GamingStatusChartCard extends HTMLElement {
     } else {
       targetEntities = Object.keys(hass.states).filter(
         (key) =>
-          key.startsWith("sensor.") &&
-          key.endsWith(this.config.entities_pattern) &&
+          (key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) &&
+          (key.endsWith(this.config.entities_pattern) || key.includes("anyone_gaming")) &&
           hass.states[key].attributes.secondary !== undefined
       );
     }
@@ -1085,7 +1085,7 @@ class GamingStatusChartCard extends HTMLElement {
 
       const friendlyName = (
         stateObj.attributes.friendly_name || entityId
-      ).replace(/ Gaming Status/gi, "");
+      ).replace(/ Gaming Status| Master/gi, "");
       const assignedColor = activePalette[index % activePalette.length];
 
       dynamicSeries.push({
@@ -1206,7 +1206,7 @@ class GamingStatusChartEditor extends HTMLElement {
           <div class="helper-text">Leave blank to automatically chart all sensors, or restrict by entering comma-separated IDs.</div>
           <input type="text" id="manual-entities-input-chart" .configValue="manual_entities" value="${
             this._config.manual_entities || ""
-          }" placeholder="sensor.adam_gaming_status, ...">
+          }" placeholder="sensor.gaming_status_jack_master, ...">
         </div>
 
         <hr>
@@ -1300,7 +1300,7 @@ class GamingStatusDonutCard extends HTMLElement {
       single_entity: "",
       selected_entities: "",
       custom_colors: "",
-      entities_pattern: "_gaming_status"
+      entities_pattern: "_master"
     };
   }
 
@@ -1319,7 +1319,7 @@ class GamingStatusDonutCard extends HTMLElement {
       single_entity: single_entity, 
       selected_entities: config.selected_entities || "",
       custom_colors: config.custom_colors || "",
-      entities_pattern: config.entities_pattern || "_gaming_status",
+      entities_pattern: config.entities_pattern || "_master",
       ...config 
     };
     
@@ -1357,9 +1357,9 @@ class GamingStatusDonutCard extends HTMLElement {
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
       entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => this._hass.states[e]);
     } else {
-      const targetSuffix = this.config.entities_pattern || "_gaming_status";
+      const targetSuffix = this.config.entities_pattern || "_master";
       for (const key in this._hass.states) {
-        if (key.startsWith("sensor.") && key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined) {
+        if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) && key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined) {
           entityIdsToProcess.push(key);
         }
       }
@@ -1379,7 +1379,7 @@ class GamingStatusDonutCard extends HTMLElement {
         const stateObj = this._hass.states[entityId];
         if (!stateObj) return;
 
-        const friendlyName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status/gi, "");
+        const friendlyName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status| Master/gi, "");
         const color = activePalette[index % activePalette.length];
 
         series.push({
@@ -1510,12 +1510,12 @@ class GamingStatusDonutEditor extends HTMLElement {
   render() {
     if (!this._hass || !this._config) return;
 
-    const targetSuffix = this._config.entities_pattern || "_gaming_status";
+    const targetSuffix = this._config.entities_pattern || "_master";
     const entityOptions = Object.keys(this._hass.states)
       .filter(key => key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined)
       .map(key => {
         const rawName = this._hass.states[key].attributes.friendly_name || key;
-        const cleanName = rawName.replace(/ Gaming Status/gi, "");
+        const cleanName = rawName.replace(/ Gaming Status| Master/gi, "");
         return `<option value="${key}" ${this._config.single_entity === key ? 'selected' : ''}>${cleanName}</option>`;
       }).join('');
 
@@ -1573,7 +1573,7 @@ class GamingStatusDonutEditor extends HTMLElement {
 
         <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.adam_gaming_status, ...">
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.gaming_status_jack_master, ...">
             <span class="helper-text">Enter a comma-separated list of exact entity IDs.</span>
           </label>
         </div>
@@ -1642,7 +1642,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       selected_entities: "",
       max_players: "3",
       custom_colors: "",
-      entities_pattern: "_gaming_status"
+      entities_pattern: "_master"
     };
   }
 
@@ -1656,7 +1656,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       selected_entities: config.selected_entities || "",
       max_players: config.max_players || "3",
       custom_colors: config.custom_colors || "",
-      entities_pattern: config.entities_pattern || "_gaming_status",
+      entities_pattern: config.entities_pattern || "_master",
       ...config
     };
   }
@@ -1681,7 +1681,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
       entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => hass.states[e]);
     } else {
-      const targetSuffix = this.config.entities_pattern || "_gaming_status";
+      const targetSuffix = this.config.entities_pattern || "_master";
       for (const key in hass.states) {
         if (key.startsWith("sensor.") && key.endsWith(targetSuffix) && hass.states[key].attributes.secondary !== undefined) {
           entityIdsToProcess.push(key);
@@ -1731,9 +1731,9 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
       entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => this._hass.states[e]);
     } else {
-      const targetSuffix = this.config.entities_pattern || "_gaming_status";
+      const targetSuffix = this.config.entities_pattern || "_master";
       for (const key in this._hass.states) {
-        if (key.startsWith("sensor.") && key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined) {
+        if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) && key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined) {
           entityIdsToProcess.push(key);
         }
       }
@@ -1762,7 +1762,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     } else {
       for (const entityId of entityIdsToProcess) {
         const stateObj = this._hass.states[entityId];
-        const friendlyName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status/gi, "");
+        const friendlyName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status| Master/gi, "");
 
         if (this.config.metric === "hours") {
           const hours = parseFloat(stateObj.attributes[isCal ? "total_weekly_hours" : "rolling_weekly_hours"]) || 0;
@@ -1862,12 +1862,12 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
   render() {
     if (!this._hass || !this._config) return;
 
-    const targetSuffix = this._config.entities_pattern || "_gaming_status";
+    const targetSuffix = this._config.entities_pattern || "_master";
     const entityOptions = Object.keys(this._hass.states)
       .filter(key => key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined)
       .map(key => {
         const rawName = this._hass.states[key].attributes.friendly_name || key;
-        const cleanName = rawName.replace(/ Gaming Status/gi, "");
+        const cleanName = rawName.replace(/ Gaming Status| Master/gi, "");
         return `<option value="${key}" ${this._config.single_entity === key ? 'selected' : ''}>${cleanName}</option>`;
       }).join('');
 
@@ -1925,7 +1925,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
         <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.adam_gaming_status, ...">
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.gaming_status_jack_master, ...">
             <span class="helper-text">Enter a comma-separated list of exact entity IDs.</span>
           </label>
         </div>
