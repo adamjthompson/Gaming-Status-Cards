@@ -1418,7 +1418,7 @@ class GamingStatusDonutCard extends HTMLElement {
         `;
 
         return {
-          entity: "sensor.players_online", 
+          entity: "sensor.gaming_status_players_online", 
           name: p.name,
           color: color,
           data_generator: generator
