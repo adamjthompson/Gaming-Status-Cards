@@ -267,6 +267,8 @@ class GamingStatusCard extends HTMLElement {
   }
 
   render(data) {
+    const escapeHTML = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
     if (!this.content) {
       this.shadowRoot.innerHTML = `
         <style>
@@ -346,6 +348,10 @@ class GamingStatusCard extends HTMLElement {
     this.content.innerHTML = data
       .map((player) => {
         const statusClass = player.isOffline ? "offline" : "online";
+        const safeName = escapeHTML(player.name);
+        const safeState = escapeHTML(player.state);
+        const safeSecondary = escapeHTML(player.secondary);
+        
         return `
         <div class="player-card ${statusClass}" style="--bg-url: ${player.cover ? `url('${player.cover}')` : 'none'}; --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
           <div class="content-wrapper">
@@ -357,8 +363,8 @@ class GamingStatusCard extends HTMLElement {
               ${this.config.show_badges ? `<div class="badge"><ha-icon icon="${player.badgeIcon}"></ha-icon></div>` : ""}
             </div>
             <div class="text-content">
-              <div class="primary">${player.name}</div>
-              <div class="secondary">${player.state !== "Offline" ? player.state + " " : ""}${player.secondary}</div>
+              <div class="primary">${safeName}</div>
+              <div class="secondary">${player.state !== "Offline" ? safeState + " " : ""}${safeSecondary}</div>
             </div>
           </div>
         </div>`;
@@ -1724,6 +1730,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
 
   updateLeaderboard() {
     if (!this._hass || !this.content) return;
+    const escapeHTML = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
     let entityIdsToProcess = [];
     if (this.config.mode === "single" && this.config.single_entity) {
@@ -1805,15 +1812,17 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     
     finalData.forEach((item, index) => {
       const color = activePalette[index % activePalette.length];
+      const safeName = escapeHTML(item.name);
+      const safeDisplay = escapeHTML(item.displayValue);
 
       if (this.config.metric === "longest") {
         html += `
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border-left: 4px solid ${color}; padding-left: 8px; box-sizing: border-box;">
             <div style="flex-grow: 1; font-size: 14px; font-weight: 500; color: var(--primary-text-color); word-break: break-word;">
-              ${item.name}
+              ${safeName}
             </div>
             <div style="flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color);">
-              ${item.displayValue}
+              ${safeDisplay}
             </div>
           </div>
         `;
@@ -1822,7 +1831,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
         html += `
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;">
             <div style="width: 110px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 500; color: var(--primary-text-color);">
-              ${item.name}
+              ${safeName}
             </div>
             <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
               <div style="width: ${pct}%; height: 100%; background: ${color}; 
@@ -1832,7 +1841,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
               </div>
             </div>
             <div style="min-width: 40px; flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap;">
-              ${item.displayValue}
+              ${safeDisplay}
             </div>
           </div>
         `;
