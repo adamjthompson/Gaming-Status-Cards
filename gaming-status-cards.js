@@ -352,8 +352,11 @@ class GamingStatusCard extends HTMLElement {
         const safeState = escapeHTML(player.state);
         const safeSecondary = escapeHTML(player.secondary);
         
+        const bgLayer1 = player.cover ? `url('${player.cover}')` : 'none';
+        const bgLayer2 = player.picture && player.picture !== player.cover ? `, url('${player.picture}')` : '';
+        
         return `
-        <div class="player-card ${statusClass}" style="--bg-url: ${player.cover ? `url('${player.cover}')` : 'none'}; --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
+        <div class="player-card ${statusClass}" style="--bg-url: ${bgLayer1}${bgLayer2}; --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
           <div class="content-wrapper">
             <div class="avatar-container">
               ${player.picture 
