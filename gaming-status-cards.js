@@ -2,7 +2,6 @@
 // CARD 1: GAMING STATUS - LIST
 // ====================================================================
 
-
 class GamingStatusCard extends HTMLElement {
   constructor() {
     super();
