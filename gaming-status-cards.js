@@ -1094,7 +1094,7 @@ class GamingStatusChartCard extends HTMLElement {
 
       const friendlyName = (
         stateObj.attributes.friendly_name || entityId
-      ).replace(/ Gaming Status| Master| Chart/gi, "");
+      ).replace(/ Gaming Status| Master/gi, "");
       const assignedColor = activePalette[index % activePalette.length];
 
       // 1. The Header Series (Text Only)
