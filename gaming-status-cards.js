@@ -1094,9 +1094,10 @@ class GamingStatusChartCard extends HTMLElement {
 
       const friendlyName = (
         stateObj.attributes.friendly_name || entityId
-      ).replace(/ Gaming Status| Master/gi, "");
+      ).replace(/ Gaming Status| Master| Chart/gi, "");
       const assignedColor = activePalette[index % activePalette.length];
 
+      // 1. The Header Series (Text Only)
       dynamicSeries.push({
         entity: entityId,
         attribute: "rolling_weekly_hours",
@@ -1105,27 +1106,32 @@ class GamingStatusChartCard extends HTMLElement {
         show: { in_header: true, in_chart: false },
       });
 
+      // 2. The Column Series (Graph Only)
+      const chartEntityId = entityId.replace("_master", "_chart");
+      
       dynamicSeries.push({
-        entity: entityId,
-        attribute: "total_daily_hours",
-        name: friendlyName,
+        entity: chartEntityId, 
+        name: friendlyName + " \u200B", 
         type: "column",
         color: assignedColor,
         show: { in_header: false, in_chart: true },
-        group_by: { func: "last", duration: "1d", fill: "zero" },
+        extend_to: "now", 
+        group_by: { func: "max", duration: "1d", fill: "zero" } 
       });
     });
 
     const apexConfig = {
       type: "custom:apexcharts-card",
+      cache: false,
+      update_interval: "1m",
       header: {
         show: true,
         show_states: true,
         colorize_states: true,
         title: this.config.title || undefined,
       },
-      graph_span: "8d",
-      span: { end: "day", offset: "+1d" },
+      graph_span: "7d",
+      span: { end: "day" }, 
       apex_config: {
         fill: {
           opacity: 1,
