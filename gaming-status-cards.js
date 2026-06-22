@@ -1130,8 +1130,8 @@ class GamingStatusChartCard extends HTMLElement {
         colorize_states: true,
         title: this.config.title || undefined,
       },
-      graph_span: "7d",
-      span: { end: "day" }, 
+      graph_span: "8d",
+      span: { end: "day", offset: "+1d" }, 
       apex_config: {
         fill: {
           opacity: 1,
