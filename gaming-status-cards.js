@@ -244,9 +244,10 @@ class GamingStatusCard extends HTMLElement {
       let heroArt = isStrValid(entity.attributes.game_hero_art) ? entity.attributes.game_hero_art : "";
       let pictureArt = isStrValid(entity.attributes.entity_picture) ? entity.attributes.entity_picture : "";
       
-      let coverArt = heroArt || pictureArt || "/static/icons/favicon-192x192.png";
+      // Removed the hardcoded fallback strings so empty values evaluate to false in the render function
+      let coverArt = heroArt || pictureArt || "";
       if (isOffline && this.config.offline_image === "avatar") {
-          coverArt = pictureArt || "/static/icons/favicon-192x192.png";
+          coverArt = pictureArt || "";
       }
 
       return {
@@ -254,7 +255,7 @@ class GamingStatusCard extends HTMLElement {
         name: friendlyName,
         state: entity.state,
         secondary: entity.attributes.secondary || "",
-        picture: pictureArt || "/static/icons/favicon-192x192.png",
+        picture: pictureArt, // Now correctly passes an empty string if there's no picture
         cover: coverArt,        
         accentColorCSS,
         gradientColorCSS,
