@@ -179,16 +179,25 @@ class GamingStatusCard extends HTMLElement {
     });
 
     return filtered.map((entity) => {
-      const isPlatformMode = ["steam", "xbox", "playstation", "pc", "custom", "discord"].includes(this.config.mode);
-      const platform = (entity.attributes.active_platform || this.config.mode).toLowerCase();
-      
+      const platformMap = {
+        "steam": { icon: "mdi:steam", color: "2, 173, 239" },
+        "xbox": { icon: "mdi:microsoft-xbox", color: "11, 124, 16" },
+        "playstation": { icon: "mdi:sony-playstation", color: "0, 48, 135" },
+        "playnite": { icon: "mdi:controller", color: "255, 88, 51" },
+        "custom": { icon: "mdi:gamepad-square", color: "100, 50, 100" },
+        "discord": { icon: "mdi:gamepad-variant", color: "88, 101, 242" }
+      };
+
       let badgeIcon = "mdi:controller";
       let platformColor = "100, 50, 100";
+
+      // Find the first key that matches the platform string
+      const matchedKey = Object.keys(platformMap).find(key => platform.includes(key));
       
-      if (platform.includes("steam")) { badgeIcon = "mdi:steam"; platformColor = "2, 173, 239"; }
-      else if (platform.includes("xbox")) { badgeIcon = "mdi:microsoft-xbox"; platformColor = "11, 124, 16"; }
-      else if (platform.includes("playstation")) { badgeIcon = "mdi:sony-playstation"; platformColor = "0, 48, 135"; }
-      else if (platform.includes("discord") || platform.includes("custom") || platform.includes("pc")) { badgeIcon = "mdi:controller"; platformColor = "100, 50, 100"; }
+      if (matchedKey) {
+        badgeIcon = platformMap[matchedKey].icon;
+        platformColor = platformMap[matchedKey].color;
+      }
 
       let platformColorCSS = `rgb(${platformColor})`;
       let accentColorCSS = platformColorCSS; 
