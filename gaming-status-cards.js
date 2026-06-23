@@ -312,6 +312,8 @@ class GamingStatusCard extends HTMLElement {
           }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
           
           .placeholder-avatar { background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+
+          .avatar.playnite { background: black; padding: 4px; box-sizing: border-box; }
         </style>
         <div id="players-container" class="card-stack"></div>
       `;
@@ -361,7 +363,7 @@ class GamingStatusCard extends HTMLElement {
           <div class="content-wrapper">
             <div class="avatar-container">
               ${player.picture 
-                ? `<img class="avatar" src="${player.picture}" />` 
+                ? `<img class="avatar ${player.picture.includes('playnite.link') ? 'playnite' : ''}" src="${player.picture}" />` 
                 : `<div class="placeholder-avatar"><ha-icon icon="mdi:controller" style="color: #888; --mdc-icon-size: 24px;"></ha-icon></div>`
               }
               ${this.config.show_badges ? `<div class="badge"><ha-icon icon="${player.badgeIcon}"></ha-icon></div>` : ""}
