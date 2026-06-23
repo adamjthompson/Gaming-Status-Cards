@@ -1117,7 +1117,7 @@ class GamingStatusChartCard extends HTMLElement {
         color: assignedColor,
         show: { in_header: false, in_chart: true },
         extend_to: "now", 
-        group_by: { func: "max", duration: "1d", fill: "zero" } 
+        group_by: { func: "last", duration: "1d", fill: "zero" } 
       });
     });
 
