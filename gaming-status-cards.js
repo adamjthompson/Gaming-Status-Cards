@@ -253,7 +253,7 @@ class GamingStatusCard extends HTMLElement {
           }
       }
 
-      const friendlyName = (entity.attributes.friendly_name || entity.entity_id).replace(/ Gaming Status| Master| Steam| Xbox| PlayStation| PC| Custom| Discord/gi, "")
+      const friendlyName = (entity.attributes.friendly_name || entity.entity_id).replace(/ Gaming Status| Master| Chart| Steam| Xbox| PlayStation| PC| Custom| Discord| Playnite/gi, "")
 
       const isStrValid = (val) => val && String(val).toLowerCase() !== "null" && String(val).toLowerCase() !== "none" && val !== "unknown";
       let heroArt = isStrValid(entity.attributes.game_hero_art) ? entity.attributes.game_hero_art : "";
@@ -1035,6 +1035,16 @@ class GamingSlideshowCardEditor extends HTMLElement {
 class GamingStatusChartCard extends HTMLElement {
   constructor() {
     super();
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot.innerHTML = `
+      <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
+        <div id="card-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none;"></div>
+        <div id="container" style="--ha-card-background: transparent; --ha-card-box-shadow: none; --ha-card-border-width: 0px; --ha-card-border-radius: 0px;"></div>
+      </ha-card>
+    `;
+    this.container = this.shadowRoot.getElementById("container");
+    this.titleEl = this.shadowRoot.getElementById("card-title");
+    
     this.defaultPalette = [
       "rgb(255, 190, 11)",
       "rgb(251, 86, 7)",
@@ -1066,6 +1076,11 @@ class GamingStatusChartCard extends HTMLElement {
       entities_pattern: config.entities_pattern || "_master",
       ...config,
     };
+    
+    if (this.titleEl) {
+        this.titleEl.innerText = this.config.title;
+        this.titleEl.style.display = this.config.title ? "block" : "none";
+    }
   }
 
   set hass(hass) {
@@ -1103,7 +1118,7 @@ class GamingStatusChartCard extends HTMLElement {
   renderChart(entities, hass) {
     if (!this.chartElement) {
       this.chartElement = document.createElement("apexcharts-card");
-      this.appendChild(this.chartElement);
+      this.container.appendChild(this.chartElement);
     }
 
     let activePalette = this.defaultPalette;
@@ -1156,7 +1171,6 @@ class GamingStatusChartCard extends HTMLElement {
         show: true,
         show_states: true,
         colorize_states: true,
-        title: this.config.title || undefined,
       },
       graph_span: "8d",
       span: { end: "day", offset: "+1d" }, 
