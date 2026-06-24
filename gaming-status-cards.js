@@ -189,9 +189,9 @@ class GamingStatusCard extends HTMLElement {
         "steam": { icon: "mdi:steam", color: "2, 173, 239" },
         "xbox": { icon: "mdi:microsoft-xbox", color: "11, 124, 16" },
         "playstation": { icon: "mdi:sony-playstation", color: "0, 48, 135" },
-        "playnite": { icon: "https://cdn2.steamgriddb.com/icon/be74b7589d33efcb1ad9b3459fa8e2f3.png", color: "255, 88, 51" },
+        "playnite": { icon: "https://cdn2.steamgriddb.com/icon/a281004dce23a29d1821f1e8430b6f8f.png", color: "255, 88, 51" },
         "custom": { icon: "mdi:gamepad-square", color: "100, 50, 100" },
-        "discord": { icon: "https://cdn2.steamgriddb.com/icon/3db4e2413cb7c36fbc1b96b821249933.png", color: "88, 101, 242" }
+        "discord": { icon: "https://cdn2.steamgriddb.com/icon/d8a6b69c1e76aeb1500df754b7b86802.png", color: "88, 101, 242" }
       };
 
       let badgeIcon = "mdi:controller";
