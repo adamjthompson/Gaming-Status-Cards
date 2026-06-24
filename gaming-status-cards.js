@@ -179,6 +179,9 @@ class GamingStatusCard extends HTMLElement {
     });
 
     return filtered.map((entity) => {
+      const isPlatformMode = ["steam", "xbox", "playstation", "pc", "custom", "discord", "playnite"].includes(this.config.mode);
+      const platform = (entity.attributes.active_platform || this.config.mode || "").toLowerCase();
+
       const platformMap = {
         "steam": { icon: "mdi:steam", color: "2, 173, 239" },
         "xbox": { icon: "mdi:microsoft-xbox", color: "11, 124, 16" },
@@ -447,7 +450,7 @@ class GamingStatusCardEditor extends HTMLElement {
             }> Online Only</label>
             <label><input type="radio" name="mode" data-field="mode" value="pc" ${
               this._config.mode === "pc" ? "checked" : ""
-            }> PC (Steam, Discord, & Custom)</label>
+            }> PC (Steam, Discord, Playnite, & Custom)</label>
             <label><input type="radio" name="mode" data-field="mode" value="custom" ${
               this._config.mode === "custom" ? "checked" : ""
             }> Custom</label>
@@ -463,6 +466,9 @@ class GamingStatusCardEditor extends HTMLElement {
             <label><input type="radio" name="mode" data-field="mode" value="playstation" ${
               this._config.mode === "playstation" ? "checked" : ""
             }> PlayStation</label>
+            <label><input type="radio" name="mode" data-field="mode" value="playnite" ${
+              this._config.mode === "playnite" ? "checked" : ""
+            }> Playnite</label>
         </div></div><hr>
         <div><div class="section-title">Color Mode</div><div class="radio-group">
             <label><input type="radio" name="color_mode" data-field="color_mode" value="game" ${
