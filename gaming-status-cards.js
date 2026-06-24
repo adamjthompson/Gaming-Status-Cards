@@ -46,7 +46,7 @@ class GamingStatusCard extends HTMLElement {
     if (!this.config) return;
 
     let targetSuffix = "_master";
-    if (["steam", "xbox", "playstation", "pc", "custom", "discord"].includes(this.config.mode)) {
+    if (["steam", "xbox", "playstation", "pc", "custom", "discord", "playnite"].includes(this.config.mode)) {
       targetSuffix = `_${this.config.mode}`;
     }
 
@@ -189,12 +189,9 @@ class GamingStatusCard extends HTMLElement {
         "steam": { icon: "mdi:steam", color: "2, 173, 239" },
         "xbox": { icon: "mdi:microsoft-xbox", color: "11, 124, 16" },
         "playstation": { icon: "mdi:sony-playstation", color: "0, 48, 135" },
-        "playnite": { icon: "https://playnite.link/applogo.png", color: "255, 88, 51" },
+        "playnite": { icon: "https://cdn2.steamgriddb.com/icon/be74b7589d33efcb1ad9b3459fa8e2f3.png", color: "255, 88, 51" },
         "custom": { icon: "mdi:gamepad-square", color: "100, 50, 100" },
-        "discord": { 
-          icon: "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20127.14%2096.36%22%3E%3Cpath%20fill%3D%22%23fff%22%20d%3D%22M107.7%2C8.07A105.15%2C105.15%2C0%2C0%2C0%2C81.47%2C0a72.06%2C72.06%2C0%2C0%2C0-3.36%2C6.83A97.68%2C97.68%2C0%2C0%2C0%2C49%2C6.83%2C72.37%2C72.37%2C0%2C0%2C0%2C45.64%2C0%2C105.89%2C105.89%2C0%2C0%2C0%2C19.39%2C8.09C2.79%2C32.65-1.71%2C56.6.54%2C80.21h0A105.73%2C105.73%2C0%2C0%2C0%2C32.71%2C96.36%2C77.7%2C77.7%2C0%2C0%2C0%2C39.6%2C85.25a68.42%2C68.42%2C0%2C0%2C1-10.85-5.18c.91-.66%2C1.8-1.34%2C2.66-2a75.57%2C75.57%2C0%2C0%2C0%2C64.32%2C0c.87.71%2C1.76%2C1.39%2C2.66%2C2a68.68%2C68.68%2C0%2C0%2C1-10.87%2C5.19%2C77%2C77%2C0%2C0%2C0%2C6.89%2C11.1%2C105.25%2C105.25%2C0%2C0%2C0%2C32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15ZM42.45%2C65.69C36.18%2C65.69%2C31%2C60%2C31%2C53s5-12.74%2C11.43-12.74S54%2C46%2C53.89%2C53%2C48.84%2C65.69%2C42.45%2C65.69Zm42.24%2C0C78.41%2C65.69%2C73.31%2C60%2C73.31%2C53s5-12.74%2C11.43-12.74S96.1%2C46%2C96%2C53%2C91%2C65.69%2C84.69%2C65.69Z%22%2F%3E%3C%2Fsvg%3E", 
-          color: "88, 101, 242" 
-        }
+        "discord": { icon: "https://cdn2.steamgriddb.com/icon/3db4e2413cb7c36fbc1b96b821249933.png", color: "88, 101, 242" }
       };
 
       let badgeIcon = "mdi:controller";
@@ -320,8 +317,7 @@ class GamingStatusCard extends HTMLElement {
           .badge { position: absolute; top: -3px; right: -3px; width: 16px; height: 16px; background: var(--platform-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: none; }
           .player-card.offline .badge { background: grey; }
           .badge ha-icon { --mdc-icon-size: 12px; margin-top: -2px; color: white; }
-          .badge img.custom-badge { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; border: none; }
-          .player-card.offline .badge img.custom-badge { filter: grayscale(100%); opacity: 0.6; }
+          .badge img.custom-badge { width: 10px; height: 10px; object-fit: contain; }
 
           .text-content { display: flex; flex-direction: column; flex-grow: 1; min-width: 0; }
           .primary { font-weight: 600; font-size: 14px; color: white; text-shadow: ${
