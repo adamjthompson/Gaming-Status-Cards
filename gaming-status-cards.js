@@ -180,7 +180,10 @@ class GamingStatusCard extends HTMLElement {
 
     return filtered.map((entity) => {
       const isPlatformMode = ["steam", "xbox", "playstation", "pc", "custom", "discord", "playnite"].includes(this.config.mode);
-      const platform = (entity.attributes.active_platform || this.config.mode || "").toLowerCase();
+      
+      // Look at the active_platform attribute FIRST.
+      // If missing (because it's a direct platform sensor), scan the entity_id itself!
+      const platform = (entity.attributes.active_platform || entity.entity_id || this.config.mode || "").toLowerCase();
 
       const platformMap = {
         "steam": { icon: "mdi:steam", color: "2, 173, 239" },
