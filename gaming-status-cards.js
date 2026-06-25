@@ -1209,8 +1209,18 @@ class GamingStatusChartCard extends HTMLElement {
       grid_options: { columns: 24, rows: "auto" },
     };
 
-    this.chartElement.setConfig(apexConfig);
-    this.chartElement.hass = hass;
+    if (customElements.get("apexcharts-card")) {
+      this.chartElement.setConfig(apexConfig);
+      this.chartElement.hass = hass;
+    } else {
+      this.shadowRoot.innerHTML = `
+        <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
+          <div style="background: rgba(255,165,0,0.2); padding: 12px; border-radius: 4px; border-left: 4px solid orange; color: var(--primary-text-color); font-family: var(--primary-font-family, sans-serif);">
+            <strong>Missing Dependency:</strong><br>The <code>apexcharts-card</code> must be installed via HACS to view this chart.
+          </div>
+        </ha-card>
+      `;
+    }
   }
 
   getCardSize() {
@@ -1401,7 +1411,13 @@ class GamingStatusDonutCard extends HTMLElement {
     if (!this.config || !this._hass || this.chartElement) return;
 
     if (!customElements.get('apexcharts-card')) {
-      console.warn("ApexCharts Card not loaded yet, waiting...");
+      this.shadowRoot.innerHTML = `
+        <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
+          <div style="background: rgba(255,165,0,0.2); padding: 12px; border-radius: 4px; border-left: 4px solid orange; color: var(--primary-text-color); font-family: var(--primary-font-family, sans-serif);">
+            <strong>Missing Dependency:</strong><br>The <code>apexcharts-card</code> must be installed via HACS to view this chart.
+          </div>
+        </ha-card>
+      `;
       return;
     }
 
