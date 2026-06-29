@@ -1732,6 +1732,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       entities_pattern: config.entities_pattern || "_master",
       ...config
     };
+    this._lastHash = "";
   }
 
   set hass(hass) {
