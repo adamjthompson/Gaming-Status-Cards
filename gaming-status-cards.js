@@ -1104,7 +1104,8 @@ class GamingStatusChartCard extends HTMLElement {
   static getStubConfig() {
     return {
       title: "",
-      manual_entities: "",
+      mode: "all",
+      selected_entities: "",
       custom_colors: "",
       entities_pattern: "_master",
       window: "rolling",
@@ -1112,13 +1113,17 @@ class GamingStatusChartCard extends HTMLElement {
   }
 
   setConfig(config) {
+    // Backward compat: manual_entities without mode → selected mode
+    const mode = config.mode || (config.manual_entities ? "selected" : "all");
     this.config = {
+      ...config,
       title: config.title || "",
+      mode,
+      selected_entities: config.selected_entities || (mode === "selected" ? config.manual_entities || "" : ""),
       manual_entities: config.manual_entities || "",
       custom_colors: config.custom_colors || "",
       entities_pattern: config.entities_pattern || "_master",
       window: config.window || "rolling",
-      ...config,
     };
     this._lastHash = "";
   }
@@ -1128,8 +1133,8 @@ class GamingStatusChartCard extends HTMLElement {
     if (!this.config) return;
 
     let entityIds = [];
-    if (this.config.manual_entities && this.config.manual_entities.trim()) {
-      entityIds = this.config.manual_entities.split(",").map(e => e.trim()).filter(e => hass.states[e]);
+    if (this.config.mode === "selected" && this.config.selected_entities) {
+      entityIds = this.config.selected_entities.split(",").map(e => e.trim()).filter(e => hass.states[e]);
     } else {
       entityIds = Object.keys(hass.states).filter(
         k => (k.startsWith("sensor.gaming_status_") || k.startsWith("binary_sensor.gaming_status_")) &&
@@ -1354,6 +1359,7 @@ class GamingStatusChartEditor extends HTMLElement {
 
   render() {
     if (!this._config) return;
+    const isSelected = this._config.mode === "selected";
     this.shadowRoot.innerHTML = `
       <style>
         .editor-container { display: flex; flex-direction: column; gap: 20px; color: var(--primary-text-color); }
@@ -1378,10 +1384,18 @@ class GamingStatusChartEditor extends HTMLElement {
         </div>
         <hr>
         <div>
-          <div class="section-title">Manual Entities (Advanced)</div>
-          <div class="helper-text">Leave blank to automatically chart all sensors, or restrict by entering comma-separated IDs.</div>
-          <input type="text" id="manual_entities" value="${this._esc(this._config.manual_entities || "")}" placeholder="sensor.gaming_status_jack_master, ...">
+          <div class="section-title">Player Filter Mode</div>
+          <select id="mode">
+            <option value="all" ${!isSelected ? "selected" : ""}>All Tracked Players</option>
+            <option value="selected" ${isSelected ? "selected" : ""}>Selected Players</option>
+          </select>
         </div>
+        ${isSelected ? `
+        <div>
+          <div class="section-title">Selected Entities</div>
+          <div class="helper-text">Comma-separated entity IDs to include in the chart.</div>
+          <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="sensor.gaming_status_jack_master, ...">
+        </div>` : ""}
         <hr>
         <div>
           <div class="section-title">Custom Colors (Advanced)</div>
@@ -1390,12 +1404,13 @@ class GamingStatusChartEditor extends HTMLElement {
         </div>
       </div>`;
 
-    ["title", "window", "manual_entities", "custom_colors"].forEach(id => {
+    ["title", "window", "mode", "selected_entities", "custom_colors"].forEach(id => {
       const el = this.shadowRoot.getElementById(id);
       if (!el) return;
       el.addEventListener("change", ev => {
         this._config = { ...this._config, [id]: ev.target.value };
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+        this.render();
       });
     });
   }
@@ -2094,30 +2109,53 @@ class GamingStatusGameChartCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return { title: "", entity: "", window: "rolling", max_games: 6, custom_colors: "" };
+    return { title: "", mode: "all", entity: "", selected_entities: "", window: "rolling", max_games: 6, custom_colors: "", entities_pattern: "_master" };
   }
 
   setConfig(config) {
+    // Backward compat: entity set without mode → single player
+    const mode = config.mode || (config.entity ? "single" : "all");
     this.config = {
+      ...config,
       title: config.title || "",
+      mode,
       entity: config.entity || "",
+      selected_entities: config.selected_entities || "",
+      entities_pattern: config.entities_pattern || "_master",
       window: config.window || "rolling",
       max_games: parseInt(config.max_games) || 6,
       custom_colors: config.custom_colors || "",
-      ...config
     };
     this._lastHash = "";
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (!this.config.entity) return;
-    const entityState = hass.states[this.config.entity];
-    if (!entityState) return;
-    const hash = [entityState.last_updated, this.config.entity, this.config.window, this.config.max_games, this.config.title, this.config.custom_colors].join("|");
+    if (!this.config) return;
+
+    let entityIds = [];
+    if (this.config.mode === "single" && this.config.entity) {
+      if (hass.states[this.config.entity]) entityIds.push(this.config.entity);
+    } else if (this.config.mode === "selected" && this.config.selected_entities) {
+      entityIds = this.config.selected_entities.split(",").map(e => e.trim()).filter(e => hass.states[e]);
+    } else {
+      for (const key in hass.states) {
+        if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) &&
+            key.endsWith(this.config.entities_pattern) &&
+            hass.states[key].attributes.secondary !== undefined) {
+          entityIds.push(key);
+        }
+      }
+    }
+    entityIds.sort();
+
+    if (!entityIds.length) return;
+
+    const hash = entityIds.map(id => `${id}:${hass.states[id]?.last_updated}`).join(",")
+      + "|" + this.config.window + "|" + this.config.max_games + "|" + this.config.custom_colors;
     if (this._lastHash === hash) return;
     this._lastHash = hash;
-    this._update(entityState.attributes);
+    this._update(entityIds);
   }
 
   _ensureShell() {
@@ -2148,36 +2186,39 @@ class GamingStatusGameChartCard extends HTMLElement {
     }
   }
 
-  _update(attrs) {
+  _update(entityIds) {
     this._ensureShell();
-    const playHistory = attrs.play_history || {};
     const now = new Date();
     const days = [];
 
     if (this.config.window === "calendar") {
-      // Show from last Sunday through today
-      const dayOfWeek = now.getDay(); // 0 = Sunday
+      const dayOfWeek = now.getDay();
       for (let i = dayOfWeek; i >= 0; i--) {
         days.push(this._fmtDate(new Date(now.getTime() - i * 86400000)));
       }
     } else {
-      // Rolling: last 7 days
       for (let i = 6; i >= 0; i--) {
         days.push(this._fmtDate(new Date(now.getTime() - i * 86400000)));
       }
     }
 
-    // play_history values are in seconds — convert to hours
-    const dailyData = days.map(day => {
-      const dayGames = {};
-      for (const [game, seconds] of Object.entries(playHistory[day] || {})) {
-        const hours = (parseFloat(seconds) || 0) / 3600;
-        if (hours > 0) dayGames[game] = hours;
+    // Aggregate play_history (seconds → hours) across all entities
+    const aggregated = {};
+    for (const entityId of entityIds) {
+      const playHistory = this._hass.states[entityId]?.attributes?.play_history || {};
+      for (const day of days) {
+        for (const [game, seconds] of Object.entries(playHistory[day] || {})) {
+          const hours = (parseFloat(seconds) || 0) / 3600;
+          if (hours > 0) {
+            if (!aggregated[day]) aggregated[day] = {};
+            aggregated[day][game] = (aggregated[day][game] || 0) + hours;
+          }
+        }
       }
-      return { day, games: dayGames };
-    });
+    }
 
-    // Rank games by total hours across all shown days, keep top N
+    const dailyData = days.map(day => ({ day, games: aggregated[day] || {} }));
+
     const totals = {};
     for (const d of dailyData) {
       for (const [g, h] of Object.entries(d.games)) {
@@ -2342,12 +2383,15 @@ class GamingStatusGameChartEditor extends HTMLElement {
   render() {
     if (!this._hass || !this._config) return;
 
-    const opts = Object.keys(this._hass.states)
-      .filter(k => k.endsWith("_master") && this._hass.states[k].attributes.secondary !== undefined)
+    const targetSuffix = this._config.entities_pattern || "_master";
+    const entityOptions = Object.keys(this._hass.states)
+      .filter(k => k.endsWith(targetSuffix) && this._hass.states[k].attributes.secondary !== undefined)
       .map(k => {
-        const name = (this._hass.states[k].attributes.friendly_name || k).replace(/ Gaming Status| Master/gi, "");
+        const name = (this._hass.states[k].attributes.friendly_name || k).replace(/ Gaming Status| Master/gi, "").trim();
         return `<option value="${k}" ${this._config.entity === k ? "selected" : ""}>${this._esc(name)}</option>`;
       }).join("");
+
+    const mode = this._config.mode || (this._config.entity ? "single" : "all");
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -2362,12 +2406,27 @@ class GamingStatusGameChartEditor extends HTMLElement {
         <label>Card Title (Optional):
           <input type="text" id="title" value="${this._esc(this._config.title || "")}">
         </label>
-        <label>Player:
-          <select id="entity">
-            <option value="" disabled ${!this._config.entity ? "selected" : ""}>Select a player…</option>
-            ${opts}
+        <label>Player Filter Mode:
+          <select id="mode">
+            <option value="all" ${mode === "all" ? "selected" : ""}>All Tracked Players</option>
+            <option value="single" ${mode === "single" ? "selected" : ""}>Single Player</option>
+            <option value="selected" ${mode === "selected" ? "selected" : ""}>Selected Players</option>
           </select>
         </label>
+        <div id="single-selector" style="display: ${mode === "single" ? "block" : "none"}">
+          <label>Select Player:
+            <select id="entity">
+              <option value="" disabled ${!this._config.entity ? "selected" : ""}>Select a player…</option>
+              ${entityOptions}
+            </select>
+          </label>
+        </div>
+        <div id="selected-selector" style="display: ${mode === "selected" ? "block" : "none"}">
+          <label>Selected Entities:
+            <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="sensor.gaming_status_jack_master, ...">
+            <span class="helper-text">Comma-separated entity IDs. Game hours are aggregated across all selected players.</span>
+          </label>
+        </div>
         <label>Time Window:
           <select id="window">
             <option value="rolling" ${this._config.window !== "calendar" ? "selected" : ""}>Rolling (Past 7 Days)</option>
@@ -2376,7 +2435,7 @@ class GamingStatusGameChartEditor extends HTMLElement {
         </label>
         <label>Max Games to Display:
           <input type="number" id="max_games" value="${parseInt(this._config.max_games) || 6}" min="1" max="20">
-          <span class="helper-text">Ranks by total hours and shows the top N games. Default: 6.</span>
+          <span class="helper-text">Ranks by total hours across all selected players and shows the top N. Default: 6.</span>
         </label>
         <hr>
         <label>Custom Colors (Advanced):
@@ -2385,12 +2444,13 @@ class GamingStatusGameChartEditor extends HTMLElement {
         </label>
       </div>`;
 
-    ["title", "entity", "window", "max_games", "custom_colors"].forEach(id => {
+    ["title", "mode", "entity", "selected_entities", "window", "max_games", "custom_colors"].forEach(id => {
       const el = this.shadowRoot.getElementById(id);
       if (!el) return;
       el.addEventListener("change", ev => {
         this._config = { ...this._config, [id]: ev.target.value };
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+        this.render();
       });
     });
   }
