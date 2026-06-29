@@ -1159,6 +1159,16 @@ class GamingStatusChartCard extends HTMLElement {
       this._titleEl = this.shadowRoot.getElementById("chart-title");
       this._contentEl = this.shadowRoot.getElementById("chart-content");
       this._tooltipEl = this.shadowRoot.getElementById("chart-tooltip");
+      if (!this._ro && typeof ResizeObserver !== "undefined") {
+        let rafId;
+        this._ro = new ResizeObserver(() => {
+          if (rafId) cancelAnimationFrame(rafId);
+          rafId = requestAnimationFrame(() => {
+            if (this._lastRenderArgs) this._renderChart(...this._lastRenderArgs);
+          });
+        });
+        this._ro.observe(this._contentEl);
+      }
     }
     if (this._titleEl) {
       this._titleEl.textContent = this.config.title || "";
@@ -1211,6 +1221,12 @@ class GamingStatusChartCard extends HTMLElement {
 
   _renderChart(dailyData, players) {
     if (!this._contentEl) return;
+    this._lastRenderArgs = [dailyData, players];
+    const VW = this._contentEl.clientWidth;
+    if (!VW) {
+      requestAnimationFrame(() => { if (this._lastRenderArgs) this._renderChart(...this._lastRenderArgs); });
+      return;
+    }
 
     if (!players.length || dailyData.every(d => !Object.keys(d.players).length)) {
       this._contentEl.innerHTML = `<div style="padding:20px;color:var(--secondary-text-color);font-style:italic;">No game activity found for this period.</div>`;
@@ -1222,7 +1238,7 @@ class GamingStatusChartCard extends HTMLElement {
       : this.defaultPalette;
     const colorOf = (i) => palette[i % palette.length];
 
-    const VW = 560, padL = 42, padR = 12, padT = 10, padB = 50, areaH = 220;
+    const padL = 42, padR = 12, padT = 8, padB = 50, areaH = 220;
     const areaW = VW - padL - padR;
 
     const legendCols = 2;
@@ -1244,7 +1260,7 @@ class GamingStatusChartCard extends HTMLElement {
     const barOff = (slotW - barW) / 2;
     const fy = (h) => padT + areaH - (h / niceMax) * areaH;
 
-    let svg = `<svg viewBox="0 0 ${VW} ${totalH}" style="width:100%;height:auto;display:block;" xmlns="http://www.w3.org/2000/svg">`;
+    let svg = `<svg width="${VW}" height="${totalH}" style="display:block;" xmlns="http://www.w3.org/2000/svg">`;
     svg += `<style>text{font-family:var(--primary-font-family,sans-serif)}</style>`;
 
     for (const tick of yTicks) {
@@ -1403,6 +1419,9 @@ class GamingStatusDonutCard extends HTMLElement {
     return {
       title: "",
       window: "rolling",
+      mode: "all",
+      single_entity: "",
+      selected_entities: "",
       manual_entities: "",
       custom_colors: "",
       entities_pattern: "_master",
@@ -1413,6 +1432,9 @@ class GamingStatusDonutCard extends HTMLElement {
     this.config = {
       title: config.title || "",
       window: config.window || "rolling",
+      mode: config.mode || "all",
+      single_entity: config.single_entity || config.entity || "",
+      selected_entities: config.selected_entities || "",
       manual_entities: config.manual_entities || "",
       custom_colors: config.custom_colors || "",
       entities_pattern: config.entities_pattern || "_master",
@@ -1426,15 +1448,21 @@ class GamingStatusDonutCard extends HTMLElement {
     if (!this.config) return;
 
     let entityIds = [];
-    const manualStr = this.config.manual_entities || this.config.selected_entities || "";
-    if (manualStr) {
-      entityIds = manualStr.split(",").map(e => e.trim()).filter(e => hass.states[e]);
+    if (this.config.mode === "single" && this.config.single_entity) {
+      if (hass.states[this.config.single_entity]) entityIds.push(this.config.single_entity);
+    } else if (this.config.mode === "selected" && this.config.selected_entities) {
+      entityIds = this.config.selected_entities.split(",").map(e => e.trim()).filter(e => hass.states[e]);
     } else {
-      for (const key in hass.states) {
-        if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) &&
-            key.endsWith(this.config.entities_pattern) &&
-            hass.states[key].attributes.secondary !== undefined) {
-          entityIds.push(key);
+      const manualStr = this.config.manual_entities || "";
+      if (manualStr) {
+        entityIds = manualStr.split(",").map(e => e.trim()).filter(e => hass.states[e]);
+      } else {
+        for (const key in hass.states) {
+          if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) &&
+              key.endsWith(this.config.entities_pattern) &&
+              hass.states[key].attributes.secondary !== undefined) {
+            entityIds.push(key);
+          }
         }
       }
     }
@@ -1460,6 +1488,16 @@ class GamingStatusDonutCard extends HTMLElement {
       this._titleEl = this.shadowRoot.getElementById("d-title");
       this._contentEl = this.shadowRoot.getElementById("d-content");
       this._tooltipEl = this.shadowRoot.getElementById("d-tooltip");
+      if (!this._ro && typeof ResizeObserver !== "undefined") {
+        let rafId;
+        this._ro = new ResizeObserver(() => {
+          if (rafId) cancelAnimationFrame(rafId);
+          rafId = requestAnimationFrame(() => {
+            if (this._lastRenderArgs) this._renderChart(...this._lastRenderArgs);
+          });
+        });
+        this._ro.observe(this._contentEl);
+      }
     }
     if (this._titleEl) {
       this._titleEl.textContent = this.config.title || "";
@@ -1501,21 +1539,27 @@ class GamingStatusDonutCard extends HTMLElement {
 
   _renderChart(platforms, platformTotals, grandTotal) {
     if (!this._contentEl) return;
+    this._lastRenderArgs = [platforms, platformTotals, grandTotal];
+    const VW = this._contentEl.clientWidth;
+    if (!VW) {
+      requestAnimationFrame(() => { if (this._lastRenderArgs) this._renderChart(...this._lastRenderArgs); });
+      return;
+    }
 
     if (grandTotal <= 0) {
       this._contentEl.innerHTML = `<div style="padding:20px;color:var(--secondary-text-color);font-style:italic;">No activity found for this period.</div>`;
       return;
     }
 
-    const VW = 560, padL = 20, padR = 20;
+    const padL = 20, padR = 20;
     const barAreaW = VW - padL - padR;
-    const barH = 44, padT = 14;
+    const barH = 44, padT = 8;
     const barGap = 14;
-    const legendRowH = 24, totalLineH = 24, padB = 16;
+    const legendRowH = 24, totalLineH = 24, padB = 2;
     const totalH = padT + barH + barGap + legendRowH + totalLineH + padB;
     const fmt = h => h >= 1 ? `${h.toFixed(1)}h` : `${Math.round(h * 60)}m`;
 
-    let svg = `<svg viewBox="0 0 ${VW} ${totalH}" style="width:100%;height:auto;display:block;" xmlns="http://www.w3.org/2000/svg">`;
+    let svg = `<svg width="${VW}" height="${totalH}" style="display:block;" xmlns="http://www.w3.org/2000/svg">`;
     svg += `<style>text{font-family:var(--primary-font-family,sans-serif)}</style>`;
 
     // Single aggregate stacked bar
@@ -1605,14 +1649,36 @@ class GamingStatusDonutEditor extends HTMLElement {
             <option value="calendar" ${this._config.window === "calendar" ? "selected" : ""}>Calendar (Since Sunday)</option>
           </select>
         </label>
-        <hr>
-        <label>Manual Entities (Advanced):
-          <input type="text" id="manual_entities" .configValue="manual_entities" value="${this._config.manual_entities || ""}" placeholder="sensor.gaming_status_jack_master, ...">
-          <span class="helper-text">Leave blank to auto-detect all players. Enter a comma-separated list of entity IDs to filter.</span>
+        <label>Player Filter:
+          <select id="mode" .configValue="mode">
+            <option value="all" ${this._config.mode === "all" || !this._config.mode ? "selected" : ""}>All Tracked Players</option>
+            <option value="single" ${this._config.mode === "single" ? "selected" : ""}>Single Player</option>
+            <option value="selected" ${this._config.mode === "selected" ? "selected" : ""}>Selected Players</option>
+          </select>
         </label>
+        <div id="single-selector" style="display: ${this._config.mode === "single" ? "block" : "none"}">
+          <label>Select Player:
+            <select id="single_entity" .configValue="single_entity">
+              <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player...</option>
+              ${Object.keys(this._hass?.states || {})
+                .filter(k => k.endsWith(this._config.entities_pattern || "_master") && this._hass.states[k].attributes.secondary !== undefined)
+                .map(k => {
+                  const name = (this._hass.states[k].attributes.friendly_name || k).replace(/ Gaming Status| Master/gi, "").trim();
+                  return `<option value="${k}" ${this._config.single_entity === k ? "selected" : ""}>${name}</option>`;
+                }).join("")}
+            </select>
+          </label>
+        </div>
+        <div id="selected-selector" style="display: ${this._config.mode === "selected" ? "block" : "none"}">
+          <label>Selected Entities:
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ""}" placeholder="sensor.gaming_status_jack_master, ...">
+            <span class="helper-text">Comma-separated list of entity IDs to include in the aggregate.</span>
+          </label>
+        </div>
+        <hr>
         <label>Custom Colors (Advanced):
           <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ""}" placeholder="rgb(11,124,16), rgb(0,48,135), rgb(2,173,239)">
-          <span class="helper-text">Leave blank for default platform colors (Xbox / PlayStation / PC). Override with a comma-separated list in order.</span>
+          <span class="helper-text">Leave blank for default platform colors (Xbox / PlayStation / PC).</span>
         </label>
       </div>`;
 
@@ -1625,6 +1691,7 @@ class GamingStatusDonutEditor extends HTMLElement {
           bubbles: true,
           composed: true,
         }));
+        this.render();
       });
     });
   }
@@ -1924,10 +1991,6 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
       </style>
       <div class="container">
 
-        <div class="info">
-          <strong>Note:</strong> This is a lightweight, native CSS card. It does <strong>not</strong> require ApexCharts or any other external HACS dependencies to render.
-        </div>
-
         <label>Card Title:
           <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ''}">
         </label>
@@ -2068,6 +2131,16 @@ class GamingStatusGameChartCard extends HTMLElement {
       this._titleEl = this.shadowRoot.getElementById("gc-title");
       this._contentEl = this.shadowRoot.getElementById("gc-content");
       this._tooltipEl = this.shadowRoot.getElementById("gc-tooltip");
+      if (!this._ro && typeof ResizeObserver !== "undefined") {
+        let rafId;
+        this._ro = new ResizeObserver(() => {
+          if (rafId) cancelAnimationFrame(rafId);
+          rafId = requestAnimationFrame(() => {
+            if (this._lastRenderArgs) this._renderChart(...this._lastRenderArgs);
+          });
+        });
+        this._ro.observe(this._contentEl);
+      }
     }
     if (this._titleEl) {
       this._titleEl.textContent = this.config.title || "";
@@ -2125,6 +2198,12 @@ class GamingStatusGameChartCard extends HTMLElement {
 
   _renderChart(dailyData, games) {
     if (!this._contentEl) return;
+    this._lastRenderArgs = [dailyData, games];
+    const VW = this._contentEl.clientWidth;
+    if (!VW) {
+      requestAnimationFrame(() => { if (this._lastRenderArgs) this._renderChart(...this._lastRenderArgs); });
+      return;
+    }
 
     if (!games.length || dailyData.every(d => !Object.keys(d.games).length)) {
       this._contentEl.innerHTML = `<div style="padding:20px;color:var(--secondary-text-color);font-style:italic;">No game activity found for this period.</div>`;
@@ -2137,7 +2216,7 @@ class GamingStatusGameChartCard extends HTMLElement {
     const colorOf = (i) => palette[i % palette.length];
 
     // SVG layout
-    const VW = 560, padL = 42, padR = 12, padT = 10, padB = 50, areaH = 220;
+    const padL = 42, padR = 12, padT = 8, padB = 50, areaH = 220;
     const areaW = VW - padL - padR;
 
     // Legend: 2 columns, dynamic rows
@@ -2161,7 +2240,7 @@ class GamingStatusGameChartCard extends HTMLElement {
     const barOff = (slotW - barW) / 2;
     const fy = (h) => padT + areaH - (h / niceMax) * areaH;
 
-    let svg = `<svg viewBox="0 0 ${VW} ${totalH}" style="width:100%;height:auto;display:block;" xmlns="http://www.w3.org/2000/svg">`;
+    let svg = `<svg width="${VW}" height="${totalH}" style="display:block;" xmlns="http://www.w3.org/2000/svg">`;
     svg += `<style>text{font-family:var(--primary-font-family,sans-serif)}</style>`;
 
     // Y-axis grid lines and labels
