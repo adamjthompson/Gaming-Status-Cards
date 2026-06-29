@@ -2099,6 +2099,296 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 }
 
 // ====================================================================
+// CARD 6: GAMING STATUS - GAME CHART
+// ====================================================================
+
+class GamingStatusGameChartCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this.defaultPalette = [
+      "rgb(58, 134, 255)",
+      "rgb(255, 190, 11)",
+      "rgb(255, 0, 110)",
+      "rgb(56, 176, 0)",
+      "rgb(131, 56, 236)",
+      "rgb(251, 86, 7)",
+      "rgb(0, 200, 180)",
+      "rgb(255, 140, 0)",
+    ];
+  }
+
+  static getConfigElement() {
+    return document.createElement("gaming-status-game-chart-editor");
+  }
+
+  static getStubConfig() {
+    return { title: "", entity: "", window: "rolling", max_games: 6, custom_colors: "" };
+  }
+
+  setConfig(config) {
+    this.config = {
+      title: config.title || "",
+      entity: config.entity || "",
+      window: config.window || "rolling",
+      max_games: parseInt(config.max_games) || 6,
+      custom_colors: config.custom_colors || "",
+      ...config
+    };
+    this._lastHash = "";
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (!this.config.entity) return;
+    const entityState = hass.states[this.config.entity];
+    if (!entityState) return;
+    const hash = [entityState.last_updated, this.config.entity, this.config.window, this.config.max_games, this.config.title, this.config.custom_colors].join("|");
+    if (this._lastHash === hash) return;
+    this._lastHash = hash;
+    this._update(entityState.attributes);
+  }
+
+  _ensureShell() {
+    if (!this.shadowRoot.querySelector("ha-card")) {
+      this.shadowRoot.innerHTML = `
+        <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
+          <div id="gc-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none;"></div>
+          <div id="gc-content"></div>
+        </ha-card>`;
+      this._titleEl = this.shadowRoot.getElementById("gc-title");
+      this._contentEl = this.shadowRoot.getElementById("gc-content");
+    }
+    if (this._titleEl) {
+      this._titleEl.textContent = this.config.title || "";
+      this._titleEl.style.display = this.config.title ? "block" : "none";
+    }
+  }
+
+  _update(attrs) {
+    this._ensureShell();
+    const playHistory = attrs.play_history || {};
+    const now = new Date();
+    const days = [];
+
+    if (this.config.window === "calendar") {
+      // Show from last Sunday through today
+      const dayOfWeek = now.getDay(); // 0 = Sunday
+      for (let i = dayOfWeek; i >= 0; i--) {
+        days.push(this._fmtDate(new Date(now.getTime() - i * 86400000)));
+      }
+    } else {
+      // Rolling: last 7 days
+      for (let i = 6; i >= 0; i--) {
+        days.push(this._fmtDate(new Date(now.getTime() - i * 86400000)));
+      }
+    }
+
+    // play_history values are in seconds — convert to hours
+    const dailyData = days.map(day => {
+      const dayGames = {};
+      for (const [game, seconds] of Object.entries(playHistory[day] || {})) {
+        const hours = (parseFloat(seconds) || 0) / 3600;
+        if (hours > 0) dayGames[game] = hours;
+      }
+      return { day, games: dayGames };
+    });
+
+    // Rank games by total hours across all shown days, keep top N
+    const totals = {};
+    for (const d of dailyData) {
+      for (const [g, h] of Object.entries(d.games)) {
+        totals[g] = (totals[g] || 0) + h;
+      }
+    }
+    const topGames = Object.entries(totals)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, this.config.max_games)
+      .map(([g]) => g);
+
+    this._renderChart(dailyData, topGames);
+  }
+
+  _fmtDate(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  _renderChart(dailyData, games) {
+    if (!this._contentEl) return;
+
+    if (!games.length || dailyData.every(d => !Object.keys(d.games).length)) {
+      this._contentEl.innerHTML = `<div style="padding:20px;color:var(--secondary-text-color);font-style:italic;">No game activity found for this period.</div>`;
+      return;
+    }
+
+    const palette = this.config.custom_colors && this.config.custom_colors.trim()
+      ? this.config.custom_colors.split(",").map(c => c.trim()).filter(Boolean)
+      : this.defaultPalette;
+    const colorOf = (i) => palette[i % palette.length];
+
+    // SVG layout
+    const VW = 560, padL = 42, padR = 12, padT = 10, padB = 50, areaH = 220;
+    const areaW = VW - padL - padR;
+
+    // Legend: 2 columns, dynamic rows
+    const legendCols = 2;
+    const legendRows = Math.ceil(games.length / legendCols);
+    const legendRowH = 22;
+    const legendH = legendRows * legendRowH + 12;
+    const totalH = padT + areaH + padB + legendH;
+
+    // Y scale
+    const maxDaily = Math.max(
+      ...dailyData.map(d => games.reduce((s, g) => s + (d.games[g] || 0), 0)),
+      0.25
+    );
+    const niceMax = this._niceMax(maxDaily);
+    const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => +(f * niceMax).toFixed(4));
+
+    const n = dailyData.length || 1;
+    const slotW = areaW / n;
+    const barW = slotW * 0.65;
+    const barOff = (slotW - barW) / 2;
+    const fy = (h) => padT + areaH - (h / niceMax) * areaH;
+
+    let svg = `<svg viewBox="0 0 ${VW} ${totalH}" style="width:100%;height:auto;display:block;" xmlns="http://www.w3.org/2000/svg">`;
+    svg += `<style>text{font-family:var(--primary-font-family,sans-serif)}</style>`;
+
+    // Y-axis grid lines and labels
+    for (const tick of yTicks) {
+      const y = fy(tick).toFixed(1);
+      svg += `<line x1="${padL}" y1="${y}" x2="${VW - padR}" y2="${y}" stroke="rgba(128,128,128,0.15)" stroke-width="1"/>`;
+      const label = tick === 0 ? "0" : tick >= 1 ? `${Math.round(tick)}h` : `${Math.round(tick * 60)}m`;
+      svg += `<text x="${padL - 5}" y="${(+y + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--secondary-text-color,#888)">${label}</text>`;
+    }
+
+    // X-axis baseline
+    svg += `<line x1="${padL}" y1="${(padT + areaH).toFixed(1)}" x2="${VW - padR}" y2="${(padT + areaH).toFixed(1)}" stroke="rgba(128,128,128,0.3)" stroke-width="1"/>`;
+
+    // Stacked bars and X-axis date labels
+    dailyData.forEach((d, i) => {
+      const slotX = padL + i * slotW;
+      const bx = (slotX + barOff).toFixed(1);
+      const bw = barW.toFixed(1);
+      let yBase = padT + areaH;
+
+      // Draw bottom-to-top (games[0] ends up at the bottom of the stack)
+      for (let gi = games.length - 1; gi >= 0; gi--) {
+        const h = d.games[games[gi]] || 0;
+        if (h <= 0) continue;
+        const bh = (h / niceMax) * areaH;
+        svg += `<rect x="${bx}" y="${(yBase - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="${colorOf(gi)}" rx="2"/>`;
+        yBase -= bh;
+      }
+
+      const dt = new Date(d.day + "T12:00:00");
+      const cx = (slotX + slotW / 2).toFixed(1);
+      svg += `<text x="${cx}" y="${(padT + areaH + 16).toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--secondary-text-color,#888)">${dt.toLocaleDateString(undefined, { weekday: "short" })}</text>`;
+      svg += `<text x="${cx}" y="${(padT + areaH + 30).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--secondary-text-color,#666)">${dt.getMonth() + 1}/${dt.getDate()}</text>`;
+    });
+
+    // Legend
+    const legY0 = padT + areaH + padB + 2;
+    const colW = areaW / legendCols;
+    games.forEach((g, i) => {
+      const col = i % legendCols;
+      const row = Math.floor(i / legendCols);
+      const lx = padL + col * colW;
+      const ly = legY0 + row * legendRowH;
+      svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2"/>`;
+      const maxCh = Math.floor(colW / 7) - 2;
+      const name = g.length > maxCh ? g.slice(0, maxCh - 1) + "…" : g;
+      svg += `<text x="${lx + 17}" y="${ly + 10}" font-size="12" fill="var(--primary-text-color,#ddd)">${this._esc(name)}</text>`;
+    });
+
+    svg += "</svg>";
+    this._contentEl.innerHTML = svg;
+  }
+
+  _niceMax(v) {
+    if (v <= 0) return 1;
+    const mag = Math.pow(10, Math.floor(Math.log10(v)));
+    return [1, 2, 3, 4, 5, 6, 8, 10].map(m => m * mag).find(c => c >= v) || v * 1.25;
+  }
+
+  _esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  getCardSize() { return 5; }
+}
+
+class GamingStatusGameChartEditor extends HTMLElement {
+  constructor() { super(); this.attachShadow({ mode: "open" }); }
+
+  setConfig(config) { this._config = config; this.render(); }
+
+  set hass(hass) {
+    const first = !this._hass;
+    this._hass = hass;
+    if (first) this.render();
+  }
+
+  render() {
+    if (!this._hass || !this._config) return;
+
+    const opts = Object.keys(this._hass.states)
+      .filter(k => k.endsWith("_master") && this._hass.states[k].attributes.secondary !== undefined)
+      .map(k => {
+        const name = (this._hass.states[k].attributes.friendly_name || k).replace(/ Gaming Status| Master/gi, "");
+        return `<option value="${k}" ${this._config.entity === k ? "selected" : ""}>${this._esc(name)}</option>`;
+      }).join("");
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        .container { display: flex; flex-direction: column; gap: 15px; color: var(--primary-text-color); }
+        select, input { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
+        select:focus, input:focus { outline: none; border-color: var(--primary-color); }
+        label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; }
+        hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
+        .helper-text { font-size: 12px; font-weight: normal; color: var(--secondary-text-color); margin-top: 2px; }
+      </style>
+      <div class="container">
+        <label>Card Title (Optional):
+          <input type="text" id="title" value="${this._esc(this._config.title || "")}">
+        </label>
+        <label>Player:
+          <select id="entity">
+            <option value="" disabled ${!this._config.entity ? "selected" : ""}>Select a player…</option>
+            ${opts}
+          </select>
+        </label>
+        <label>Time Window:
+          <select id="window">
+            <option value="rolling" ${this._config.window !== "calendar" ? "selected" : ""}>Rolling (Past 7 Days)</option>
+            <option value="calendar" ${this._config.window === "calendar" ? "selected" : ""}>Calendar (Since Sunday)</option>
+          </select>
+        </label>
+        <label>Max Games to Display:
+          <input type="number" id="max_games" value="${parseInt(this._config.max_games) || 6}" min="1" max="20">
+          <span class="helper-text">Ranks by total hours and shows the top N games. Default: 6.</span>
+        </label>
+        <hr>
+        <label>Custom Colors (Advanced):
+          <input type="text" id="custom_colors" value="${this._esc(this._config.custom_colors || "")}" placeholder="#3a86ff, #ffbe0b, …">
+          <span class="helper-text">Leave blank for the default palette. Comma-separated colors.</span>
+        </label>
+      </div>`;
+
+    ["title", "entity", "window", "max_games", "custom_colors"].forEach(id => {
+      const el = this.shadowRoot.getElementById(id);
+      if (!el) return;
+      el.addEventListener("change", ev => {
+        this._config = { ...this._config, [id]: ev.target.value };
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+      });
+    });
+  }
+
+  _esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+}
+
+// ====================================================================
 // REGISTRATION
 // ====================================================================
 
@@ -2124,6 +2414,10 @@ customElements.define("gaming-status-donut-editor", GamingStatusDonutEditor);
 // Card 5
 customElements.define("gaming-status-leaderboard-card", GamingStatusLeaderboardCard);
 customElements.define("gaming-status-leaderboard-editor", GamingStatusLeaderboardEditor);
+
+// Card 6
+customElements.define("gaming-status-game-chart-card", GamingStatusGameChartCard);
+customElements.define("gaming-status-game-chart-editor", GamingStatusGameChartEditor);
 
 // Inject into UI
 window.customCards = window.customCards || [];
@@ -2163,4 +2457,11 @@ window.customCards.push({
   name: "Gaming Status - Leaderboard",
   preview: true,
   description: "A dynamic standalone bar graph ranking the top players across chosen metrics."
+});
+
+window.customCards.push({
+  type: "gaming-status-game-chart-card",
+  name: "Gaming Status - Game Chart",
+  preview: true,
+  description: "A per-player stacked bar chart showing daily hours broken down by game."
 });
