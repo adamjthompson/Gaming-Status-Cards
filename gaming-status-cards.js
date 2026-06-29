@@ -1267,7 +1267,7 @@ class GamingStatusChartCard extends HTMLElement {
       const y = fy(tick).toFixed(1);
       svg += `<line x1="${padL}" y1="${y}" x2="${VW - padR}" y2="${y}" stroke="rgba(128,128,128,0.15)" stroke-width="1"/>`;
       const label = tick === 0 ? "0" : tick >= 1 ? `${Math.round(tick)}h` : `${Math.round(tick * 60)}m`;
-      svg += `<text x="${padL - 5}" y="${(+y + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--secondary-text-color,#888)">${label}</text>`;
+      svg += `<text x="${padL - 5}" y="${(+y + 4).toFixed(1)}" text-anchor="end" font-size="13" fill="var(--primary-text-color,#ddd)">${label}</text>`;
     }
 
     svg += `<line x1="${padL}" y1="${(padT + areaH).toFixed(1)}" x2="${VW - padR}" y2="${(padT + areaH).toFixed(1)}" stroke="rgba(128,128,128,0.3)" stroke-width="1"/>`;
@@ -1288,8 +1288,8 @@ class GamingStatusChartCard extends HTMLElement {
 
       const dt = new Date(d.day + "T12:00:00");
       const cx = (slotX + slotW / 2).toFixed(1);
-      svg += `<text x="${cx}" y="${(padT + areaH + 16).toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--secondary-text-color,#888)">${dt.toLocaleDateString(undefined, { weekday: "short" })}</text>`;
-      svg += `<text x="${cx}" y="${(padT + areaH + 30).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--secondary-text-color,#666)">${dt.getMonth() + 1}/${dt.getDate()}</text>`;
+      svg += `<text x="${cx}" y="${(padT + areaH + 16).toFixed(1)}" text-anchor="middle" font-size="13" fill="var(--primary-text-color,#ddd)">${dt.toLocaleDateString(undefined, { weekday: "short" })}</text>`;
+      svg += `<text x="${cx}" y="${(padT + areaH + 30).toFixed(1)}" text-anchor="middle" font-size="12" fill="var(--primary-text-color,#ddd)">${dt.getMonth() + 1}/${dt.getDate()}</text>`;
     });
 
     const legY0 = padT + areaH + padB + 2;
@@ -1577,7 +1577,7 @@ class GamingStatusDonutCard extends HTMLElement {
     platforms.forEach((p, i) => {
       const lx = padL + i * colW;
       svg += `<rect x="${lx}" y="${legY + 1}" width="12" height="12" fill="${p.color}" rx="2"/>`;
-      svg += `<text x="${lx + 17}" y="${legY + 13}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(p.name)}  ${fmt(platformTotals[p.key])}</text>`;
+      svg += `<text x="${lx + 17}" y="${legY + 13}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(p.name)} (${fmt(platformTotals[p.key])})</text>`;
     });
 
     // Total line
@@ -2248,7 +2248,7 @@ class GamingStatusGameChartCard extends HTMLElement {
       const y = fy(tick).toFixed(1);
       svg += `<line x1="${padL}" y1="${y}" x2="${VW - padR}" y2="${y}" stroke="rgba(128,128,128,0.15)" stroke-width="1"/>`;
       const label = tick === 0 ? "0" : tick >= 1 ? `${Math.round(tick)}h` : `${Math.round(tick * 60)}m`;
-      svg += `<text x="${padL - 5}" y="${(+y + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--secondary-text-color,#888)">${label}</text>`;
+      svg += `<text x="${padL - 5}" y="${(+y + 4).toFixed(1)}" text-anchor="end" font-size="13" fill="var(--primary-text-color,#ddd)">${label}</text>`;
     }
 
     // X-axis baseline
@@ -2272,8 +2272,8 @@ class GamingStatusGameChartCard extends HTMLElement {
 
       const dt = new Date(d.day + "T12:00:00");
       const cx = (slotX + slotW / 2).toFixed(1);
-      svg += `<text x="${cx}" y="${(padT + areaH + 16).toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--secondary-text-color,#888)">${dt.toLocaleDateString(undefined, { weekday: "short" })}</text>`;
-      svg += `<text x="${cx}" y="${(padT + areaH + 30).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--secondary-text-color,#666)">${dt.getMonth() + 1}/${dt.getDate()}</text>`;
+      svg += `<text x="${cx}" y="${(padT + areaH + 16).toFixed(1)}" text-anchor="middle" font-size="13" fill="var(--primary-text-color,#ddd)">${dt.toLocaleDateString(undefined, { weekday: "short" })}</text>`;
+      svg += `<text x="${cx}" y="${(padT + areaH + 30).toFixed(1)}" text-anchor="middle" font-size="12" fill="var(--primary-text-color,#ddd)">${dt.getMonth() + 1}/${dt.getDate()}</text>`;
     });
 
     // Legend
