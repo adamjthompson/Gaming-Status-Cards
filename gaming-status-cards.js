@@ -1825,6 +1825,21 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     this.updateLeaderboard();
   }
 
+  _getPlayHistoryBreakdown(attrs, isCalendar) {
+    const playHistory = attrs.play_history || {};
+    const now = new Date();
+    const result = {};
+    const daysBack = isCalendar ? now.getDay() : 6;
+    for (let i = daysBack; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      for (const [game, seconds] of Object.entries(playHistory[key] || {})) {
+        result[game] = (result[game] || 0) + (parseFloat(seconds) || 0);
+      }
+    }
+    return result;
+  }
+
   extractMinutes(timeVal) {
     if (timeVal === undefined || timeVal === null || timeVal === "None") return 0;
     if (typeof timeVal === "number") return Math.floor(timeVal / 60);
@@ -1881,9 +1896,10 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       let gamesMap = {};
       for (const entityId of entityIdsToProcess) {
         const stateObj = this._hass.states[entityId];
-        const breakdown = getBreakdown(stateObj.attributes);
-        for (const [game, timeStr] of Object.entries(breakdown)) {
-          gamesMap[game] = (gamesMap[game] || 0) + this.extractMinutes(timeStr);
+        const phBreakdown = this._getPlayHistoryBreakdown(stateObj.attributes, isCal);
+        for (const [game, seconds] of Object.entries(phBreakdown)) {
+          const mins = Math.floor((parseFloat(seconds) || 0) / 60);
+          if (mins > 0) gamesMap[game] = (gamesMap[game] || 0) + mins;
         }
       }
       for (const [game, mins] of Object.entries(gamesMap)) {
@@ -1903,8 +1919,8 @@ class GamingStatusLeaderboardCard extends HTMLElement {
           finalData.push({ name: friendlyName, value: hours, displayValue: `${hours}h` });
         }
         else if (this.config.metric === "games") {
-          const breakdown = getBreakdown(stateObj.attributes);
-          const count = Object.keys(breakdown).length;
+          const phBreakdown = this._getPlayHistoryBreakdown(stateObj.attributes, isCal);
+          const count = Object.keys(phBreakdown).length;
           finalData.push({ name: friendlyName, value: count, displayValue: `${count}` });
         }
         else if (this.config.metric === "longest") {
