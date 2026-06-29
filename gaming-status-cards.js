@@ -1088,8 +1088,12 @@ class GamingStatusChartCard extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this.defaultPalette = [
-      "#4e79a7", "#f28e2b", "#e15759", "#76b7b2",
-      "#59a14f", "#edc948", "#b07aa1", "#ff9da7",
+      "rgb(255, 190, 11)",
+      "rgb(251, 86, 7)",
+      "rgb(255, 0, 110)",
+      "rgb(131, 56, 236)",
+      "rgb(58, 134, 255)",
+      "rgb(56, 176, 0)",
     ];
   }
 
@@ -1366,7 +1370,7 @@ class GamingStatusChartEditor extends HTMLElement {
         <div>
           <div class="section-title">Custom Colors (Advanced)</div>
           <div class="helper-text">Leave blank to use the default palette. Override with comma-separated colors (hex, RGB, or names like <code>red, #00FF00, rgb(0,0,255)</code>).</div>
-          <input type="text" id="custom_colors" value="${this._esc(this._config.custom_colors || "")}" placeholder="#4e79a7, #f28e2b, ...">
+          <input type="text" id="custom_colors" value="${this._esc(this._config.custom_colors || "")}" placeholder="rgb(255,190,11), rgb(58,134,255), ...">
         </div>
       </div>`;
 
@@ -1388,17 +1392,9 @@ class GamingStatusChartEditor extends HTMLElement {
 // ====================================================================
 
 class GamingStatusDonutCard extends HTMLElement {
-  constructor() { 
-    super(); 
+  constructor() {
+    super();
     this.attachShadow({ mode: "open" });
-    this.shadowRoot.innerHTML = `
-      <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
-        <div id="card-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none;"></div>
-        <div id="container" style="--ha-card-background: transparent; --ha-card-box-shadow: none; --ha-card-border-width: 0px; --ha-card-border-radius: 0px;"></div>
-      </ha-card>
-    `;
-    this.container = this.shadowRoot.getElementById("container");
-    this.titleEl = this.shadowRoot.getElementById("card-title");
     this.defaultPalette = [
       "rgb(255, 190, 11)",
       "rgb(251, 86, 7)",
@@ -1407,228 +1403,258 @@ class GamingStatusDonutCard extends HTMLElement {
       "rgb(58, 134, 255)",
       "rgb(56, 176, 0)",
     ];
+    this._platforms = [
+      { name: "Xbox",        key: "Xbox",        color: "rgb(11, 124, 16)"  },
+      { name: "PlayStation", key: "PlayStation", color: "rgb(0, 48, 135)"   },
+      { name: "PC",          key: "PC",          color: "rgb(2, 173, 239)"  },
+    ];
   }
 
   static getConfigElement() { return document.createElement("gaming-status-donut-editor"); }
 
   static getStubConfig() {
-    return { 
-      title: "", 
+    return {
+      title: "",
       metric: "platforms",
-      mode: "all", 
+      mode: "all",
       single_entity: "",
       selected_entities: "",
+      window: "rolling",
       custom_colors: "",
-      entities_pattern: "_master"
+      entities_pattern: "_master",
     };
   }
 
   setConfig(config) {
     let mode = config.mode || "all";
-    let single_entity = config.single_entity || config.entity || "";
-
-    if (config.metric === "hours" && mode === "single") {
-      mode = "all";
-    }
-
-    this.config = { 
-      title: config.title || "", 
+    const single_entity = config.single_entity || config.entity || "";
+    if (config.metric === "hours" && mode === "single") mode = "all";
+    this.config = {
+      title: config.title || "",
       metric: config.metric || "platforms",
-      mode: mode, 
-      single_entity: single_entity, 
+      mode,
+      single_entity,
       selected_entities: config.selected_entities || "",
+      window: config.window || "rolling",
       custom_colors: config.custom_colors || "",
       entities_pattern: config.entities_pattern || "_master",
-      ...config 
+      ...config,
     };
-    
-    if (this.titleEl) {
-        this.titleEl.innerText = this.config.title;
-        this.titleEl.style.display = this.config.title ? "block" : "none";
-    }
-    
-    this.renderChart();
+    this._lastHash = "";
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (this.chartElement) {
-      this.chartElement.hass = hass;
-    } else {
-      this.renderChart();
-    }
-  }
+    if (!this.config) return;
 
-  renderChart() {
-    if (!this.config || !this._hass || this.chartElement) return;
-
-    if (!customElements.get('apexcharts-card')) {
-      this.shadowRoot.innerHTML = `
-        <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
-          <div style="background: rgba(255,165,0,0.2); padding: 12px; border-radius: 4px; border-left: 4px solid orange; color: var(--primary-text-color); font-family: var(--primary-font-family, sans-serif);">
-            <strong>Missing Dependency:</strong><br>The <code>apexcharts-card</code> must be installed via HACS to view this chart.
-          </div>
-        </ha-card>
-      `;
-      return;
-    }
-
-    this.chartElement = document.createElement("apexcharts-card");
-    this.container.appendChild(this.chartElement);
-
-    let entityIdsToProcess = [];
+    let entityIds = [];
     if (this.config.mode === "single" && this.config.single_entity) {
-      if (this._hass.states[this.config.single_entity]) entityIdsToProcess.push(this.config.single_entity);
+      if (hass.states[this.config.single_entity]) entityIds.push(this.config.single_entity);
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
-      entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => this._hass.states[e]);
+      entityIds = this.config.selected_entities.split(",").map(e => e.trim()).filter(e => hass.states[e]);
     } else {
-      const targetSuffix = this.config.entities_pattern || "_master";
-      for (const key in this._hass.states) {
-        if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) && key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined) {
-          entityIdsToProcess.push(key);
+      for (const key in hass.states) {
+        if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) &&
+            key.endsWith(this.config.entities_pattern) &&
+            hass.states[key].attributes.secondary !== undefined) {
+          entityIds.push(key);
         }
       }
     }
-    entityIdsToProcess.sort();
+    entityIds.sort();
 
-    let activePalette = this.defaultPalette;
-    const hasCustomColors = this.config.custom_colors && this.config.custom_colors.trim() !== "";
-    if (hasCustomColors) {
-      activePalette = this.config.custom_colors.split(",").map(c => c.trim()).filter(c => c);
+    const hash = entityIds.map(id => `${id}:${hass.states[id]?.last_updated}`).join(",")
+      + "|" + this.config.metric
+      + "|" + this.config.window
+      + "|" + this.config.custom_colors;
+
+    if (this._lastHash === hash) return;
+    this._lastHash = hash;
+    this._update(entityIds);
+  }
+
+  _ensureShell() {
+    if (!this.shadowRoot.querySelector("ha-card")) {
+      this.shadowRoot.innerHTML = `
+        <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
+          <div id="d-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none;"></div>
+          <div id="d-content"></div>
+        </ha-card>
+        <div id="d-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:5px 9px;border-radius:5px;font-size:12px;white-space:nowrap;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`;
+      this._titleEl = this.shadowRoot.getElementById("d-title");
+      this._contentEl = this.shadowRoot.getElementById("d-content");
+      this._tooltipEl = this.shadowRoot.getElementById("d-tooltip");
     }
+    if (this._titleEl) {
+      this._titleEl.textContent = this.config.title || "";
+      this._titleEl.style.display = this.config.title ? "block" : "none";
+    }
+  }
 
-    let series = [];
+  _update(entityIds) {
+    this._ensureShell();
+
+    const isCal = this.config.window === "calendar";
+    const weeklyAttr = isCal ? "total_weekly_hours" : "rolling_weekly_hours";
+    const hasCustom = this.config.custom_colors && this.config.custom_colors.trim();
+    const palette = hasCustom
+      ? this.config.custom_colors.split(",").map(c => c.trim()).filter(Boolean)
+      : this.defaultPalette;
+
+    const rows = [];
+    let legendItems = [];
 
     if (this.config.metric === "hours") {
-      entityIdsToProcess.forEach((entityId, index) => {
+      entityIds.forEach(entityId => {
         const stateObj = this._hass.states[entityId];
         if (!stateObj) return;
-
-        const friendlyName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status| Master/gi, "");
-        const color = activePalette[index % activePalette.length];
-
-        series.push({
-          entity: entityId,
-          name: friendlyName,
-          color: color,
-          data_generator: `const attr = entity.attributes; const val = parseFloat(attr.${this.config.window === "calendar" ? "total_weekly_hours" : "rolling_weekly_hours"}) || 0; return val > 0 ? [[new Date().getTime(), val]] : [];`
-        });
+        const name = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status| Master/gi, "").trim();
+        const hours = parseFloat(stateObj.attributes[weeklyAttr]) || 0;
+        if (hours > 0) rows.push({ label: name, totalHours: hours });
       });
+      rows.sort((a, b) => b.totalHours - a.totalHours);
+      rows.forEach((r, i) => {
+        const color = palette[i % palette.length];
+        r.segments = [{ name: r.label, hours: r.totalHours, color }];
+      });
+      legendItems = rows.map((r, i) => ({ name: r.label, color: palette[i % palette.length] }));
 
     } else {
-      const platforms = [
-        { name: "Xbox", key: "Xbox", color: "rgb(11, 124, 16)" },
-        { name: "PlayStation", key: "PlayStation", color: "rgb(0, 48, 135)" },
-        { name: "PC", key: "PC", color: "rgb(2, 173, 239)" }
-      ];
+      const resolvedPlatforms = this._platforms.map((p, i) => ({
+        ...p,
+        color: hasCustom ? (palette[i] || p.color) : p.color,
+      }));
 
-      const targetEntitiesStr = JSON.stringify(entityIdsToProcess);
+      entityIds.forEach(entityId => {
+        const stateObj = this._hass.states[entityId];
+        if (!stateObj) return;
+        const name = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status| Master/gi, "").trim();
+        const totalHours = parseFloat(stateObj.attributes[weeklyAttr]) || 0;
+        if (totalHours <= 0) return;
 
-      series = platforms.map((p, index) => {
-        const color = hasCustomColors ? activePalette[index % activePalette.length] : p.color;
+        const split = stateObj.attributes.platform_split || {};
+        const segments = resolvedPlatforms
+          .map(p => ({ name: p.name, hours: (parseFloat(split[p.key]) || 0) / 100 * totalHours, color: p.color }))
+          .filter(s => s.hours > 0);
 
-        const generator = `
-          let total = 0;
-          const targets = ${targetEntitiesStr};
-          targets.forEach(key => {
-            if (hass.states[key]) {
-              const attr = hass.states[key].attributes;
-              const hours_target = '${this.config.window === "calendar" ? "total_weekly_hours" : "rolling_weekly_hours"}';
-              if (attr.platform_split && attr.platform_split['${p.key}'] && attr[hours_target]) {
-                total += (parseFloat(attr.platform_split['${p.key}']) / 100) * parseFloat(attr[hours_target]);
-              }
-            }
-          });
-          return total > 0 ? [[new Date().getTime(), total]] : [];
-        `;
-
-        return {
-          entity: "sensor.gaming_status_players_online", 
-          name: p.name,
-          color: color,
-          data_generator: generator
-        };
+        if (segments.length) rows.push({ label: name, totalHours, segments });
       });
+      rows.sort((a, b) => b.totalHours - a.totalHours);
+      legendItems = resolvedPlatforms.map(p => ({ name: p.name, color: p.color }));
     }
 
-    const apexConfig = {
-      type: "custom:apexcharts-card",
-      chart_type: "donut",
-      update_interval: "5m",
-      header: {
-        show: false
-      },
-      apex_config: {
-        chart: { 
-          height: 240, 
-          fontFamily: "var(--primary-font-family)",
-          events: {
-             mounted: (chartContext, config) => {
-               const legend = chartContext.el.querySelector('.apexcharts-legend');
-               if (legend) legend.style.left = '0px';
-             }
-          }
-        },
-        tooltip: { enabled: false },
-        legend: { 
-          position: "left", 
-          fontSize: "14px", 
-          offsetX: -10, 
-          offsetY: 0, 
-          width: 140,
-          itemMargin: { vertical: 6 }, 
-          markers: { strokeWidth: 0, offsetX: -5 } 
-        },
-        dataLabels: { 
-          style: { fontSize: "16px" } 
-        },
-        stroke: { show: false },
-        plotOptions: {
-          pie: { 
-            customScale: 0.9,
-            donut: { 
-              size: "50%", 
-              labels: { 
-                show: true, 
-                name: { show: false }, 
-                value: { 
-                  show: true, 
-                  offsetY: 8, 
-                  fontSize: "22px",
-                  formatter: "EVAL:function(val) { return parseFloat(val).toFixed(1) + 'h'; }"
-                }, 
-                total: { 
-                  show: true, 
-                  showAlways: true, 
-                  label: "Total", 
-                  formatter: "EVAL:function(w) { return w.globals.seriesTotals.reduce((a, b) => a + b, 0).toFixed(1) + 'h' }" 
-                } 
-              } 
-            } 
-          }
-        }
-      },
-      series: series
-    };
-
-    this.chartElement.setConfig(apexConfig);
-    this.chartElement.hass = this._hass;
+    this._renderChart(rows, legendItems);
   }
+
+  _renderChart(rows, legendItems) {
+    if (!this._contentEl) return;
+
+    if (!rows.length) {
+      this._contentEl.innerHTML = `<div style="padding:20px;color:var(--secondary-text-color);font-style:italic;">No activity found for this period.</div>`;
+      return;
+    }
+
+    const VW = 560, padL = 90, padR = 12, labelW = 44, padT = 14, padB = 14;
+    const barAreaW = VW - padL - padR - labelW;
+    const rowH = 28, rowGap = 10;
+    const legendCols = 2, legendRowH = 22;
+    const legendH = Math.ceil(legendItems.length / legendCols) * legendRowH + 12;
+    const totalH = padT + rows.length * (rowH + rowGap) - rowGap + padB + legendH;
+
+    const maxHours = Math.max(...rows.map(r => r.totalHours));
+
+    let svg = `<svg viewBox="0 0 ${VW} ${totalH}" style="width:100%;height:auto;display:block;" xmlns="http://www.w3.org/2000/svg">`;
+    svg += `<style>text{font-family:var(--primary-font-family,sans-serif)}</style>`;
+
+    rows.forEach((row, i) => {
+      const yTop = padT + i * (rowH + rowGap);
+      const textY = (yTop + rowH * 0.68).toFixed(1);
+
+      // Player name
+      const maxNameCh = Math.floor((padL - 10) / 7);
+      const nameLabel = row.label.length > maxNameCh ? row.label.slice(0, maxNameCh - 1) + "…" : row.label;
+      svg += `<text x="${padL - 8}" y="${textY}" text-anchor="end" font-size="12" fill="var(--primary-text-color,#ddd)">${this._esc(nameLabel)}</text>`;
+
+      // Background track
+      svg += `<rect x="${padL}" y="${yTop}" width="${barAreaW.toFixed(1)}" height="${rowH}" fill="rgba(128,128,128,0.08)"/>`;
+
+      // Stacked segments
+      let xCursor = padL;
+      for (const seg of row.segments) {
+        const segW = (seg.hours / maxHours) * barAreaW;
+        if (segW < 0.5) continue;
+        svg += `<rect x="${xCursor.toFixed(1)}" y="${yTop}" width="${segW.toFixed(1)}" height="${rowH}" fill="${seg.color}" data-player="${this._esc(row.label)}" data-segment="${this._esc(seg.name)}" data-hours="${seg.hours.toFixed(4)}"/>`;
+        xCursor += segW;
+      }
+
+      // Total hours label
+      const h = row.totalHours;
+      const hoursLabel = h >= 1 ? `${h.toFixed(1)}h` : `${Math.round(h * 60)}m`;
+      svg += `<text x="${(padL + barAreaW + 6).toFixed(1)}" y="${textY}" font-size="11" fill="var(--secondary-text-color,#888)">${hoursLabel}</text>`;
+    });
+
+    // Legend
+    const legY0 = padT + rows.length * (rowH + rowGap) - rowGap + padB + 2;
+    const colW = (VW - padL - padR) / legendCols;
+    legendItems.forEach((item, i) => {
+      const col = i % legendCols;
+      const row = Math.floor(i / legendCols);
+      const lx = padL + col * colW;
+      const ly = legY0 + row * legendRowH;
+      svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${item.color}" rx="2"/>`;
+      const maxCh = Math.floor(colW / 7) - 2;
+      const label = item.name.length > maxCh ? item.name.slice(0, maxCh - 1) + "…" : item.name;
+      svg += `<text x="${lx + 17}" y="${ly + 10}" font-size="12" fill="var(--primary-text-color,#ddd)">${this._esc(label)}</text>`;
+    });
+
+    svg += "</svg>";
+    this._contentEl.innerHTML = svg;
+
+    const tooltipEl = this._tooltipEl;
+    if (tooltipEl) {
+      this._contentEl.querySelectorAll("rect[data-player]").forEach(rect => {
+        rect.addEventListener("mouseenter", () => {
+          const totalMins = Math.round(parseFloat(rect.dataset.hours) * 60);
+          const h = Math.floor(totalMins / 60);
+          const m = totalMins % 60;
+          const display = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+          const label = rect.dataset.segment !== rect.dataset.player
+            ? `${rect.dataset.player} — ${rect.dataset.segment}: ${display}`
+            : `${rect.dataset.player}: ${display}`;
+          tooltipEl.textContent = label;
+          tooltipEl.style.display = "block";
+        });
+        rect.addEventListener("mousemove", (ev) => {
+          tooltipEl.style.left = `${ev.clientX + 14}px`;
+          tooltipEl.style.top = `${ev.clientY - 38}px`;
+        });
+        rect.addEventListener("mouseleave", () => {
+          tooltipEl.style.display = "none";
+        });
+      });
+    }
+  }
+
+  _esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  getCardSize() { return 4; }
 }
 
 class GamingStatusDonutEditor extends HTMLElement {
   constructor() { super(); this.attachShadow({ mode: "open" }); }
-  
-  setConfig(config) { 
+
+  setConfig(config) {
     let mode = config.mode || "all";
     let single_entity = config.single_entity || config.entity || "";
-    this._config = { ...config, mode, single_entity }; 
-    this.render(); 
+    this._config = { ...config, mode, single_entity };
+    this.render();
   }
-  
-  set hass(hass) { 
+
+  set hass(hass) {
     const firstLoad = !this._hass;
-    this._hass = hass; 
+    this._hass = hass;
     if (firstLoad) this.render();
   }
 
@@ -1641,10 +1667,10 @@ class GamingStatusDonutEditor extends HTMLElement {
       .map(key => {
         const rawName = this._hass.states[key].attributes.friendly_name || key;
         const cleanName = rawName.replace(/ Gaming Status| Master/gi, "");
-        return `<option value="${key}" ${this._config.single_entity === key ? 'selected' : ''}>${cleanName}</option>`;
-      }).join('');
+        return `<option value="${key}" ${this._config.single_entity === key ? "selected" : ""}>${cleanName}</option>`;
+      }).join("");
 
-    const isHoursMetric = this._config.metric === 'hours';
+    const isHoursMetric = this._config.metric === "hours";
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -1653,83 +1679,64 @@ class GamingStatusDonutEditor extends HTMLElement {
         label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; }
         hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
         .helper-text { font-size: 12px; font-weight: normal; color: var(--secondary-text-color); margin-top: 2px; }
-        .warning { background: rgba(255,165,0,0.2); padding: 10px; border-radius: 4px; border-left: 4px solid orange; font-size: 13px; }
       </style>
       <div class="container">
-        
-        <div class="warning">
-          <strong>Note:</strong> This wrapper card requires the popular <code>apexcharts-card</code> to be installed via HACS in order to render the graphical data.
-        </div>
-
         <label>Card Title (Optional):
-          <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ''}">
+          <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ""}">
         </label>
-
         <label>Chart Metric:
           <select id="metric" .configValue="metric">
-            <option value="platforms" ${this._config.metric === 'platforms' || !this._config.metric ? 'selected' : ''}>Platform Split (Xbox, PlayStation, PC)</option>
-            <option value="hours" ${isHoursMetric ? 'selected' : ''}>Most Played Hours (By Player)</option>
+            <option value="platforms" ${this._config.metric === "platforms" || !this._config.metric ? "selected" : ""}>Platform Split (Xbox, PlayStation, PC)</option>
+            <option value="hours" ${isHoursMetric ? "selected" : ""}>Most Played Hours (By Player)</option>
           </select>
         </label>
-
         <label>Time Window:
           <select id="window" .configValue="window">
-            <option value="rolling" ${this._config.window !== 'calendar' ? 'selected' : ''}>Rolling (Past 7 Days)</option>
-            <option value="calendar" ${this._config.window === 'calendar' ? 'selected' : ''}>Calendar (Since Sunday)</option>
+            <option value="rolling" ${this._config.window !== "calendar" ? "selected" : ""}>Rolling (Past 7 Days)</option>
+            <option value="calendar" ${this._config.window === "calendar" ? "selected" : ""}>Calendar (Since Sunday)</option>
           </select>
         </label>
-
         <label>Player Filter Mode:
           <select id="mode" .configValue="mode">
-            <option value="all" ${this._config.mode === 'all' || !this._config.mode ? 'selected' : ''}>All Tracked Players</option>
-            <option value="single" ${this._config.mode === 'single' ? 'selected' : ''} ${isHoursMetric ? 'disabled hidden' : ''}>Single Player</option>
-            <option value="selected" ${this._config.mode === 'selected' ? 'selected' : ''}>Selected Players</option>
+            <option value="all" ${this._config.mode === "all" || !this._config.mode ? "selected" : ""}>All Tracked Players</option>
+            <option value="single" ${this._config.mode === "single" ? "selected" : ""} ${isHoursMetric ? "disabled hidden" : ""}>Single Player</option>
+            <option value="selected" ${this._config.mode === "selected" ? "selected" : ""}>Selected Players</option>
           </select>
         </label>
-
-        <div id="single-selector" style="display: ${this._config.mode === 'single' ? 'block' : 'none'}">
-          <label>Select Player: 
+        <div id="single-selector" style="display: ${this._config.mode === "single" ? "block" : "none"}">
+          <label>Select Player:
             <select id="single_entity" .configValue="single_entity">
-              <option value="" disabled ${!this._config.single_entity ? 'selected' : ''}>Select a player...</option>
+              <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player...</option>
               ${entityOptions}
             </select>
           </label>
         </div>
-
-        <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
+        <div id="selected-selector" style="display: ${this._config.mode === "selected" ? "block" : "none"}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.gaming_status_jack_master, ...">
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ""}" placeholder="sensor.gaming_status_jack_master, ...">
             <span class="helper-text">Enter a comma-separated list of exact entity IDs.</span>
           </label>
         </div>
-
         <hr>
-
         <label>Custom Colors (Advanced):
-          <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
+          <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ""}" placeholder="#ffbe0b, #fb5607, ...">
           <span class="helper-text">Leave blank to use default colors. For Platform Mode, leaving blank uses native brand colors. Override by entering a comma-separated list.</span>
         </label>
+      </div>`;
 
-      </div>
-    `;
-
-    this.shadowRoot.querySelectorAll('input, select').forEach(el => {
-      el.addEventListener('change', e => {
-        const field = e.target.getAttribute('.configValue');
+    this.shadowRoot.querySelectorAll("input, select").forEach(el => {
+      el.addEventListener("change", e => {
+        const field = e.target.getAttribute(".configValue");
         let value = e.target.value;
-        
-        if (field === 'metric' && value === 'hours' && this._config.mode === 'single') {
-          this._config = { ...this._config, mode: 'all' };
+        if (field === "metric" && value === "hours" && this._config.mode === "single") {
+          this._config = { ...this._config, mode: "all" };
         }
-
         this._config = { ...this._config, [field]: value };
-
-        this.dispatchEvent(new CustomEvent("config-changed", { 
-          detail: { config: this._config }, 
-          bubbles: true, 
-          composed: true 
+        this.dispatchEvent(new CustomEvent("config-changed", {
+          detail: { config: this._config },
+          bubbles: true,
+          composed: true,
         }));
-        
         this.render();
       });
     });
