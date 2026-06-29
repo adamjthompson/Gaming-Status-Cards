@@ -2171,9 +2171,11 @@ class GamingStatusGameChartCard extends HTMLElement {
         <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
           <div id="gc-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none;"></div>
           <div id="gc-content"></div>
-        </ha-card>`;
+        </ha-card>
+        <div id="gc-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:5px 9px;border-radius:5px;font-size:12px;white-space:nowrap;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`;
       this._titleEl = this.shadowRoot.getElementById("gc-title");
       this._contentEl = this.shadowRoot.getElementById("gc-content");
+      this._tooltipEl = this.shadowRoot.getElementById("gc-tooltip");
     }
     if (this._titleEl) {
       this._titleEl.textContent = this.config.title || "";
@@ -2293,7 +2295,7 @@ class GamingStatusGameChartCard extends HTMLElement {
         const h = d.games[games[gi]] || 0;
         if (h <= 0) continue;
         const bh = (h / niceMax) * areaH;
-        svg += `<rect x="${bx}" y="${(yBase - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="${colorOf(gi)}" rx="2"/>`;
+        svg += `<rect x="${bx}" y="${(yBase - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="${colorOf(gi)}" data-game="${this._esc(games[gi])}" data-hours="${h.toFixed(4)}"/>`;
         yBase -= bh;
       }
 
@@ -2319,6 +2321,27 @@ class GamingStatusGameChartCard extends HTMLElement {
 
     svg += "</svg>";
     this._contentEl.innerHTML = svg;
+
+    const tooltipEl = this._tooltipEl;
+    if (tooltipEl) {
+      this._contentEl.querySelectorAll("rect[data-game]").forEach(rect => {
+        rect.addEventListener("mouseenter", () => {
+          const totalMins = Math.round(parseFloat(rect.dataset.hours) * 60);
+          const h = Math.floor(totalMins / 60);
+          const m = totalMins % 60;
+          const display = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+          tooltipEl.textContent = `${rect.dataset.game}: ${display}`;
+          tooltipEl.style.display = "block";
+        });
+        rect.addEventListener("mousemove", (ev) => {
+          tooltipEl.style.left = `${ev.clientX + 14}px`;
+          tooltipEl.style.top = `${ev.clientY - 38}px`;
+        });
+        rect.addEventListener("mouseleave", () => {
+          tooltipEl.style.display = "none";
+        });
+      });
+    }
   }
 
   _niceMax(v) {
