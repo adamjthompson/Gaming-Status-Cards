@@ -577,7 +577,7 @@ class GamingSlideshowCard extends HTMLElement {
       transition_time: 1,
       show_avatars: true,
       auto_hide: true,
-      include_plex: false,
+      plex_source: "none",
       manual_entities: "",
       entities_pattern: "_master",
     };
@@ -593,7 +593,7 @@ class GamingSlideshowCard extends HTMLElement {
         config.transition_time !== undefined ? config.transition_time : 1,
       show_avatars: config.show_avatars !== false,
       auto_hide: config.auto_hide !== false,
-      include_plex: config.include_plex === true,
+      plex_source: config.plex_source || (config.include_plex ? "tautulli" : "none"),
       manual_entities: config.manual_entities || "",
       entities_pattern: config.entities_pattern || "_master",
       ...config,
@@ -630,7 +630,7 @@ class GamingSlideshowCard extends HTMLElement {
       }
     }
 
-    if (this.config.include_plex) {
+    if (this.config.plex_source === "tautulli") {
       for (const entityId in hass.states) {
         if (
           entityId.startsWith("sensor.plex_session_") &&
@@ -638,6 +638,17 @@ class GamingSlideshowCard extends HTMLElement {
         ) {
           if (!rawEntities.some((e) => e.entity_id === entityId)) {
             rawEntities.push(hass.states[entityId]);
+          }
+        }
+      }
+    } else if (this.config.plex_source === "plex") {
+      for (const entityId in hass.states) {
+        if (entityId.startsWith("media_player.plex_")) {
+          const plexState = hass.states[entityId].state;
+          if (["playing", "paused"].includes(plexState)) {
+            if (!rawEntities.some((e) => e.entity_id === entityId)) {
+              rawEntities.push(hass.states[entityId]);
+            }
           }
         }
       }
@@ -670,11 +681,32 @@ class GamingSlideshowCard extends HTMLElement {
     let active_items = [];
     entities.forEach((entity) => {
       const state = entity.state.toLowerCase();
+      const isPlexNative = entity.entity_id.startsWith("media_player.plex_");
       const isPlex =
         entity.entity_id.startsWith("sensor.plex_session_") &&
         entity.entity_id.includes("_tautulli");
 
-      if (isPlex) {
+      if (isPlexNative) {
+        if (["playing", "paused"].includes(state)) {
+          const attrs = entity.attributes;
+          const gameName = attrs.media_series_title || attrs.media_title;
+          const gameArt = attrs.entity_picture;
+          const username = attrs.username || "Plex";
+          const initial = username.charAt(0).toUpperCase();
+          const badge = { isImage: false, content: initial };
+
+          if (gameName && gameArt) {
+            let existing = active_items.find((i) => i.name === gameName);
+            if (existing) {
+              if (!existing.players.find((p) => p.content === badge.content)) {
+                existing.players.push(badge);
+              }
+            } else {
+              active_items.push({ name: gameName, art: gameArt, players: [badge] });
+            }
+          }
+        }
+      } else if (isPlex) {
         if (["playing", "paused", "buffering"].includes(state)) {
           const gameName =
             entity.attributes.full_title || entity.attributes.friendly_name;
@@ -925,9 +957,12 @@ class GamingSlideshowCardEditor extends HTMLElement {
           <label style="margin-top: 10px;"><input type="checkbox" .configValue="auto_hide" ${
             this._config.auto_hide !== false ? "checked" : ""
           }> Auto-hide card when empty</label>
-          <label style="margin-top: 10px;"><input type="checkbox" .configValue="include_plex" ${
-            this._config.include_plex === true ? "checked" : ""
-          }> Include Plex/Tautulli Sessions</label>
+          <div style="margin-top: 12px;">
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">Plex Integration</div>
+            <label style="margin-bottom: 4px;"><input type="radio" name="plex_source" value="none" ${this._config.plex_source !== "tautulli" && this._config.plex_source !== "plex" ? "checked" : ""}> None</label>
+            <label style="margin-bottom: 4px;"><input type="radio" name="plex_source" value="plex" ${this._config.plex_source === "plex" ? "checked" : ""}> Plex (media_player)</label>
+            <label><input type="radio" name="plex_source" value="tautulli" ${this._config.plex_source === "tautulli" ? "checked" : ""}> Tautulli (sensor)</label>
+          </div>
         </div><hr>
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
@@ -1016,6 +1051,22 @@ class GamingSlideshowCardEditor extends HTMLElement {
             ...this._config,
             [ev.target.getAttribute(".configValue")]: ev.target.checked,
           };
+          this.dispatchEvent(
+            new CustomEvent("config-changed", {
+              detail: { config: this._config },
+              bubbles: true,
+              composed: true,
+            })
+          );
+        });
+      });
+
+    this.shadowRoot
+      .querySelectorAll('input[name="plex_source"]')
+      .forEach((radio) => {
+        radio.addEventListener("change", (ev) => {
+          if (!this._config) return;
+          this._config = { ...this._config, plex_source: ev.target.value };
           this.dispatchEvent(
             new CustomEvent("config-changed", {
               detail: { config: this._config },
