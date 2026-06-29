@@ -1087,22 +1087,9 @@ class GamingStatusChartCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this.shadowRoot.innerHTML = `
-      <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
-        <div id="card-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none;"></div>
-        <div id="container" style="--ha-card-background: transparent; --ha-card-box-shadow: none; --ha-card-border-width: 0px; --ha-card-border-radius: 0px;"></div>
-      </ha-card>
-    `;
-    this.container = this.shadowRoot.getElementById("container");
-    this.titleEl = this.shadowRoot.getElementById("card-title");
-    
     this.defaultPalette = [
-      "rgb(255, 190, 11)",
-      "rgb(251, 86, 7)",
-      "rgb(255, 0, 110)",
-      "rgb(131, 56, 236)",
-      "rgb(58, 134, 255)",
-      "rgb(56, 176, 0)",
+      "#4e79a7", "#f28e2b", "#e15759", "#76b7b2",
+      "#59a14f", "#edc948", "#b07aa1", "#ff9da7",
     ];
   }
 
@@ -1116,6 +1103,7 @@ class GamingStatusChartCard extends HTMLElement {
       manual_entities: "",
       custom_colors: "",
       entities_pattern: "_master",
+      window: "rolling",
     };
   }
 
@@ -1125,172 +1113,224 @@ class GamingStatusChartCard extends HTMLElement {
       manual_entities: config.manual_entities || "",
       custom_colors: config.custom_colors || "",
       entities_pattern: config.entities_pattern || "_master",
+      window: config.window || "rolling",
       ...config,
     };
-    
-    if (this.titleEl) {
-        this.titleEl.innerText = this.config.title;
-        this.titleEl.style.display = this.config.title ? "block" : "none";
-    }
+    this._lastHash = "";
   }
 
   set hass(hass) {
     this._hass = hass;
     if (!this.config) return;
 
-    let targetEntities = [];
-    if (
-      this.config.manual_entities &&
-      this.config.manual_entities.trim() !== ""
-    ) {
-      const entityIds = this.config.manual_entities
-        .split(",")
-        .map((e) => e.trim());
-      targetEntities = entityIds.filter((id) => hass.states[id]);
+    let entityIds = [];
+    if (this.config.manual_entities && this.config.manual_entities.trim()) {
+      entityIds = this.config.manual_entities.split(",").map(e => e.trim()).filter(e => hass.states[e]);
     } else {
-      targetEntities = Object.keys(hass.states).filter(
-        (key) =>
-          (key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) &&
-          (key.endsWith(this.config.entities_pattern) || key.includes("anyone_gaming")) &&
-          hass.states[key].attributes.secondary !== undefined
+      entityIds = Object.keys(hass.states).filter(
+        k => (k.startsWith("sensor.gaming_status_") || k.startsWith("binary_sensor.gaming_status_")) &&
+             k.endsWith(this.config.entities_pattern) &&
+             hass.states[k].attributes.secondary !== undefined
       );
     }
-    targetEntities.sort();
+    entityIds.sort();
 
-    const rosterHash = targetEntities.join(",") + this.config.custom_colors;
-    if (this._lastRoster !== rosterHash) {
-      this._lastRoster = rosterHash;
-      this.renderChart(targetEntities, hass);
-    } else if (this.chartElement) {
-      this.chartElement.hass = hass;
-    }
+    const hash = entityIds.map(id => `${id}:${hass.states[id]?.last_updated}`).join(",")
+      + "|" + this.config.window
+      + "|" + this.config.custom_colors;
+
+    if (this._lastHash === hash) return;
+    this._lastHash = hash;
+    this._update(entityIds);
   }
 
-  renderChart(entities, hass) {
-    if (!this.chartElement) {
-      this.chartElement = document.createElement("apexcharts-card");
-      this.container.appendChild(this.chartElement);
-    }
-
-    let activePalette = this.defaultPalette;
-    if (this.config.custom_colors && this.config.custom_colors.trim() !== "") {
-      activePalette = this.config.custom_colors
-        .split(",")
-        .map((c) => c.trim())
-        .filter((c) => c);
-    }
-
-    let dynamicSeries = [];
-
-    entities.forEach((entityId, index) => {
-      const stateObj = hass.states[entityId];
-      if (!stateObj) return;
-
-      const friendlyName = (
-        stateObj.attributes.friendly_name || entityId
-      ).replace(/ Gaming Status| Master/gi, "");
-      const assignedColor = activePalette[index % activePalette.length];
-
-      // 1. The Header Series (Text Only)
-      dynamicSeries.push({
-        entity: entityId,
-        attribute: "rolling_weekly_hours",
-        name: friendlyName,
-        color: assignedColor,
-        show: { in_header: true, in_chart: false },
-      });
-
-      // 2. The Column Series (Graph Only)
-      const chartEntityId = entityId.replace("_master", "_chart");
-      
-      dynamicSeries.push({
-        entity: chartEntityId, 
-        name: friendlyName + " \u200B", 
-        type: "column",
-        color: assignedColor,
-        show: { in_header: false, in_chart: true },
-        extend_to: "now", 
-        group_by: { func: "last", duration: "1d", fill: "zero" } 
-      });
-    });
-
-    const apexConfig = {
-      type: "custom:apexcharts-card",
-      cache: false,
-      update_interval: "1m",
-      header: {
-        show: true,
-        show_states: true,
-        colorize_states: true,
-      },
-      graph_span: "8d",
-      span: { end: "day", offset: "+1d" }, 
-      apex_config: {
-        fill: {
-          opacity: 1,
-          type: "gradient",
-          gradient: {
-            type: "vertical",
-            shadeIntensity: 0,
-            opacityFrom: 1,
-            opacityTo: 0.5,
-            stops: [0, 95, 100],
-          },
-        },
-        chart: {
-          height: "350px",
-          parentHeightOffset: 10,
-          toolbar: { show: false },
-          zoom: { enabled: false },
-        },
-        grid: { padding: { left: 0, right: 0 } },
-        xaxis: {
-          type: "datetime",
-          labels: {
-            hideOverlappingLabels: false,
-            datetimeFormatter: { year: "dd", month: "dd", day: "dd" },
-            trim: false,
-          },
-          tooltip: { enabled: false },
-        },
-        legend: { show: false },
-        tooltip: { x: { format: "dd", show: false } },
-      },
-      series: dynamicSeries,
-      grid_options: { columns: 24, rows: "auto" },
-    };
-
-    if (customElements.get("apexcharts-card")) {
-      this.chartElement.setConfig(apexConfig);
-      this.chartElement.hass = hass;
-    } else {
+  _ensureShell() {
+    if (!this.shadowRoot.querySelector("ha-card")) {
       this.shadowRoot.innerHTML = `
         <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
-          <div style="background: rgba(255,165,0,0.2); padding: 12px; border-radius: 4px; border-left: 4px solid orange; color: var(--primary-text-color); font-family: var(--primary-font-family, sans-serif);">
-            <strong>Missing Dependency:</strong><br>The <code>apexcharts-card</code> must be installed via HACS to view this chart.
-          </div>
+          <div id="chart-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none;"></div>
+          <div id="chart-content"></div>
         </ha-card>
-      `;
+        <div id="chart-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:5px 9px;border-radius:5px;font-size:12px;white-space:nowrap;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`;
+      this._titleEl = this.shadowRoot.getElementById("chart-title");
+      this._contentEl = this.shadowRoot.getElementById("chart-content");
+      this._tooltipEl = this.shadowRoot.getElementById("chart-tooltip");
+    }
+    if (this._titleEl) {
+      this._titleEl.textContent = this.config.title || "";
+      this._titleEl.style.display = this.config.title ? "block" : "none";
     }
   }
 
-  getCardSize() {
-    return 6;
+  _update(entityIds) {
+    this._ensureShell();
+
+    const isCal = this.config.window === "calendar";
+    const now = new Date();
+    const days = [];
+    const daysBack = isCal ? now.getDay() : 6;
+    for (let i = daysBack; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000);
+      days.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
+    }
+
+    const weeklyAttr = isCal ? "total_weekly_hours" : "rolling_weekly_hours";
+    const playerMap = {};
+
+    for (const entityId of entityIds) {
+      const stateObj = this._hass.states[entityId];
+      if (!stateObj) continue;
+      const name = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status| Master/gi, "").trim();
+      const playHistory = stateObj.attributes.play_history || {};
+      const weeklyHours = parseFloat(stateObj.attributes[weeklyAttr]) || 0;
+
+      if (!playerMap[name]) playerMap[name] = { name, weeklyHours, daily: {} };
+
+      for (const day of days) {
+        const totalSecs = Object.values(playHistory[day] || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+        const h = totalSecs / 3600;
+        if (h > 0) playerMap[name].daily[day] = (playerMap[name].daily[day] || 0) + h;
+      }
+    }
+
+    const players = Object.values(playerMap).sort((a, b) => b.weeklyHours - a.weeklyHours);
+    const dailyData = days.map(day => {
+      const entry = { day, players: {} };
+      for (const p of players) {
+        if (p.daily[day]) entry.players[p.name] = p.daily[day];
+      }
+      return entry;
+    });
+
+    this._renderChart(dailyData, players);
   }
+
+  _renderChart(dailyData, players) {
+    if (!this._contentEl) return;
+
+    if (!players.length || dailyData.every(d => !Object.keys(d.players).length)) {
+      this._contentEl.innerHTML = `<div style="padding:20px;color:var(--secondary-text-color);font-style:italic;">No game activity found for this period.</div>`;
+      return;
+    }
+
+    const palette = this.config.custom_colors && this.config.custom_colors.trim()
+      ? this.config.custom_colors.split(",").map(c => c.trim()).filter(Boolean)
+      : this.defaultPalette;
+    const colorOf = (i) => palette[i % palette.length];
+
+    const VW = 560, padL = 42, padR = 12, padT = 10, padB = 50, areaH = 220;
+    const areaW = VW - padL - padR;
+
+    const legendCols = 2;
+    const legendRows = Math.ceil(players.length / legendCols);
+    const legendRowH = 22;
+    const legendH = legendRows * legendRowH + 12;
+    const totalH = padT + areaH + padB + legendH;
+
+    const maxDaily = Math.max(
+      ...dailyData.map(d => players.reduce((s, p) => s + (d.players[p.name] || 0), 0)),
+      0.25
+    );
+    const niceMax = this._niceMax(maxDaily);
+    const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => +(f * niceMax).toFixed(4));
+
+    const n = dailyData.length || 1;
+    const slotW = areaW / n;
+    const barW = slotW * 0.65;
+    const barOff = (slotW - barW) / 2;
+    const fy = (h) => padT + areaH - (h / niceMax) * areaH;
+
+    let svg = `<svg viewBox="0 0 ${VW} ${totalH}" style="width:100%;height:auto;display:block;" xmlns="http://www.w3.org/2000/svg">`;
+    svg += `<style>text{font-family:var(--primary-font-family,sans-serif)}</style>`;
+
+    for (const tick of yTicks) {
+      const y = fy(tick).toFixed(1);
+      svg += `<line x1="${padL}" y1="${y}" x2="${VW - padR}" y2="${y}" stroke="rgba(128,128,128,0.15)" stroke-width="1"/>`;
+      const label = tick === 0 ? "0" : tick >= 1 ? `${Math.round(tick)}h` : `${Math.round(tick * 60)}m`;
+      svg += `<text x="${padL - 5}" y="${(+y + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--secondary-text-color,#888)">${label}</text>`;
+    }
+
+    svg += `<line x1="${padL}" y1="${(padT + areaH).toFixed(1)}" x2="${VW - padR}" y2="${(padT + areaH).toFixed(1)}" stroke="rgba(128,128,128,0.3)" stroke-width="1"/>`;
+
+    dailyData.forEach((d, i) => {
+      const slotX = padL + i * slotW;
+      const bx = (slotX + barOff).toFixed(1);
+      const bw = barW.toFixed(1);
+      let yBase = padT + areaH;
+
+      for (let pi = players.length - 1; pi >= 0; pi--) {
+        const h = d.players[players[pi].name] || 0;
+        if (h <= 0) continue;
+        const bh = (h / niceMax) * areaH;
+        svg += `<rect x="${bx}" y="${(yBase - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="${colorOf(pi)}" data-player="${this._esc(players[pi].name)}" data-hours="${h.toFixed(4)}"/>`;
+        yBase -= bh;
+      }
+
+      const dt = new Date(d.day + "T12:00:00");
+      const cx = (slotX + slotW / 2).toFixed(1);
+      svg += `<text x="${cx}" y="${(padT + areaH + 16).toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--secondary-text-color,#888)">${dt.toLocaleDateString(undefined, { weekday: "short" })}</text>`;
+      svg += `<text x="${cx}" y="${(padT + areaH + 30).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--secondary-text-color,#666)">${dt.getMonth() + 1}/${dt.getDate()}</text>`;
+    });
+
+    const legY0 = padT + areaH + padB + 2;
+    const colW = areaW / legendCols;
+    players.forEach((p, i) => {
+      const col = i % legendCols;
+      const row = Math.floor(i / legendCols);
+      const lx = padL + col * colW;
+      const ly = legY0 + row * legendRowH;
+      svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2"/>`;
+      const hoursStr = p.weeklyHours > 0 ? ` \u2014 ${p.weeklyHours}h` : "";
+      const fullLabel = p.name + hoursStr;
+      const maxCh = Math.floor(colW / 7) - 2;
+      const label = fullLabel.length > maxCh ? fullLabel.slice(0, maxCh - 1) + "\u2026" : fullLabel;
+      svg += `<text x="${lx + 17}" y="${ly + 10}" font-size="12" fill="var(--primary-text-color,#ddd)">${this._esc(label)}</text>`;
+    });
+
+    svg += "</svg>";
+    this._contentEl.innerHTML = svg;
+
+    const tooltipEl = this._tooltipEl;
+    if (tooltipEl) {
+      this._contentEl.querySelectorAll("rect[data-player]").forEach(rect => {
+        rect.addEventListener("mouseenter", () => {
+          const totalMins = Math.round(parseFloat(rect.dataset.hours) * 60);
+          const h = Math.floor(totalMins / 60);
+          const m = totalMins % 60;
+          const display = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+          tooltipEl.textContent = `${rect.dataset.player}: ${display}`;
+          tooltipEl.style.display = "block";
+        });
+        rect.addEventListener("mousemove", (ev) => {
+          tooltipEl.style.left = `${ev.clientX + 14}px`;
+          tooltipEl.style.top = `${ev.clientY - 38}px`;
+        });
+        rect.addEventListener("mouseleave", () => {
+          tooltipEl.style.display = "none";
+        });
+      });
+    }
+  }
+
+  _niceMax(v) {
+    if (v <= 0) return 1;
+    const mag = Math.pow(10, Math.floor(Math.log10(v)));
+    return [1, 2, 3, 4, 5, 6, 8, 10].map(m => m * mag).find(c => c >= v) || v * 1.25;
+  }
+
+  _esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  getCardSize() { return 5; }
 }
 
 class GamingStatusChartEditor extends HTMLElement {
-  constructor() {
-    super();
-    this.attachShadow({ mode: "open" });
-  }
-  setConfig(config) {
-    this._config = config;
-    this.render();
-  }
-  set hass(hass) {
-    this._hass = hass;
-  }
+  constructor() { super(); this.attachShadow({ mode: "open" }); }
+
+  setConfig(config) { this._config = config; this.render(); }
+
+  set hass(hass) { this._hass = hass; }
 
   render() {
     if (!this._config) return;
@@ -1298,88 +1338,49 @@ class GamingStatusChartEditor extends HTMLElement {
       <style>
         .editor-container { display: flex; flex-direction: column; gap: 20px; color: var(--primary-text-color); }
         .section-title { font-weight: 600; margin-bottom: 8px; }
-        input[type="text"] { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
-        input:focus { outline: none; border-color: var(--primary-color); }
+        input[type="text"], select { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
+        input[type="text"]:focus, select:focus { outline: none; border-color: var(--primary-color); }
         hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
         .helper-text { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 8px; line-height: 1.4; }
-        .warning { background: rgba(255,165,0,0.2); padding: 10px; border-radius: 4px; border-left: 4px solid orange; font-size: 13px; }
       </style>
       <div class="editor-container">
-        
-        <div class="warning">
-          <strong>Note:</strong> This wrapper card requires the popular <code>apexcharts-card</code> to be installed via HACS in order to render the graphical data.
-        </div>
-
         <div>
           <div class="section-title">Chart Title (Optional)</div>
-          <input type="text" id="title-input-chart" .configValue="title" value="${
-            this._config.title || ""
-          }">
+          <input type="text" id="title" value="${this._esc(this._config.title || "")}">
         </div>
-
         <hr>
-
+        <div>
+          <div class="section-title">Time Window</div>
+          <select id="window">
+            <option value="rolling" ${this._config.window !== "calendar" ? "selected" : ""}>Rolling (Past 7 Days)</option>
+            <option value="calendar" ${this._config.window === "calendar" ? "selected" : ""}>Calendar (Since Sunday)</option>
+          </select>
+        </div>
+        <hr>
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
           <div class="helper-text">Leave blank to automatically chart all sensors, or restrict by entering comma-separated IDs.</div>
-          <input type="text" id="manual-entities-input-chart" .configValue="manual_entities" value="${
-            this._config.manual_entities || ""
-          }" placeholder="sensor.gaming_status_jack_master, ...">
+          <input type="text" id="manual_entities" value="${this._esc(this._config.manual_entities || "")}" placeholder="sensor.gaming_status_jack_master, ...">
         </div>
-
         <hr>
-
         <div>
           <div class="section-title">Custom Colors (Advanced)</div>
-          <div class="helper-text">Leave blank to use the default vibrant palette. Override by entering a comma-separated list of colors (Hex, RGB, or names like <code>red, #00FF00, rgb(0,0,255)</code>).</div>
-          <input type="text" id="custom-colors-input-chart" .configValue="custom_colors" value="${
-            this._config.custom_colors || ""
-          }" placeholder="#ffbe0b, #fb5607, ...">
+          <div class="helper-text">Leave blank to use the default palette. Override with comma-separated colors (hex, RGB, or names like <code>red, #00FF00, rgb(0,0,255)</code>).</div>
+          <input type="text" id="custom_colors" value="${this._esc(this._config.custom_colors || "")}" placeholder="#4e79a7, #f28e2b, ...">
         </div>
+      </div>`;
 
-      </div>
-    `;
-
-    const titleInput = this.shadowRoot.getElementById("title-input-chart");
-    titleInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, title: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    const manualInput = this.shadowRoot.getElementById(
-      "manual-entities-input-chart"
-    );
-    manualInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, manual_entities: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
-
-    const colorInput = this.shadowRoot.getElementById(
-      "custom-colors-input-chart"
-    );
-    colorInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, custom_colors: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
+    ["title", "window", "manual_entities", "custom_colors"].forEach(id => {
+      const el = this.shadowRoot.getElementById(id);
+      if (!el) return;
+      el.addEventListener("change", ev => {
+        this._config = { ...this._config, [id]: ev.target.value };
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+      });
     });
   }
+
+  _esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 }
 
 // ====================================================================
@@ -2481,7 +2482,7 @@ window.customCards.push({
   name: "Gaming Status - Chart",
   preview: true,
   description:
-    "An automated wrapper that builds a historical gaming ApexChart.",
+    "A stacked bar chart showing daily gaming hours per player across your household.",
 });
 
 window.customCards.push({
