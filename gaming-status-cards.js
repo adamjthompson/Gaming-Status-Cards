@@ -1868,12 +1868,20 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     let finalData = [];
 
     const isCal = this.config.window === "calendar";
+
+    const getBreakdown = (attrs) => isCal
+      ? (attrs.calendar_weekly_breakdown || attrs.total_weekly_breakdown || attrs.weekly_breakdown || attrs.weekly_game_breakdown || {})
+      : (attrs.rolling_weekly_breakdown || attrs.weekly_breakdown || attrs.weekly_game_breakdown || {});
+
+    const getLongest = (attrs) => isCal
+      ? (attrs.calendar_longest_session || attrs.total_longest_session || attrs.longest_session || "None")
+      : (attrs.rolling_longest_session || attrs.longest_session || "None");
+
     if (this.config.metric === "game_hours") {
       let gamesMap = {};
       for (const entityId of entityIdsToProcess) {
         const stateObj = this._hass.states[entityId];
-        const attrTarget = isCal ? "calendar_weekly_breakdown" : "rolling_weekly_breakdown";
-        const breakdown = stateObj.attributes[attrTarget] || stateObj.attributes.weekly_breakdown || stateObj.attributes.weekly_game_breakdown || {};
+        const breakdown = getBreakdown(stateObj.attributes);
         for (const [game, timeStr] of Object.entries(breakdown)) {
           gamesMap[game] = (gamesMap[game] || 0) + this.extractMinutes(timeStr);
         }
@@ -1893,16 +1901,14 @@ class GamingStatusLeaderboardCard extends HTMLElement {
         if (this.config.metric === "hours") {
           const hours = parseFloat(stateObj.attributes[isCal ? "total_weekly_hours" : "rolling_weekly_hours"]) || 0;
           finalData.push({ name: friendlyName, value: hours, displayValue: `${hours}h` });
-        } 
+        }
         else if (this.config.metric === "games") {
-          const attrTarget = isCal ? "calendar_weekly_breakdown" : "rolling_weekly_breakdown";
-          const breakdown = stateObj.attributes[attrTarget] || stateObj.attributes.weekly_breakdown || stateObj.attributes.weekly_game_breakdown || {};
+          const breakdown = getBreakdown(stateObj.attributes);
           const count = Object.keys(breakdown).length;
           finalData.push({ name: friendlyName, value: count, displayValue: `${count}` });
-        } 
+        }
         else if (this.config.metric === "longest") {
-          const attrTarget = isCal ? "calendar_longest_session" : "rolling_longest_session";
-          const longestStr = stateObj.attributes[attrTarget] || stateObj.attributes.longest_session || "None";
+          const longestStr = getLongest(stateObj.attributes);
           const mins = this.extractMinutes(longestStr);
           finalData.push({ name: friendlyName, value: mins, displayValue: String(longestStr) });
         }
