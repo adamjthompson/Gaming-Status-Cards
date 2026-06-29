@@ -1105,6 +1105,7 @@ class GamingStatusChartCard extends HTMLElement {
     return {
       title: "",
       mode: "all",
+      single_entity: "",
       selected_entities: "",
       custom_colors: "",
       entities_pattern: "_master",
@@ -1119,6 +1120,7 @@ class GamingStatusChartCard extends HTMLElement {
       ...config,
       title: config.title || "",
       mode,
+      single_entity: config.single_entity || "",
       selected_entities: config.selected_entities || (mode === "selected" ? config.manual_entities || "" : ""),
       manual_entities: config.manual_entities || "",
       custom_colors: config.custom_colors || "",
@@ -1133,7 +1135,9 @@ class GamingStatusChartCard extends HTMLElement {
     if (!this.config) return;
 
     let entityIds = [];
-    if (this.config.mode === "selected" && this.config.selected_entities) {
+    if (this.config.mode === "single" && this.config.single_entity) {
+      if (hass.states[this.config.single_entity]) entityIds.push(this.config.single_entity);
+    } else if (this.config.mode === "selected" && this.config.selected_entities) {
       entityIds = this.config.selected_entities.split(",").map(e => e.trim()).filter(e => hass.states[e]);
     } else {
       entityIds = Object.keys(hass.states).filter(
@@ -1246,10 +1250,10 @@ class GamingStatusChartCard extends HTMLElement {
     const padL = 42, padR = 12, padT = 8, padB = 50, areaH = 220;
     const areaW = VW - padL - padR;
 
+    const isSingle = players.length === 1;
     const legendCols = 2;
-    const legendRows = Math.ceil(players.length / legendCols);
     const legendRowH = 22;
-    const legendH = legendRows * legendRowH + 12;
+    const legendH = isSingle ? 28 : (Math.ceil(players.length / legendCols) * legendRowH + 12);
     const totalH = padT + areaH + padB + legendH;
 
     const maxDaily = Math.max(
@@ -1298,19 +1302,26 @@ class GamingStatusChartCard extends HTMLElement {
     });
 
     const legY0 = padT + areaH + padB + 2;
-    const colW = areaW / legendCols;
-    players.forEach((p, i) => {
-      const col = i % legendCols;
-      const row = Math.floor(i / legendCols);
-      const lx = padL + col * colW;
-      const ly = legY0 + row * legendRowH;
-      svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2"/>`;
-      const hoursStr = p.weeklyHours > 0 ? ` (${p.weeklyHours.toFixed(2)}h)` : "";
-      const fullLabel = p.name + hoursStr;
-      const maxCh = Math.floor(colW / 7) - 2;
-      const label = fullLabel.length > maxCh ? fullLabel.slice(0, maxCh - 1) + "\u2026" : fullLabel;
-      svg += `<text x="${lx + 17}" y="${ly + 11}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(label)}</text>`;
-    });
+    if (isSingle) {
+      const p = players[0];
+      if (p.weeklyHours > 0) {
+        svg += `<text x="${(padL + areaW / 2).toFixed(1)}" y="${legY0 + 18}" text-anchor="middle" font-size="14" fill="var(--primary-text-color,#ddd)">Total: ${p.weeklyHours.toFixed(2)}h</text>`;
+      }
+    } else {
+      const colW = areaW / legendCols;
+      players.forEach((p, i) => {
+        const col = i % legendCols;
+        const row = Math.floor(i / legendCols);
+        const lx = padL + col * colW;
+        const ly = legY0 + row * legendRowH;
+        svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2"/>`;
+        const hoursStr = p.weeklyHours > 0 ? ` (${p.weeklyHours.toFixed(2)}h)` : "";
+        const fullLabel = p.name + hoursStr;
+        const maxCh = Math.floor(colW / 7) - 2;
+        const label = fullLabel.length > maxCh ? fullLabel.slice(0, maxCh - 1) + "\u2026" : fullLabel;
+        svg += `<text x="${lx + 17}" y="${ly + 11}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(label)}</text>`;
+      });
+    }
 
     svg += "</svg>";
     this._contentEl.innerHTML = svg;
@@ -1323,7 +1334,7 @@ class GamingStatusChartCard extends HTMLElement {
           const h = Math.floor(totalMins / 60);
           const m = totalMins % 60;
           const display = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
-          tooltipEl.textContent = `${rect.dataset.player}: ${display}`;
+          tooltipEl.textContent = isSingle ? display : `${rect.dataset.player}: ${display}`;
           tooltipEl.style.display = "block";
         });
         rect.addEventListener("mousemove", (ev) => {
@@ -1355,11 +1366,23 @@ class GamingStatusChartEditor extends HTMLElement {
 
   setConfig(config) { this._config = config; this.render(); }
 
-  set hass(hass) { this._hass = hass; }
+  set hass(hass) {
+    const first = !this._hass;
+    this._hass = hass;
+    if (first) this.render();
+  }
 
   render() {
     if (!this._config) return;
-    const isSelected = this._config.mode === "selected";
+    const mode = this._config.mode || "all";
+    const targetSuffix = this._config.entities_pattern || "_master";
+    const entityOptions = this._hass ? Object.keys(this._hass.states)
+      .filter(k => k.endsWith(targetSuffix) && this._hass.states[k].attributes.secondary !== undefined)
+      .map(k => {
+        const name = (this._hass.states[k].attributes.friendly_name || k).replace(/ Gaming Status| Master/gi, "").trim();
+        return `<option value="${k}" ${this._config.single_entity === k ? "selected" : ""}>${this._esc(name)}</option>`;
+      }).join("") : "";
+
     this.shadowRoot.innerHTML = `
       <style>
         .editor-container { display: flex; flex-direction: column; gap: 20px; color: var(--primary-text-color); }
@@ -1386,11 +1409,20 @@ class GamingStatusChartEditor extends HTMLElement {
         <div>
           <div class="section-title">Player Filter Mode</div>
           <select id="mode">
-            <option value="all" ${!isSelected ? "selected" : ""}>All Tracked Players</option>
-            <option value="selected" ${isSelected ? "selected" : ""}>Selected Players</option>
+            <option value="all" ${mode === "all" ? "selected" : ""}>All Tracked Players</option>
+            <option value="single" ${mode === "single" ? "selected" : ""}>Single Player</option>
+            <option value="selected" ${mode === "selected" ? "selected" : ""}>Selected Players</option>
           </select>
         </div>
-        ${isSelected ? `
+        ${mode === "single" ? `
+        <div>
+          <div class="section-title">Select Player</div>
+          <select id="single_entity">
+            <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player…</option>
+            ${entityOptions}
+          </select>
+        </div>` : ""}
+        ${mode === "selected" ? `
         <div>
           <div class="section-title">Selected Entities</div>
           <div class="helper-text">Comma-separated entity IDs to include in the chart.</div>
@@ -1404,7 +1436,7 @@ class GamingStatusChartEditor extends HTMLElement {
         </div>
       </div>`;
 
-    ["title", "window", "mode", "selected_entities", "custom_colors"].forEach(id => {
+    ["title", "window", "mode", "single_entity", "selected_entities", "custom_colors"].forEach(id => {
       const el = this.shadowRoot.getElementById(id);
       if (!el) return;
       el.addEventListener("change", ev => {
