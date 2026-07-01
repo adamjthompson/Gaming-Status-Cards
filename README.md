@@ -87,6 +87,7 @@ A native SVG stacked bar chart for visualizing platform usage across your squad.
 * **Player Filter Mode:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Custom Colors:** Leave blank to use native platform brand colors (Xbox green, PlayStation blue, PC teal). Override with a comma-separated list of CSS colors.
 * **Show Legend:** Toggle the platform legend below the bar on or off. The legend automatically wraps to multiple rows on narrow screens. Defaults to on.
+* **Show Total:** Toggle the grand total playtime line below the legend on or off. Defaults to on.
 
 **Platform Split**
 ![Donut Card Screenshot](images/donut.png)
@@ -191,6 +192,7 @@ single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated sensor names (used when mode is 'selected')
 custom_colors: " " # Override the default colors (Xbox, PlayStation, PC)
 show_legend: true # Set to false to hide the platform legend; legend wraps automatically on narrow screens when shown
+show_total: true # Set to false to hide the grand total playtime line
 ```
 
 **The Leaderboard Card:**

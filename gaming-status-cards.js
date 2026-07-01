@@ -1487,13 +1487,24 @@ class GamingStatusChartEditor extends HTMLElement {
           <div class="helper-text">Leave blank to use the default palette. Override with comma-separated colors (hex, RGB, or names like <code>red, #00FF00, rgb(0,0,255)</code>).</div>
           <input type="text" id="custom_colors" value="${this._esc(this._config.custom_colors || "")}" placeholder="rgb(255,190,11), rgb(58,134,255), ...">
         </div>
+        <hr>
+        <div>
+          <div class="section-title">Show Legend</div>
+          <div class="helper-text">Hide the player legend to give more vertical space to the chart.</div>
+          <select id="show_legend">
+            <option value="true" ${this._config.show_legend !== false && this._config.show_legend !== "false" ? "selected" : ""}>Show Legend</option>
+            <option value="false" ${this._config.show_legend === false || this._config.show_legend === "false" ? "selected" : ""}>Hide Legend</option>
+          </select>
+        </div>
       </div>`;
 
-    ["title", "window", "mode", "single_entity", "selected_entities", "custom_colors"].forEach(id => {
+    const BOOL_FIELDS_CHART = ["show_legend"];
+    ["title", "window", "mode", "single_entity", "selected_entities", "custom_colors", "show_legend"].forEach(id => {
       const el = this.shadowRoot.getElementById(id);
       if (!el) return;
       el.addEventListener("change", ev => {
-        this._config = { ...this._config, [id]: ev.target.value };
+        const value = BOOL_FIELDS_CHART.includes(id) ? ev.target.value !== "false" : ev.target.value;
+        this._config = { ...this._config, [id]: value };
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
         this.render();
       });
@@ -1665,7 +1676,8 @@ class GamingStatusDonutCard extends HTMLElement {
       ? Math.max(1, Math.min(platforms.length, 3, Math.floor(barAreaW / estPlatItemW)))
       : 1;
     const platLegendRows = showLegend ? Math.ceil(platforms.length / platLegendCols) : 0;
-    const totalH = padT + barH + barGap + platLegendRows * legendRowH + totalLineH + padB;
+    const showTotal = this.config.show_total !== false && this.config.show_total !== "false";
+    const totalH = padT + barH + barGap + platLegendRows * legendRowH + (showTotal ? totalLineH : 0) + padB;
     const fmt = h => h >= 1 ? `${h.toFixed(1)}h` : `${Math.round(h * 60)}m`;
 
     let svg = `<svg width="${VW}" height="${totalH}" style="display:block;" xmlns="http://www.w3.org/2000/svg">`;
@@ -1697,7 +1709,9 @@ class GamingStatusDonutCard extends HTMLElement {
     }
 
     // Total line
-    svg += `<text x="${(padL + barAreaW / 2).toFixed(1)}" y="${legY + platLegendRows * legendRowH + 14}" text-anchor="middle" font-size="14" fill="var(--secondary-text-color,#888)">Total: ${fmt(grandTotal)}</text>`;
+    if (showTotal) {
+      svg += `<text x="${(padL + barAreaW / 2).toFixed(1)}" y="${legY + platLegendRows * legendRowH + 14}" text-anchor="middle" font-size="14" fill="var(--secondary-text-color,#888)">Total: ${fmt(grandTotal)}</text>`;
+    }
 
     svg += "</svg>";
     this._contentEl.innerHTML = svg;
@@ -1796,12 +1810,29 @@ class GamingStatusDonutEditor extends HTMLElement {
           <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ""}" placeholder="rgb(11,124,16), rgb(0,48,135), rgb(2,173,239)">
           <span class="helper-text">Leave blank for default platform colors (Xbox / PlayStation / PC).</span>
         </label>
+        <hr>
+        <label>Show Legend:
+          <select id="show_legend" .configValue="show_legend">
+            <option value="true" ${this._config.show_legend !== false && this._config.show_legend !== "false" ? "selected" : ""}>Show Legend</option>
+            <option value="false" ${this._config.show_legend === false || this._config.show_legend === "false" ? "selected" : ""}>Hide Legend</option>
+          </select>
+          <span class="helper-text">Platform legend below the bar. Wraps to multiple rows on narrow screens.</span>
+        </label>
+        <label>Show Total:
+          <select id="show_total" .configValue="show_total">
+            <option value="true" ${this._config.show_total !== false && this._config.show_total !== "false" ? "selected" : ""}>Show Total</option>
+            <option value="false" ${this._config.show_total === false || this._config.show_total === "false" ? "selected" : ""}>Hide Total</option>
+          </select>
+          <span class="helper-text">Grand total playtime line below the legend.</span>
+        </label>
       </div>`;
 
+    const BOOL_FIELDS_DONUT = ["show_legend", "show_total"];
     this.shadowRoot.querySelectorAll("input, select").forEach(el => {
       el.addEventListener("change", e => {
         const field = e.target.getAttribute(".configValue");
-        this._config = { ...this._config, [field]: e.target.value };
+        const value = BOOL_FIELDS_DONUT.includes(field) ? e.target.value !== "false" : e.target.value;
+        this._config = { ...this._config, [field]: value };
         this.dispatchEvent(new CustomEvent("config-changed", {
           detail: { config: this._config },
           bubbles: true,
@@ -2585,13 +2616,23 @@ class GamingStatusGameChartEditor extends HTMLElement {
           <input type="text" id="custom_colors" value="${this._esc(this._config.custom_colors || "")}" placeholder="#3a86ff, #ffbe0b, …">
           <span class="helper-text">Leave blank for the default palette. Comma-separated colors.</span>
         </label>
+        <hr>
+        <label>Show Legend:
+          <select id="show_legend">
+            <option value="true" ${this._config.show_legend !== false && this._config.show_legend !== "false" ? "selected" : ""}>Show Legend</option>
+            <option value="false" ${this._config.show_legend === false || this._config.show_legend === "false" ? "selected" : ""}>Hide Legend</option>
+          </select>
+          <span class="helper-text">Hide the game title legend to give more vertical space to the chart.</span>
+        </label>
       </div>`;
 
-    ["title", "mode", "entity", "selected_entities", "window", "max_games", "custom_colors"].forEach(id => {
+    const BOOL_FIELDS_GAME = ["show_legend"];
+    ["title", "mode", "entity", "selected_entities", "window", "max_games", "custom_colors", "show_legend"].forEach(id => {
       const el = this.shadowRoot.getElementById(id);
       if (!el) return;
       el.addEventListener("change", ev => {
-        this._config = { ...this._config, [id]: ev.target.value };
+        const value = BOOL_FIELDS_GAME.includes(id) ? ev.target.value !== "false" : ev.target.value;
+        this._config = { ...this._config, [id]: value };
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
         this.render();
       });
