@@ -2397,7 +2397,7 @@ class GamingStatusGameChartCard extends HTMLElement {
     const longestCh = games.length > 0 ? Math.max(...games.map(g => g.length)) : 10;
     const estItemW = Math.max(80, 17 + longestCh * 7);
     const legendCols = showLegend
-      ? Math.max(1, Math.min(games.length, 3, Math.floor(areaW / estItemW)))
+      ? Math.max(1, Math.min(games.length, 4, Math.floor(areaW / estItemW)))
       : 1;
     const legendRows = showLegend ? Math.ceil(games.length / legendCols) : 0;
     const legendH = showLegend ? legendRows * legendRowH + 12 : 0;
