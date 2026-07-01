@@ -71,6 +71,7 @@ A native SVG stacked bar chart showing each player's daily gaming hours across a
 * **Time Window:** Choose the time period to display — **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**.
 * **Player Filter Mode:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Custom Colors:** Override the default vibrant palette with a comma-separated list of CSS colors (e.g., `#ffbe0b, rgb(251, 86, 7), blue`).
+* **Show Legend:** Toggle the player legend below the chart on or off. Hiding it reclaims the legend area and gives the chart more vertical space. Defaults to on.
 
 **Weekly Stats Chart**
 ![Playtime Stats Card Screenshot](images/graph.png)
@@ -85,6 +86,7 @@ A native SVG stacked bar chart for visualizing platform usage across your squad.
 * **Time Window:** Choose the time period to display — **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**.
 * **Player Filter Mode:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Custom Colors:** Leave blank to use native platform brand colors (Xbox green, PlayStation blue, PC teal). Override with a comma-separated list of CSS colors.
+* **Show Legend:** Toggle the platform legend below the bar on or off. The legend automatically wraps to multiple rows on narrow screens. Defaults to on.
 
 **Platform Split**
 ![Donut Card Screenshot](images/donut.png)
@@ -119,6 +121,7 @@ A native SVG stacked bar chart showing daily gaming hours broken down by individ
 * **Time Window:** Choose the time period to display — **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**.
 * **Max Games to Display:** Ranks games by total hours and shows the top N titles (default: 6, max: 20).
 * **Custom Colors:** Override the default palette with a comma-separated list of CSS colors.
+* **Show Legend:** Toggle the game title legend below the chart on or off. Column count adjusts automatically based on available width and title lengths. Defaults to on.
 
 ---
 
@@ -175,6 +178,7 @@ mode: all # Options: all, single, selected
 single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated sensor names (used when mode is 'selected')
 custom_colors: " " # Override the default colors
+show_legend: true # Set to false to hide the player legend and give more space to the chart
 ```
 
 **The Platforms Card:**
@@ -186,6 +190,7 @@ mode: all # Options: all, single, selected
 single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated sensor names (used when mode is 'selected')
 custom_colors: " " # Override the default colors (Xbox, PlayStation, PC)
+show_legend: true # Set to false to hide the platform legend; legend wraps automatically on narrow screens when shown
 ```
 
 **The Leaderboard Card:**
@@ -211,4 +216,5 @@ entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated sensor names (used when mode is 'selected')
 max_games: 6 # Number of top games to display
 custom_colors: " " # Override the default colors
+show_legend: true # Set to false to hide the game title legend; column count adapts to available width when shown
 ```

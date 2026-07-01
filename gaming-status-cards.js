@@ -1251,9 +1251,24 @@ class GamingStatusChartCard extends HTMLElement {
     const areaW = VW - padL - padR;
 
     const isSingle = players.length === 1;
-    const legendCols = 2;
+    const showLegend = this.config.show_legend !== false;
     const legendRowH = 22;
-    const legendH = isSingle ? 28 : (Math.ceil(players.length / legendCols) * legendRowH + 12);
+    let legendCols, legendH;
+    if (!showLegend) {
+      legendCols = 1;
+      legendH = 0;
+    } else if (isSingle) {
+      legendCols = 1;
+      legendH = 28;
+    } else {
+      const longestCh = players.length > 0 ? Math.max(...players.map(p => {
+        const h = p.weeklyHours > 0 ? ` (${p.weeklyHours.toFixed(2)}h)` : "";
+        return (p.name + h).length;
+      })) : 10;
+      const estItemW = Math.max(80, 17 + longestCh * 7);
+      legendCols = Math.max(1, Math.min(players.length, 4, Math.floor(areaW / estItemW)));
+      legendH = Math.ceil(players.length / legendCols) * legendRowH + 12;
+    }
     const totalH = padT + areaH + padB + legendH;
 
     const maxDaily = Math.max(
@@ -1302,26 +1317,28 @@ class GamingStatusChartCard extends HTMLElement {
     });
 
     const legY0 = padT + areaH + padB + 2;
-    if (isSingle) {
-      const p = players[0];
-      if (p.weeklyHours > 0) {
-        svg += `<text x="${(padL + areaW / 2).toFixed(1)}" y="${legY0 + 18}" text-anchor="middle" font-size="14" fill="var(--primary-text-color,#ddd)">Total: ${p.weeklyHours.toFixed(2)}h</text>`;
+    if (showLegend) {
+      if (isSingle) {
+        const p = players[0];
+        if (p.weeklyHours > 0) {
+          svg += `<text x="${(padL + areaW / 2).toFixed(1)}" y="${legY0 + 18}" text-anchor="middle" font-size="14" fill="var(--primary-text-color,#ddd)">Total: ${p.weeklyHours.toFixed(2)}h</text>`;
+        }
+      } else {
+        const colW = areaW / legendCols;
+        players.forEach((p, i) => {
+          const col = i % legendCols;
+          const row = Math.floor(i / legendCols);
+          const lx = padL + col * colW;
+          const ly = legY0 + row * legendRowH;
+          svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2" style="transition:opacity 0.2s ease" data-swatch-player="${this._esc(p.name)}"/>`;
+          const hoursStr = p.weeklyHours > 0 ? ` (${p.weeklyHours.toFixed(2)}h)` : "";
+          const fullLabel = p.name + hoursStr;
+          const maxCh = Math.floor(colW / 7) - 2;
+          const label = fullLabel.length > maxCh ? fullLabel.slice(0, maxCh - 1) + "\u2026" : fullLabel;
+          svg += `<text x="${lx + 17}" y="${ly + 11}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(label)}</text>`;
+          svg += `<rect x="${lx}" y="${ly - 2}" width="${colW - 4}" height="${legendRowH}" fill="transparent" style="cursor:pointer" data-legend-player="${this._esc(p.name)}"/>`;
+        });
       }
-    } else {
-      const colW = areaW / legendCols;
-      players.forEach((p, i) => {
-        const col = i % legendCols;
-        const row = Math.floor(i / legendCols);
-        const lx = padL + col * colW;
-        const ly = legY0 + row * legendRowH;
-        svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2" style="transition:opacity 0.2s ease" data-swatch-player="${this._esc(p.name)}"/>`;
-        const hoursStr = p.weeklyHours > 0 ? ` (${p.weeklyHours.toFixed(2)}h)` : "";
-        const fullLabel = p.name + hoursStr;
-        const maxCh = Math.floor(colW / 7) - 2;
-        const label = fullLabel.length > maxCh ? fullLabel.slice(0, maxCh - 1) + "\u2026" : fullLabel;
-        svg += `<text x="${lx + 17}" y="${ly + 11}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(label)}</text>`;
-        svg += `<rect x="${lx}" y="${ly - 2}" width="${colW - 4}" height="${legendRowH}" fill="transparent" style="cursor:pointer" data-legend-player="${this._esc(p.name)}"/>`;
-      });
     }
 
     svg += "</svg>";
@@ -1639,7 +1656,16 @@ class GamingStatusDonutCard extends HTMLElement {
     const barH = 44, padT = 8;
     const barGap = 14;
     const legendRowH = 24, totalLineH = 24, padB = 2;
-    const totalH = padT + barH + barGap + legendRowH + totalLineH + padB;
+    const showLegend = this.config.show_legend !== false;
+    const longestPlatCh = platforms.length > 0
+      ? Math.max(...platforms.map(p => p.name.length + 8))
+      : 10;
+    const estPlatItemW = Math.max(80, 17 + longestPlatCh * 7);
+    const platLegendCols = showLegend
+      ? Math.max(1, Math.min(platforms.length, 3, Math.floor(barAreaW / estPlatItemW)))
+      : 1;
+    const platLegendRows = showLegend ? Math.ceil(platforms.length / platLegendCols) : 0;
+    const totalH = padT + barH + barGap + platLegendRows * legendRowH + totalLineH + padB;
     const fmt = h => h >= 1 ? `${h.toFixed(1)}h` : `${Math.round(h * 60)}m`;
 
     let svg = `<svg width="${VW}" height="${totalH}" style="display:block;" xmlns="http://www.w3.org/2000/svg">`;
@@ -1654,17 +1680,24 @@ class GamingStatusDonutCard extends HTMLElement {
       xCursor += segW;
     }
 
-    // Legend: 3 columns on one row
     const legY = padT + barH + barGap;
-    const colW = barAreaW / platforms.length;
-    platforms.forEach((p, i) => {
-      const lx = padL + i * colW;
-      svg += `<rect x="${lx}" y="${legY + 1}" width="12" height="12" fill="${p.color}" rx="2"/>`;
-      svg += `<text x="${lx + 17}" y="${legY + 13}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(p.name)} (${fmt(platformTotals[p.key])})</text>`;
-    });
+    if (showLegend) {
+      const platColW = barAreaW / platLegendCols;
+      platforms.forEach((p, i) => {
+        const col = i % platLegendCols;
+        const row = Math.floor(i / platLegendCols);
+        const lx = padL + col * platColW;
+        const ly = legY + row * legendRowH;
+        const maxCh = Math.floor(platColW / 7) - 2;
+        const fullLabel = `${p.name} (${fmt(platformTotals[p.key])})`;
+        const label = fullLabel.length > maxCh ? fullLabel.slice(0, maxCh - 1) + "…" : fullLabel;
+        svg += `<rect x="${lx}" y="${ly + 1}" width="12" height="12" fill="${p.color}" rx="2"/>`;
+        svg += `<text x="${lx + 17}" y="${ly + 13}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(label)}</text>`;
+      });
+    }
 
     // Total line
-    svg += `<text x="${(padL + barAreaW / 2).toFixed(1)}" y="${legY + legendRowH + 14}" text-anchor="middle" font-size="14" fill="var(--secondary-text-color,#888)">Total: ${fmt(grandTotal)}</text>`;
+    svg += `<text x="${(padL + barAreaW / 2).toFixed(1)}" y="${legY + platLegendRows * legendRowH + 14}" text-anchor="middle" font-size="14" fill="var(--secondary-text-color,#888)">Total: ${fmt(grandTotal)}</text>`;
 
     svg += "</svg>";
     this._contentEl.innerHTML = svg;
@@ -2328,11 +2361,15 @@ class GamingStatusGameChartCard extends HTMLElement {
     const padL = 42, padR = 12, padT = 8, padB = 50, areaH = 220;
     const areaW = VW - padL - padR;
 
-    // Legend: 2 columns, dynamic rows
-    const legendCols = 2;
-    const legendRows = Math.ceil(games.length / legendCols);
+    const showLegend = this.config.show_legend !== false;
     const legendRowH = 22;
-    const legendH = legendRows * legendRowH + 12;
+    const longestCh = games.length > 0 ? Math.max(...games.map(g => g.length)) : 10;
+    const estItemW = Math.max(80, 17 + longestCh * 7);
+    const legendCols = showLegend
+      ? Math.max(1, Math.min(games.length, 3, Math.floor(areaW / estItemW)))
+      : 1;
+    const legendRows = showLegend ? Math.ceil(games.length / legendCols) : 0;
+    const legendH = showLegend ? legendRows * legendRowH + 12 : 0;
     const totalH = padT + areaH + padB + legendH;
 
     // Y scale
@@ -2387,18 +2424,20 @@ class GamingStatusGameChartCard extends HTMLElement {
 
     // Legend
     const legY0 = padT + areaH + padB + 2;
-    const colW = areaW / legendCols;
-    games.forEach((g, i) => {
-      const col = i % legendCols;
-      const row = Math.floor(i / legendCols);
-      const lx = padL + col * colW;
-      const ly = legY0 + row * legendRowH;
-      svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2" style="transition:opacity 0.2s ease" data-swatch-game="${this._esc(g)}"/>`;
-      const maxCh = Math.floor(colW / 7) - 2;
-      const name = g.length > maxCh ? g.slice(0, maxCh - 1) + "…" : g;
-      svg += `<text x="${lx + 17}" y="${ly + 11}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(name)}</text>`;
-      svg += `<rect x="${lx}" y="${ly - 2}" width="${colW - 4}" height="${legendRowH}" fill="transparent" style="cursor:pointer" data-legend-game="${this._esc(g)}"/>`;
-    });
+    if (showLegend) {
+      const colW = areaW / legendCols;
+      games.forEach((g, i) => {
+        const col = i % legendCols;
+        const row = Math.floor(i / legendCols);
+        const lx = padL + col * colW;
+        const ly = legY0 + row * legendRowH;
+        svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2" style="transition:opacity 0.2s ease" data-swatch-game="${this._esc(g)}"/>`;
+        const maxCh = Math.floor(colW / 7) - 2;
+        const name = g.length > maxCh ? g.slice(0, maxCh - 1) + "…" : g;
+        svg += `<text x="${lx + 17}" y="${ly + 11}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(name)}</text>`;
+        svg += `<rect x="${lx}" y="${ly - 2}" width="${colW - 4}" height="${legendRowH}" fill="transparent" style="cursor:pointer" data-legend-game="${this._esc(g)}"/>`;
+      });
+    }
 
     svg += "</svg>";
     this._contentEl.innerHTML = svg;
