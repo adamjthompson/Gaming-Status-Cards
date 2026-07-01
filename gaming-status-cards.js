@@ -1500,7 +1500,7 @@ class GamingStatusChartEditor extends HTMLElement {
           </select>
         </div>
         <div>
-          <div class="section-title">Hide Inactive Players</div>
+          <div class="section-title">Exclusions</div>
           <div class="helper-text">Exclude players with no hours in the selected time window from the chart and legend.</div>
           <select id="hide_empty">
             <option value="false" ${this._config.hide_empty !== true && this._config.hide_empty !== "true" ? "selected" : ""}>Show All Players</option>

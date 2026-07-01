@@ -69,13 +69,13 @@ A native SVG stacked bar chart showing each player's daily gaming hours across a
 **UI Configuration Options:**
 * **Chart Title:** Optional title displayed above the chart.
 * **Time Window:** Choose the time period to display — **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**.
-* **Player Filter Mode:** Show all tracked players, a single selected player, or a custom subset of players.
+* **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Custom Colors:** Override the default vibrant palette with a comma-separated list of CSS colors (e.g., `#ffbe0b, rgb(251, 86, 7), blue`).
-* **Show Legend:** Toggle the player legend below the chart on or off. Hiding it reclaims the legend area and gives the chart more vertical space. Defaults to on.
-* **Hide Inactive Players:** When enabled, players with no hours in the selected time window are excluded from both the chart and the legend. Useful for squads where not everyone plays every week. Defaults to off.
+* **Legend:** Toggle the player legend below the chart on or off. Hiding it reclaims the legend area and gives the chart more vertical space. Defaults to on.
+* **Exclusions:** When enabled, players with no hours in the selected time window are excluded from both the chart and the legend. Useful for squads where not everyone plays every week. Defaults to off.
 
-**Weekly Stats Chart**
-![Playtime Stats Card Screenshot](images/graph.png)
+**Weekly Hours Chart**
+![Weekly Hours Chart Screenshot](images/week-hours.png)
 
 ---
 
@@ -85,13 +85,13 @@ A native SVG stacked bar chart for visualizing platform usage across your squad.
 **UI Configuration Options:**
 * **Card Title:** Optional title displayed above the chart.
 * **Time Window:** Choose the time period to display — **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**.
-* **Player Filter Mode:** Show all tracked players, a single selected player, or a custom subset of players.
+* **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Custom Colors:** Leave blank to use native platform brand colors (Xbox green, PlayStation blue, PC teal). Override with a comma-separated list of CSS colors.
-* **Show Legend:** Toggle the platform legend below the bar on or off. The legend automatically wraps to multiple rows on narrow screens. Defaults to on.
-* **Show Total:** Toggle the grand total playtime line below the legend on or off. Defaults to on.
+* **Legend:** Toggle the platform legend below the bar on or off. The legend automatically wraps to multiple rows on narrow screens. Defaults to on.
+* **Total:** Toggle the grand total playtime line below the legend on or off. Defaults to on.
 
 **Platform Split**
-![Donut Card Screenshot](images/donut.png)
+![PLatform Split Card Screenshot](images/platforms.png)
 
 ---
 
@@ -105,13 +105,18 @@ A dependency-free native CSS bar chart that ranks your squad across a variety of
   * **Most Different Games Played** — who has the broadest taste.
   * **Top Games: Hours Per Game (Aggregate)** — ranks games instead of players, showing which titles consumed the most time across your whole squad.
 * **Time Window:** Choose the time period to display — **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**.
-* **Player Filter Mode:** Show all tracked players, a single selected player, or a custom subset of players.
+* **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Items to Display (Rows):** Set how many ranked entries are shown (default: 3, max: 20).
 * **Custom Colors:** Override the default vibrant palette with a comma-separated list of CSS colors.
 
-**Leaderboard**
-![Leaderboard Card Screenshot](images/leaderboard.png)
+**Leaderboard Cards**
+![Most Hours Screenshot](images/leaderboard-most-hours.png)
 
+![Longest Session Screenshot](images/leaderboard-longest.png)
+
+![Most Variety Screenshot](images/leaderboard-variety.png)
+
+![Top Games Screenshot](images/leaderboard-hours-game.png)
 ---
 
 ### 6. Gaming Status - Weekly Games
@@ -119,11 +124,14 @@ A native SVG stacked bar chart showing daily gaming hours broken down by individ
 
 **UI Configuration Options:**
 * **Chart Title:** Optional title displayed above the chart.
-* **Player Filter Mode:** Show all tracked players, a single selected player, or a custom subset of players.
+* **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Time Window:** Choose the time period to display — **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**.
 * **Max Games to Display:** Ranks games by total hours and shows the top N titles (default: 6, max: 20).
 * **Custom Colors:** Override the default palette with a comma-separated list of CSS colors.
-* **Show Legend:** Toggle the game title legend below the chart on or off. Column count adjusts automatically based on available width and title lengths. Defaults to on.
+* **Legend:** Toggle the game title legend below the chart on or off. Column count adjusts automatically based on available width and title lengths. Defaults to on.
+
+**Weekly Games Chart**
+![Weekly Games Chart Card Screenshot](images/week-games.png)
 
 ---
 
@@ -133,7 +141,7 @@ By default, all cards are entirely plug-and-play. They automatically scan your H
 
 The **List** and **Slideshow** cards feature a **Manual Entities** override in their Advanced section. Simply enter a comma-separated list of the exact Entity IDs you want to track to restrict what those cards display.
 
-The **Weekly Hours**, **Platforms**, **Leaderboard**, and **Weekly Games** cards use a **Player Filter Mode** setting instead: choose **All Tracked Players**, **Single Player**, or **Selected Players** to control scope.
+The **Weekly Hours**, **Platforms**, **Leaderboard**, and **Weekly Games** cards use a **Player Filter** setting instead: choose **All Tracked Players**, **Single Player**, or **Selected Players** to control scope.
 
 **How Manual Entities interact with Plex (Slideshow card):**
 * **To restrict both gamers AND Plex sessions:** Set the Plex Integration to **None**, and manually type out only the gamers and Plex session sensors you want to see (e.g., `sensor.gaming_status_adam_master, sensor.plex_session_1_tautulli`). The card will automatically format the Tautulli text bubbles correctly.
