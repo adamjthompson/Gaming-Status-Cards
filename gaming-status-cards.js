@@ -1216,7 +1216,10 @@ class GamingStatusChartCard extends HTMLElement {
       }
     }
 
-    const players = Object.values(playerMap).sort((a, b) => b.weeklyHours - a.weeklyHours);
+    const hideEmpty = this.config.hide_empty === true || this.config.hide_empty === "true";
+    const players = Object.values(playerMap)
+      .sort((a, b) => b.weeklyHours - a.weeklyHours)
+      .filter(p => !hideEmpty || Object.values(p.daily).some(h => h > 0));
     const dailyData = days.map(day => {
       const entry = { day, players: {} };
       for (const p of players) {
@@ -1496,10 +1499,18 @@ class GamingStatusChartEditor extends HTMLElement {
             <option value="false" ${this._config.show_legend === false || this._config.show_legend === "false" ? "selected" : ""}>Hide Legend</option>
           </select>
         </div>
+        <div>
+          <div class="section-title">Hide Inactive Players</div>
+          <div class="helper-text">Exclude players with no hours in the selected time window from the chart and legend.</div>
+          <select id="hide_empty">
+            <option value="false" ${this._config.hide_empty !== true && this._config.hide_empty !== "true" ? "selected" : ""}>Show All Players</option>
+            <option value="true" ${this._config.hide_empty === true || this._config.hide_empty === "true" ? "selected" : ""}>Hide Inactive Players</option>
+          </select>
+        </div>
       </div>`;
 
-    const BOOL_FIELDS_CHART = ["show_legend"];
-    ["title", "window", "mode", "single_entity", "selected_entities", "custom_colors", "show_legend"].forEach(id => {
+    const BOOL_FIELDS_CHART = ["show_legend", "hide_empty"];
+    ["title", "window", "mode", "single_entity", "selected_entities", "custom_colors", "show_legend", "hide_empty"].forEach(id => {
       const el = this.shadowRoot.getElementById(id);
       if (!el) return;
       el.addEventListener("change", ev => {

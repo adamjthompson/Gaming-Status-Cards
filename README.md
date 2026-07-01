@@ -72,6 +72,7 @@ A native SVG stacked bar chart showing each player's daily gaming hours across a
 * **Player Filter Mode:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Custom Colors:** Override the default vibrant palette with a comma-separated list of CSS colors (e.g., `#ffbe0b, rgb(251, 86, 7), blue`).
 * **Show Legend:** Toggle the player legend below the chart on or off. Hiding it reclaims the legend area and gives the chart more vertical space. Defaults to on.
+* **Hide Inactive Players:** When enabled, players with no hours in the selected time window are excluded from both the chart and the legend. Useful for squads where not everyone plays every week. Defaults to off.
 
 **Weekly Stats Chart**
 ![Playtime Stats Card Screenshot](images/graph.png)
@@ -180,6 +181,7 @@ single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated sensor names (used when mode is 'selected')
 custom_colors: " " # Override the default colors
 show_legend: true # Set to false to hide the player legend and give more space to the chart
+hide_empty: false # Set to true to exclude players with no hours in the selected window
 ```
 
 **The Platforms Card:**
