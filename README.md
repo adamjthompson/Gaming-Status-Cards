@@ -56,7 +56,7 @@ A dynamic, CSS-animated slideshow that cycles through the high-resolution cover 
 * **Timing Controls:** Set the exact number of seconds each slide displays, and how long the crossfade transition takes.
 * **Player Avatars:** Automatically superimposes the avatar of the person playing the game into the bottom right corner.
 * **Auto-Hide:** Automatically hides the entire card from your dashboard if no one is currently playing a game, saving valuable screen real estate.
-* **Plex Integration:** Optionally pull in active media sessions from your Plex server. Choose **None**, **Plex (media_player)** for native Plex integration, or **Tautulli (sensor)** for Tautulli session sensors. *(The Tautulli option requires the [Tautulli custom integration](https://github.com/custom-components/tautulli) to be installed and configured).*
+* **Plex Integration:** Optionally pull in active media sessions from your Plex server. Choose **None**, **Plex (media_player)** for the [native Plex integration](https://www.home-assistant.io/integrations/plex/), or **Tautulli (sensor)** for Tautulli session sensors. *(The Tautulli option requires the [Tautulli Active Streams integration](https://github.com/Richardvaio/Tautulli_Active_Streams) to be installed and configured).*
 
 **Slideshow with Player Avatars**
 ![Large Slideshow Card Screenshot](images/wide.png)
