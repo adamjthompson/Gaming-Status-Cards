@@ -1291,7 +1291,7 @@ class GamingStatusChartCard extends HTMLElement {
         const h = d.players[players[pi].name] || 0;
         if (h <= 0) continue;
         const bh = (h / niceMax) * areaH;
-        svg += `<rect x="${bx}" y="${(yBase - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="${colorOf(pi)}" data-player="${this._esc(players[pi].name)}" data-hours="${h.toFixed(4)}"/>`;
+        svg += `<rect x="${bx}" y="${(yBase - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="${colorOf(pi)}" data-player="${this._esc(players[pi].name)}" data-hours="${h.toFixed(4)}" style="transition:opacity 0.2s ease"/>`;
         yBase -= bh;
       }
 
@@ -1314,12 +1314,13 @@ class GamingStatusChartCard extends HTMLElement {
         const row = Math.floor(i / legendCols);
         const lx = padL + col * colW;
         const ly = legY0 + row * legendRowH;
-        svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2"/>`;
+        svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2" style="transition:opacity 0.2s ease" data-swatch-player="${this._esc(p.name)}"/>`;
         const hoursStr = p.weeklyHours > 0 ? ` (${p.weeklyHours.toFixed(2)}h)` : "";
         const fullLabel = p.name + hoursStr;
         const maxCh = Math.floor(colW / 7) - 2;
         const label = fullLabel.length > maxCh ? fullLabel.slice(0, maxCh - 1) + "\u2026" : fullLabel;
         svg += `<text x="${lx + 17}" y="${ly + 11}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(label)}</text>`;
+        svg += `<rect x="${lx}" y="${ly - 2}" width="${colW - 4}" height="${legendRowH}" fill="transparent" style="cursor:pointer" data-legend-player="${this._esc(p.name)}"/>`;
       });
     }
 
@@ -1346,6 +1347,41 @@ class GamingStatusChartCard extends HTMLElement {
         });
       });
     }
+
+    let focusedPlayer = null;
+    const applyPlayerFocus = (name) => {
+      this._contentEl.querySelectorAll("rect[data-player]").forEach(r => {
+        r.style.opacity = r.dataset.player === name ? "1" : "0.15";
+      });
+      this._contentEl.querySelectorAll("rect[data-swatch-player]").forEach(r => {
+        r.style.opacity = r.dataset.swatchPlayer === name ? "1" : "0.15";
+      });
+    };
+    const clearPlayerFocus = () => {
+      this._contentEl.querySelectorAll("rect[data-player], rect[data-swatch-player]").forEach(r => {
+        r.style.opacity = "1";
+      });
+    };
+    this._contentEl.querySelectorAll("rect[data-legend-player]").forEach(hitRect => {
+      const playerName = hitRect.dataset.legendPlayer;
+      hitRect.addEventListener("click", () => {
+        if (focusedPlayer === playerName) {
+          focusedPlayer = null;
+          clearPlayerFocus();
+        } else {
+          focusedPlayer = playerName;
+          applyPlayerFocus(playerName);
+        }
+      });
+      hitRect.addEventListener("mouseenter", () => {
+        if (focusedPlayer) return;
+        applyPlayerFocus(playerName);
+      });
+      hitRect.addEventListener("mouseleave", () => {
+        if (focusedPlayer) return;
+        clearPlayerFocus();
+      });
+    });
   }
 
   _niceMax(v) {
@@ -2339,7 +2375,7 @@ class GamingStatusGameChartCard extends HTMLElement {
         const h = d.games[games[gi]] || 0;
         if (h <= 0) continue;
         const bh = (h / niceMax) * areaH;
-        svg += `<rect x="${bx}" y="${(yBase - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="${colorOf(gi)}" data-game="${this._esc(games[gi])}" data-hours="${h.toFixed(4)}"/>`;
+        svg += `<rect x="${bx}" y="${(yBase - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="${colorOf(gi)}" data-game="${this._esc(games[gi])}" data-hours="${h.toFixed(4)}" style="transition:opacity 0.2s ease"/>`;
         yBase -= bh;
       }
 
@@ -2357,10 +2393,11 @@ class GamingStatusGameChartCard extends HTMLElement {
       const row = Math.floor(i / legendCols);
       const lx = padL + col * colW;
       const ly = legY0 + row * legendRowH;
-      svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2"/>`;
+      svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2" style="transition:opacity 0.2s ease" data-swatch-game="${this._esc(g)}"/>`;
       const maxCh = Math.floor(colW / 7) - 2;
       const name = g.length > maxCh ? g.slice(0, maxCh - 1) + "…" : g;
       svg += `<text x="${lx + 17}" y="${ly + 11}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(name)}</text>`;
+      svg += `<rect x="${lx}" y="${ly - 2}" width="${colW - 4}" height="${legendRowH}" fill="transparent" style="cursor:pointer" data-legend-game="${this._esc(g)}"/>`;
     });
 
     svg += "</svg>";
@@ -2386,6 +2423,41 @@ class GamingStatusGameChartCard extends HTMLElement {
         });
       });
     }
+
+    let focusedGame = null;
+    const applyGameFocus = (name) => {
+      this._contentEl.querySelectorAll("rect[data-game]").forEach(r => {
+        r.style.opacity = r.dataset.game === name ? "1" : "0.15";
+      });
+      this._contentEl.querySelectorAll("rect[data-swatch-game]").forEach(r => {
+        r.style.opacity = r.dataset.swatchGame === name ? "1" : "0.15";
+      });
+    };
+    const clearGameFocus = () => {
+      this._contentEl.querySelectorAll("rect[data-game], rect[data-swatch-game]").forEach(r => {
+        r.style.opacity = "1";
+      });
+    };
+    this._contentEl.querySelectorAll("rect[data-legend-game]").forEach(hitRect => {
+      const gameName = hitRect.dataset.legendGame;
+      hitRect.addEventListener("click", () => {
+        if (focusedGame === gameName) {
+          focusedGame = null;
+          clearGameFocus();
+        } else {
+          focusedGame = gameName;
+          applyGameFocus(gameName);
+        }
+      });
+      hitRect.addEventListener("mouseenter", () => {
+        if (focusedGame) return;
+        applyGameFocus(gameName);
+      });
+      hitRect.addEventListener("mouseleave", () => {
+        if (focusedGame) return;
+        clearGameFocus();
+      });
+    });
   }
 
   _niceMax(v) {
