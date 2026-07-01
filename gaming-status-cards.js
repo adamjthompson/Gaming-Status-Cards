@@ -1460,7 +1460,7 @@ class GamingStatusChartEditor extends HTMLElement {
         </div>
         <hr>
         <div>
-          <div class="section-title">Player Filter Mode</div>
+          <div class="section-title">Player Filter</div>
           <select id="mode">
             <option value="all" ${mode === "all" ? "selected" : ""}>All Tracked Players</option>
             <option value="single" ${mode === "single" ? "selected" : ""}>Single Player</option>
@@ -1489,7 +1489,7 @@ class GamingStatusChartEditor extends HTMLElement {
         </div>
         <hr>
         <div>
-          <div class="section-title">Show Legend</div>
+          <div class="section-title">Legend</div>
           <div class="helper-text">Hide the player legend to give more vertical space to the chart.</div>
           <select id="show_legend">
             <option value="true" ${this._config.show_legend !== false && this._config.show_legend !== "false" ? "selected" : ""}>Show Legend</option>
@@ -1770,16 +1770,16 @@ class GamingStatusDonutEditor extends HTMLElement {
         .helper-text { font-size: 12px; font-weight: normal; color: var(--secondary-text-color); margin-top: 2px; }
       </style>
       <div class="container">
-        <label>Card Title (Optional):
+        <label>Card Title (Optional)
           <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ""}">
         </label>
-        <label>Time Window:
+        <label>Time Window
           <select id="window" .configValue="window">
             <option value="rolling" ${this._config.window !== "calendar" ? "selected" : ""}>Rolling (Past 7 Days)</option>
             <option value="calendar" ${this._config.window === "calendar" ? "selected" : ""}>Calendar (Since Sunday)</option>
           </select>
         </label>
-        <label>Player Filter:
+        <label>Player Filter
           <select id="mode" .configValue="mode">
             <option value="all" ${this._config.mode === "all" || !this._config.mode ? "selected" : ""}>All Tracked Players</option>
             <option value="single" ${this._config.mode === "single" ? "selected" : ""}>Single Player</option>
@@ -1806,19 +1806,19 @@ class GamingStatusDonutEditor extends HTMLElement {
           </label>
         </div>
         <hr>
-        <label>Custom Colors (Advanced):
+        <label>Custom Colors (Advanced)
           <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ""}" placeholder="rgb(11,124,16), rgb(0,48,135), rgb(2,173,239)">
           <span class="helper-text">Leave blank for default platform colors (Xbox / PlayStation / PC).</span>
         </label>
         <hr>
-        <label>Show Legend:
+        <label>Legend
           <select id="show_legend" .configValue="show_legend">
             <option value="true" ${this._config.show_legend !== false && this._config.show_legend !== "false" ? "selected" : ""}>Show Legend</option>
             <option value="false" ${this._config.show_legend === false || this._config.show_legend === "false" ? "selected" : ""}>Hide Legend</option>
           </select>
           <span class="helper-text">Platform legend below the bar. Wraps to multiple rows on narrow screens.</span>
         </label>
-        <label>Show Total:
+        <label>Total
           <select id="show_total" .configValue="show_total">
             <option value="true" ${this._config.show_total !== false && this._config.show_total !== "false" ? "selected" : ""}>Show Total</option>
             <option value="false" ${this._config.show_total === false || this._config.show_total === "false" ? "selected" : ""}>Hide Total</option>
@@ -2138,11 +2138,11 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
       </style>
       <div class="container">
 
-        <label>Card Title:
+        <label>Card Title (Optional)
           <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ''}">
         </label>
         
-        <label>Leaderboard Metric:
+        <label>Leaderboard Metric
           <select id="metric" .configValue="metric">
             <option value="hours" ${this._config.metric === 'hours' ? 'selected' : ''}>Top Players: Most Played Hours</option>
             <option value="longest" ${this._config.metric === 'longest' ? 'selected' : ''}>Top Players: Longest Gaming Session</option>
@@ -2151,14 +2151,14 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
           </select>
         </label>
 
-        <label>Time Window:
+        <label>Time Window
           <select id="window" .configValue="window">
             <option value="rolling" ${this._config.window !== 'calendar' ? 'selected' : ''}>Rolling (Past 7 Days)</option>
             <option value="calendar" ${this._config.window === 'calendar' ? 'selected' : ''}>Calendar (Since Sunday)</option>
           </select>
         </label>
 
-        <label>Player Filter Mode:
+        <label>Player Filter
           <select id="mode" .configValue="mode">
             <option value="all" ${this._config.mode === 'all' || !this._config.mode ? 'selected' : ''}>All Tracked Players</option>
             <option value="single" ${this._config.mode === 'single' ? 'selected' : ''}>Single Player</option>
@@ -2182,13 +2182,13 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
           </label>
         </div>
 
-        <label>Items to Display (Rows):
+        <label>Items to Display (Rows)
           <input type="number" id="max_players" .configValue="max_players" value="${this._config.max_players || '3'}" min="1" max="20">
         </label>
         
         <hr>
 
-        <label>Custom Colors (Advanced):
+        <label>Custom Colors (Advanced)
           <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
           <span class="helper-text">Leave blank to use the default vibrant palette. Override by entering a comma-separated list of colors.</span>
         </label>
@@ -2397,7 +2397,7 @@ class GamingStatusGameChartCard extends HTMLElement {
     const longestCh = games.length > 0 ? Math.max(...games.map(g => g.length)) : 10;
     const estItemW = Math.max(80, 17 + longestCh * 7);
     const legendCols = showLegend
-      ? Math.max(1, Math.min(games.length, 4, Math.floor(areaW / estItemW)))
+      ? Math.max(1, Math.min(games.length, 3, Math.floor(areaW / estItemW)))
       : 1;
     const legendRows = showLegend ? Math.ceil(games.length / legendCols) : 0;
     const legendH = showLegend ? legendRows * legendRowH + 12 : 0;
@@ -2577,10 +2577,10 @@ class GamingStatusGameChartEditor extends HTMLElement {
         .helper-text { font-size: 12px; font-weight: normal; color: var(--secondary-text-color); margin-top: 2px; }
       </style>
       <div class="container">
-        <label>Card Title (Optional):
+        <label>Card Title (Optional)
           <input type="text" id="title" value="${this._esc(this._config.title || "")}">
         </label>
-        <label>Player Filter Mode:
+        <label>Player Filter
           <select id="mode">
             <option value="all" ${mode === "all" ? "selected" : ""}>All Tracked Players</option>
             <option value="single" ${mode === "single" ? "selected" : ""}>Single Player</option>
@@ -2601,23 +2601,23 @@ class GamingStatusGameChartEditor extends HTMLElement {
             <span class="helper-text">Comma-separated entity IDs. Game hours are aggregated across all selected players.</span>
           </label>
         </div>
-        <label>Time Window:
+        <label>Time Window
           <select id="window">
             <option value="rolling" ${this._config.window !== "calendar" ? "selected" : ""}>Rolling (Past 7 Days)</option>
             <option value="calendar" ${this._config.window === "calendar" ? "selected" : ""}>Calendar (Since Sunday)</option>
           </select>
         </label>
-        <label>Max Games to Display:
+        <label>Max Games to Display
           <input type="number" id="max_games" value="${parseInt(this._config.max_games) || 6}" min="1" max="20">
           <span class="helper-text">Ranks by total hours across all selected players and shows the top N. Default: 6.</span>
         </label>
         <hr>
-        <label>Custom Colors (Advanced):
+        <label>Custom Colors (Advanced)
           <input type="text" id="custom_colors" value="${this._esc(this._config.custom_colors || "")}" placeholder="#3a86ff, #ffbe0b, …">
           <span class="helper-text">Leave blank for the default palette. Comma-separated colors.</span>
         </label>
         <hr>
-        <label>Show Legend:
+        <label>Legend
           <select id="show_legend">
             <option value="true" ${this._config.show_legend !== false && this._config.show_legend !== "false" ? "selected" : ""}>Show Legend</option>
             <option value="false" ${this._config.show_legend === false || this._config.show_legend === "false" ? "selected" : ""}>Hide Legend</option>
@@ -2701,7 +2701,7 @@ window.customCards.push({
 
 window.customCards.push({
   type: "gaming-status-donut-card",
-  name: "Gaming Status - Platforms",
+  name: "Gaming Status  Platforms",
   preview: true,
   description: "Aggregate platform split bar chart (Xbox / PlayStation / PC) across all players."
 });
