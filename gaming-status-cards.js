@@ -1127,7 +1127,7 @@ class GamingSlideshowCardEditor extends HTMLElement {
 }
 
 // ====================================================================
-// CARD 3: GAMING STATUS - CHART
+// CARD 3: GAMING STATUS - WEEKLY HOURS
 // ====================================================================
 
 class GamingStatusChartCard extends HTMLElement {
@@ -1573,7 +1573,7 @@ class GamingStatusChartEditor extends HTMLElement {
 }
 
 // ====================================================================
-// CARD 4: GAMING STATUS - DONUT
+// CARD 4: GAMING STATUS - PLATFORMS
 // ====================================================================
 
 class GamingStatusDonutCard extends HTMLElement {
@@ -2277,7 +2277,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 }
 
 // ====================================================================
-// CARD 6: GAMING STATUS - GAME CHART
+// CARD 6: GAMING STATUS - WEEKLY GAMES
 // ====================================================================
 
 class GamingStatusGameChartCard extends HTMLElement {
@@ -2756,7 +2756,7 @@ window.customCards.push({
 
 window.customCards.push({
   type: "gaming-status-donut-card",
-  name: "Gaming Status  Platforms",
+  name: "Gaming Status - Platforms",
   preview: true,
   description: "Aggregate platform split bar chart (Xbox / PlayStation / PC) across all players."
 });
