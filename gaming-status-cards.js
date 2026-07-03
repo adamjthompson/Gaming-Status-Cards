@@ -1,4 +1,50 @@
 // ====================================================================
+// SHARED: NAMED COLOR PALETTES
+// ====================================================================
+
+const GAMING_STATUS_PALETTES = {
+  vivid: {
+    label: "Vivid (Default)",
+    colors: ["#FFBE0B", "#FB5607", "#FF006E", "#8338EC", "#3A86FF", "#38B000", "#AF0E8E", "#A428BD", "#B71A2A", "#5329FA"],
+  },
+  material: {
+    label: "Material",
+    colors: ["#BB1B1B", "#1453FF", "#AA0E95", "#04A45F", "#A467E9", "#C91D78", "#D16B05", "#57A117", "#9C0FB8", "#8161FF"],
+  },
+  muted: {
+    label: "Muted",
+    colors: ["#A55050", "#575BDB", "#8B8B1D", "#7F4186", "#8A6BC7", "#D63D80", "#417722", "#236CA4", "#B14F25", "#3B9B6B"],
+  },
+  soft: {
+    label: "Soft",
+    colors: ["#C63939", "#613EEF", "#D05DC4", "#9045C9", "#CD517E", "#2180ED", "#D2742D", "#EF3E67", "#E12D9F", "#3B5CE3"],
+  },
+};
+
+// Normalizes a card's persisted config into an explicit color_palette value.
+// Preserves pre-existing custom_colors setups for users upgrading from before this feature.
+function gamingStatusNormalizePalette(config) {
+  if (config.color_palette) return config.color_palette;
+  return config.custom_colors && String(config.custom_colors).trim() ? "custom" : "vivid";
+}
+
+function gamingStatusResolvePalette(config) {
+  if (config.color_palette === "custom") {
+    const custom = (config.custom_colors || "").split(",").map(c => c.trim()).filter(Boolean);
+    return custom.length ? custom : GAMING_STATUS_PALETTES.vivid.colors;
+  }
+  const preset = GAMING_STATUS_PALETTES[config.color_palette];
+  return preset ? preset.colors : GAMING_STATUS_PALETTES.vivid.colors;
+}
+
+function gamingStatusPaletteOptionsHTML(selected) {
+  const presetOpts = Object.entries(GAMING_STATUS_PALETTES)
+    .map(([key, p]) => `<option value="${key}" ${selected === key ? "selected" : ""}>${p.label}</option>`)
+    .join("");
+  return `${presetOpts}<option value="custom" ${selected === "custom" ? "selected" : ""}>Custom Colors</option>`;
+}
+
+// ====================================================================
 // CARD 1: GAMING STATUS - LIST
 // ====================================================================
 
@@ -1088,14 +1134,6 @@ class GamingStatusChartCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this.defaultPalette = [
-      "rgb(255, 190, 11)",
-      "rgb(251, 86, 7)",
-      "rgb(255, 0, 110)",
-      "rgb(131, 56, 236)",
-      "rgb(58, 134, 255)",
-      "rgb(56, 176, 0)",
-    ];
   }
 
   static getConfigElement() {
@@ -1108,6 +1146,7 @@ class GamingStatusChartCard extends HTMLElement {
       mode: "all",
       single_entity: "",
       selected_entities: "",
+      color_palette: "vivid",
       custom_colors: "",
       entities_pattern: "_master",
       window: "rolling",
@@ -1124,6 +1163,7 @@ class GamingStatusChartCard extends HTMLElement {
       single_entity: config.single_entity || "",
       selected_entities: config.selected_entities || (mode === "selected" ? config.manual_entities || "" : ""),
       manual_entities: config.manual_entities || "",
+      color_palette: gamingStatusNormalizePalette(config),
       custom_colors: config.custom_colors || "",
       entities_pattern: config.entities_pattern || "_master",
       window: config.window || "rolling",
@@ -1151,6 +1191,7 @@ class GamingStatusChartCard extends HTMLElement {
 
     const hash = entityIds.map(id => `${id}:${hass.states[id]?.last_updated}`).join(",")
       + "|" + this.config.window
+      + "|" + this.config.color_palette
       + "|" + this.config.custom_colors;
 
     if (this._lastHash === hash) return;
@@ -1246,9 +1287,7 @@ class GamingStatusChartCard extends HTMLElement {
       return;
     }
 
-    const palette = this.config.custom_colors && this.config.custom_colors.trim()
-      ? this.config.custom_colors.split(",").map(c => c.trim()).filter(Boolean)
-      : this.defaultPalette;
+    const palette = gamingStatusResolvePalette(this.config);
     const colorOf = (i) => palette[i % palette.length];
 
     const padL = 42, padR = 12, padT = 8, padB = 50, areaH = 220;
@@ -1432,6 +1471,7 @@ class GamingStatusChartEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const mode = this._config.mode || "all";
+    const colorPalette = gamingStatusNormalizePalette(this._config);
     const targetSuffix = this._config.entities_pattern || "_master";
     const entityOptions = this._hass ? Object.keys(this._hass.states)
       .filter(k => k.endsWith(targetSuffix) && this._hass.states[k].attributes.secondary !== undefined)
@@ -1487,10 +1527,16 @@ class GamingStatusChartEditor extends HTMLElement {
         </div>` : ""}
         <hr>
         <div>
-          <div class="section-title">Custom Colors (Advanced)</div>
-          <div class="helper-text">Leave blank to use the default palette. Override with comma-separated colors (hex, RGB, or names like <code>red, #00FF00, rgb(0,0,255)</code>).</div>
-          <input type="text" id="custom_colors" value="${this._esc(this._config.custom_colors || "")}" placeholder="rgb(255,190,11), rgb(58,134,255), ...">
+          <div class="section-title">Color Palette</div>
+          <div class="helper-text">Colors are assigned to players/games in order and cycle if there are more entries than colors.</div>
+          <select id="color_palette">${gamingStatusPaletteOptionsHTML(colorPalette)}</select>
         </div>
+        ${colorPalette === "custom" ? `
+        <div>
+          <div class="section-title">Custom Colors (Advanced)</div>
+          <div class="helper-text">Comma-separated colors (hex, RGB, or names like <code>red, #00FF00, rgb(0,0,255)</code>). A 10-color palette is recommended so colors don't repeat.</div>
+          <input type="text" id="custom_colors" value="${this._esc(this._config.custom_colors || "")}" placeholder="rgb(255,190,11), rgb(58,134,255), ...">
+        </div>` : ""}
         <hr>
         <div>
           <div class="section-title">Legend</div>
@@ -1511,7 +1557,7 @@ class GamingStatusChartEditor extends HTMLElement {
       </div>`;
 
     const BOOL_FIELDS_CHART = ["show_legend", "hide_empty"];
-    ["title", "window", "mode", "single_entity", "selected_entities", "custom_colors", "show_legend", "hide_empty"].forEach(id => {
+    ["title", "window", "mode", "single_entity", "selected_entities", "color_palette", "custom_colors", "show_legend", "hide_empty"].forEach(id => {
       const el = this.shadowRoot.getElementById(id);
       if (!el) return;
       el.addEventListener("change", ev => {
@@ -1864,14 +1910,6 @@ class GamingStatusLeaderboardCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this.defaultPalette = [
-      "rgb(255, 190, 11)",
-      "rgb(251, 86, 7)",
-      "rgb(255, 0, 110)",
-      "rgb(131, 56, 236)",
-      "rgb(58, 134, 255)",
-      "rgb(56, 176, 0)",
-    ];
   }
 
   static getConfigElement() {
@@ -1886,6 +1924,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       single_entity: "",
       selected_entities: "",
       max_players: "3",
+      color_palette: "vivid",
       custom_colors: "",
       entities_pattern: "_master"
     };
@@ -1902,7 +1941,8 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       max_players: config.max_players || "3",
       custom_colors: config.custom_colors || "",
       entities_pattern: config.entities_pattern || "_master",
-      ...config
+      ...config,
+      color_palette: gamingStatusNormalizePalette(config),
     };
     this._lastHash = "";
   }
@@ -2061,13 +2101,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       return;
     }
 
-    let activePalette = this.defaultPalette;
-    if (this.config.custom_colors && this.config.custom_colors.trim() !== "") {
-      activePalette = this.config.custom_colors
-        .split(",")
-        .map((c) => c.trim())
-        .filter((c) => c);
-    }
+    const activePalette = gamingStatusResolvePalette(this.config);
 
     const maxValue = Math.max(...finalData.map(d => d.value));
     let html = `<div style="display: flex; flex-direction: column; gap: 14px; margin-top: 8px;">`;
@@ -2139,6 +2173,8 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         return `<option value="${key}" ${this._config.single_entity === key ? 'selected' : ''}>${cleanName}</option>`;
       }).join('');
 
+    const colorPalette = gamingStatusNormalizePalette(this._config);
+
     this.shadowRoot.innerHTML = `
       <style>
         .container { display: flex; flex-direction: column; gap: 15px; color: var(--primary-text-color); }
@@ -2200,26 +2236,38 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         
         <hr>
 
-        <label>Custom Colors (Advanced)
-          <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
-          <span class="helper-text">Leave blank to use the default vibrant palette. Override by entering a comma-separated list of colors.</span>
+        <label>Color Palette
+          <select id="color_palette" .configValue="color_palette">${gamingStatusPaletteOptionsHTML(colorPalette)}</select>
+          <span class="helper-text">Colors are assigned to rows in order and cycle if there are more entries than colors.</span>
         </label>
+
+        <div id="custom-colors-selector" style="display: ${colorPalette === 'custom' ? 'block' : 'none'}">
+          <label>Custom Colors (Advanced)
+            <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
+            <span class="helper-text">Comma-separated colors. A 10-color palette is recommended so colors don't repeat.</span>
+          </label>
+        </div>
       </div>
     `;
 
     const singleSelector = this.shadowRoot.getElementById('single-selector');
     const selectedSelector = this.shadowRoot.getElementById('selected-selector');
+    const customColorsSelector = this.shadowRoot.getElementById('custom-colors-selector');
 
     this.shadowRoot.querySelectorAll('input, select').forEach(el => {
       el.addEventListener('change', e => {
         const field = e.target.getAttribute('.configValue');
         const value = e.target.value;
-        
+
         this._config = { ...this._config, [field]: value };
-        
+
         if (field === 'mode') {
             singleSelector.style.display = (value === 'single') ? 'block' : 'none';
             selectedSelector.style.display = (value === 'selected') ? 'block' : 'none';
+        }
+
+        if (field === 'color_palette') {
+            customColorsSelector.style.display = (value === 'custom') ? 'block' : 'none';
         }
 
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
@@ -2236,16 +2284,6 @@ class GamingStatusGameChartCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this.defaultPalette = [
-      "rgb(58, 134, 255)",
-      "rgb(255, 190, 11)",
-      "rgb(255, 0, 110)",
-      "rgb(56, 176, 0)",
-      "rgb(131, 56, 236)",
-      "rgb(251, 86, 7)",
-      "rgb(0, 200, 180)",
-      "rgb(255, 140, 0)",
-    ];
   }
 
   static getConfigElement() {
@@ -2253,7 +2291,7 @@ class GamingStatusGameChartCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return { title: "", mode: "all", entity: "", selected_entities: "", window: "rolling", max_games: 6, custom_colors: "", entities_pattern: "_master" };
+    return { title: "", mode: "all", entity: "", selected_entities: "", window: "rolling", max_games: 6, color_palette: "vivid", custom_colors: "", entities_pattern: "_master" };
   }
 
   setConfig(config) {
@@ -2268,6 +2306,7 @@ class GamingStatusGameChartCard extends HTMLElement {
       entities_pattern: config.entities_pattern || "_master",
       window: config.window || "rolling",
       max_games: parseInt(config.max_games) || 6,
+      color_palette: gamingStatusNormalizePalette(config),
       custom_colors: config.custom_colors || "",
     };
     this._lastHash = "";
@@ -2296,7 +2335,7 @@ class GamingStatusGameChartCard extends HTMLElement {
     if (!entityIds.length) return;
 
     const hash = entityIds.map(id => `${id}:${hass.states[id]?.last_updated}`).join(",")
-      + "|" + this.config.window + "|" + this.config.max_games + "|" + this.config.custom_colors;
+      + "|" + this.config.window + "|" + this.config.max_games + "|" + this.config.color_palette + "|" + this.config.custom_colors;
     if (this._lastHash === hash) return;
     this._lastHash = hash;
     this._update(entityIds);
@@ -2395,9 +2434,7 @@ class GamingStatusGameChartCard extends HTMLElement {
       return;
     }
 
-    const palette = this.config.custom_colors && this.config.custom_colors.trim()
-      ? this.config.custom_colors.split(",").map(c => c.trim()).filter(Boolean)
-      : this.defaultPalette;
+    const palette = gamingStatusResolvePalette(this.config);
     const colorOf = (i) => palette[i % palette.length];
 
     // SVG layout
@@ -2578,6 +2615,7 @@ class GamingStatusGameChartEditor extends HTMLElement {
       }).join("");
 
     const mode = this._config.mode || (this._config.entity ? "single" : "all");
+    const colorPalette = gamingStatusNormalizePalette(this._config);
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -2624,10 +2662,15 @@ class GamingStatusGameChartEditor extends HTMLElement {
           <span class="helper-text">Ranks by total hours across all selected players and shows the top N. Default: 6.</span>
         </label>
         <hr>
+        <label>Color Palette
+          <select id="color_palette">${gamingStatusPaletteOptionsHTML(colorPalette)}</select>
+          <span class="helper-text">Colors are assigned to games in order and cycle if there are more games than colors.</span>
+        </label>
+        ${colorPalette === "custom" ? `
         <label>Custom Colors (Advanced)
           <input type="text" id="custom_colors" value="${this._esc(this._config.custom_colors || "")}" placeholder="#3a86ff, #ffbe0b, …">
-          <span class="helper-text">Leave blank for the default palette. Comma-separated colors.</span>
-        </label>
+          <span class="helper-text">Comma-separated colors. A 10-color palette is recommended so colors don't repeat.</span>
+        </label>` : ""}
         <hr>
         <label>Legend
           <select id="show_legend">
@@ -2639,7 +2682,7 @@ class GamingStatusGameChartEditor extends HTMLElement {
       </div>`;
 
     const BOOL_FIELDS_GAME = ["show_legend"];
-    ["title", "mode", "entity", "selected_entities", "window", "max_games", "custom_colors", "show_legend"].forEach(id => {
+    ["title", "mode", "entity", "selected_entities", "window", "max_games", "color_palette", "custom_colors", "show_legend"].forEach(id => {
       const el = this.shadowRoot.getElementById(id);
       if (!el) return;
       el.addEventListener("change", ev => {
