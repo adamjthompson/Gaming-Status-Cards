@@ -1528,7 +1528,7 @@ class GamingStatusChartEditor extends HTMLElement {
         <hr>
         <div>
           <div class="section-title">Color Palette</div>
-          <div class="helper-text">Colors are assigned to players/games in order and cycle if there are more entries than colors.</div>
+          <div class="helper-text">Colors are assigned to players in order and cycle if there are more players than colors.</div>
           <select id="color_palette">${gamingStatusPaletteOptionsHTML(colorPalette)}</select>
         </div>
         ${colorPalette === "custom" ? `
