@@ -303,6 +303,7 @@ class GamingStatusCard extends HTMLElement {
             display: flex; align-items: center; padding: 10px 10px; cursor: pointer; box-sizing: border-box;
             width: 100%; transition: transform 0.2s;
             flex-shrink: 0;
+            -webkit-mask-image: -webkit-radial-gradient(white, black);
           }
           .player-card:active { transform: scale(0.98); }
           .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none;background-image: linear-gradient(to right, var(--card-gradient-color) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); filter: var(--card-filter); }
