@@ -45,6 +45,42 @@ function gamingStatusPaletteOptionsHTML(selected) {
 }
 
 // ====================================================================
+// SHARED: PLAYER ENTITY DROPDOWNS (Single Player mode)
+// ====================================================================
+
+// Returns [{id, name}] of gaming_status player entities matching the given
+// suffix, sorted alphabetically by display name so "first in the list" is
+// deterministic and matches what the dropdown actually shows.
+function gamingStatusGetPlayerEntities(hass, targetSuffix) {
+  if (!hass) return [];
+  return Object.keys(hass.states)
+    .filter(k => k.endsWith(targetSuffix) && hass.states[k].attributes.secondary !== undefined)
+    .map(k => ({
+      id: k,
+      name: (hass.states[k].attributes.friendly_name || k).replace(/ Gaming Status| Master/gi, "").trim(),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function gamingStatusPlayerOptionsHTML(entities, selected, escapeFn) {
+  const esc = escapeFn || ((s) => s);
+  return entities.map(e => `<option value="${e.id}" ${selected === e.id ? "selected" : ""}>${esc(e.name)}</option>`).join("");
+}
+
+// If "Single Player" mode has no selection yet, defaults to the first
+// available player (alphabetically) instead of leaving the dropdown on the
+// dead-end "Select a player…" placeholder. Mutates `config` in place and
+// returns true if a default was just applied, so the caller can persist it.
+function gamingStatusDefaultSingleEntity(config, entities, field) {
+  const key = field || "single_entity";
+  if (config.mode === "single" && !config[key] && entities.length) {
+    config[key] = entities[0].id;
+    return true;
+  }
+  return false;
+}
+
+// ====================================================================
 // CARD 1: GAMING STATUS - LIST
 // ====================================================================
 
@@ -1473,12 +1509,11 @@ class GamingStatusChartEditor extends HTMLElement {
     const mode = this._config.mode || "all";
     const colorPalette = gamingStatusNormalizePalette(this._config);
     const targetSuffix = this._config.entities_pattern || "_master";
-    const entityOptions = this._hass ? Object.keys(this._hass.states)
-      .filter(k => k.endsWith(targetSuffix) && this._hass.states[k].attributes.secondary !== undefined)
-      .map(k => {
-        const name = (this._hass.states[k].attributes.friendly_name || k).replace(/ Gaming Status| Master/gi, "").trim();
-        return `<option value="${k}" ${this._config.single_entity === k ? "selected" : ""}>${this._esc(name)}</option>`;
-      }).join("") : "";
+    const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
+    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+    }
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -1819,6 +1854,12 @@ class GamingStatusDonutEditor extends HTMLElement {
   render() {
     if (!this._hass || !this._config) return;
 
+    const targetSuffix = this._config.entities_pattern || "_master";
+    const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
+    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+    }
+
     this.shadowRoot.innerHTML = `
       <style>
         .container { display: flex; flex-direction: column; gap: 15px; color: var(--primary-text-color); }
@@ -1845,15 +1886,10 @@ class GamingStatusDonutEditor extends HTMLElement {
           </select>
         </label>
         <div id="single-selector" style="display: ${this._config.mode === "single" ? "block" : "none"}">
-          <label>Select Player:
+          <label>Select Player
             <select id="single_entity" .configValue="single_entity">
               <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player...</option>
-              ${Object.keys(this._hass?.states || {})
-                .filter(k => k.endsWith(this._config.entities_pattern || "_master") && this._hass.states[k].attributes.secondary !== undefined)
-                .map(k => {
-                  const name = (this._hass.states[k].attributes.friendly_name || k).replace(/ Gaming Status| Master/gi, "").trim();
-                  return `<option value="${k}" ${this._config.single_entity === k ? "selected" : ""}>${name}</option>`;
-                }).join("")}
+              ${gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity)}
             </select>
           </label>
         </div>
@@ -2165,13 +2201,11 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
     if (!this._hass || !this._config) return;
 
     const targetSuffix = this._config.entities_pattern || "_master";
-    const entityOptions = Object.keys(this._hass.states)
-      .filter(key => key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined)
-      .map(key => {
-        const rawName = this._hass.states[key].attributes.friendly_name || key;
-        const cleanName = rawName.replace(/ Gaming Status| Master/gi, "");
-        return `<option value="${key}" ${this._config.single_entity === key ? 'selected' : ''}>${cleanName}</option>`;
-      }).join('');
+    const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
+    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+    }
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity);
 
     const colorPalette = gamingStatusNormalizePalette(this._config);
 
@@ -2215,7 +2249,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         </label>
 
         <div id="single-selector" style="display: ${this._config.mode === 'single' ? 'block' : 'none'}">
-          <label>Select Player: 
+          <label>Select Player 
             <select id="single_entity" .configValue="single_entity">
               <option value="" disabled ${!this._config.single_entity ? 'selected' : ''}>Select a player...</option>
               ${entityOptions}
@@ -2607,14 +2641,14 @@ class GamingStatusGameChartEditor extends HTMLElement {
     if (!this._hass || !this._config) return;
 
     const targetSuffix = this._config.entities_pattern || "_master";
-    const entityOptions = Object.keys(this._hass.states)
-      .filter(k => k.endsWith(targetSuffix) && this._hass.states[k].attributes.secondary !== undefined)
-      .map(k => {
-        const name = (this._hass.states[k].attributes.friendly_name || k).replace(/ Gaming Status| Master/gi, "").trim();
-        return `<option value="${k}" ${this._config.entity === k ? "selected" : ""}>${this._esc(name)}</option>`;
-      }).join("");
-
     const mode = this._config.mode || (this._config.entity ? "single" : "all");
+    const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
+    if (mode === "single" && !this._config.entity && playerEntities.length) {
+      this._config = { ...this._config, entity: playerEntities[0].id };
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+    }
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.entity, (s) => this._esc(s));
+
     const colorPalette = gamingStatusNormalizePalette(this._config);
 
     this.shadowRoot.innerHTML = `
@@ -2638,7 +2672,7 @@ class GamingStatusGameChartEditor extends HTMLElement {
           </select>
         </label>
         <div id="single-selector" style="display: ${mode === "single" ? "block" : "none"}">
-          <label>Select Player:
+          <label>Select Player
             <select id="entity">
               <option value="" disabled ${!this._config.entity ? "selected" : ""}>Select a player…</option>
               ${entityOptions}
@@ -2724,12 +2758,16 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       show_column_platform: true,
       show_column_duration: true,
       show_column_date: true,
-      show_column_time: true,
+      show_column_start: true,
+      show_column_end: true,
       entities_pattern: "_master",
     };
   }
 
   setConfig(config) {
+    // Backward compat: the original single "Time" column (start time only)
+    // is now split into separate Start/End columns.
+    const legacyTime = config.show_column_time !== false;
     this.config = {
       ...config,
       title: config.title || "",
@@ -2743,7 +2781,8 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       show_column_platform: config.show_column_platform !== false,
       show_column_duration: config.show_column_duration !== false,
       show_column_date: config.show_column_date !== false,
-      show_column_time: config.show_column_time !== false,
+      show_column_start: config.show_column_start !== undefined ? config.show_column_start !== false : legacyTime,
+      show_column_end: config.show_column_end !== undefined ? config.show_column_end !== false : legacyTime,
       entities_pattern: config.entities_pattern || "_master",
     };
     this._lastHash = "";
@@ -2773,7 +2812,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
     }).join(",")
       + "|" + this.config.max_sessions
       + "|" + this.config.background
-      + "|" + [this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_time].join(",");
+      + "|" + [this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end].join(",");
 
     if (this._lastHash === hash) return;
     this._lastHash = hash;
@@ -2799,6 +2838,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
           duration_seconds: parseInt(s.duration_seconds) || 0,
           date: s.date || "",
           start_time: s.start_time || "",
+          end_time: s.end_time || "",
           hero_art_url: s.hero_art_url || "",
         });
       }
@@ -2818,7 +2858,8 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       { key: "platform", label: "Platform", flex: "1" },
       { key: "duration", label: "Duration", flex: "0.9" },
       { key: "date", label: "Date", flex: "0.9" },
-      { key: "time", label: "Time", flex: "0.9" },
+      { key: "start", label: "Start", flex: "0.9" },
+      { key: "end", label: "End", flex: "0.9" },
     ];
     return ALL_COLUMNS.filter(c => {
       if (c.key === "player") return !isSingle && this.config.show_column_player;
@@ -2937,7 +2978,8 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
           case "platform": value = escapeHTML(row.platform); break;
           case "duration": value = escapeHTML(this._formatDuration(row.duration_seconds)); break;
           case "date": value = escapeHTML(this._formatDate(row.date)); break;
-          case "time": value = escapeHTML(this._formatTime(row.start_time)); break;
+          case "start": value = escapeHTML(this._formatTime(row.start_time)); break;
+          case "end": value = escapeHTML(this._formatTime(row.end_time)); break;
         }
         return `<div class="${cls}" style="flex: ${c.flex};">${value}</div>`;
       }).join("");
@@ -2972,12 +3014,11 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
     if (!this._config) return;
     const mode = this._config.mode || "all";
     const targetSuffix = this._config.entities_pattern || "_master";
-    const entityOptions = this._hass ? Object.keys(this._hass.states)
-      .filter(k => k.endsWith(targetSuffix) && this._hass.states[k].attributes.secondary !== undefined)
-      .map(k => {
-        const name = (this._hass.states[k].attributes.friendly_name || k).replace(/ Gaming Status| Master/gi, "").trim();
-        return `<option value="${k}" ${this._config.single_entity === k ? "selected" : ""}>${this._esc(name)}</option>`;
-      }).join("") : "";
+    const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
+    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+    }
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -3042,7 +3083,8 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
             <label><input type="checkbox" data-field="show_column_platform" ${this._config.show_column_platform !== false ? "checked" : ""}> Platform</label>
             <label><input type="checkbox" data-field="show_column_duration" ${this._config.show_column_duration !== false ? "checked" : ""}> Duration</label>
             <label><input type="checkbox" data-field="show_column_date" ${this._config.show_column_date !== false ? "checked" : ""}> Date</label>
-            <label><input type="checkbox" data-field="show_column_time" ${this._config.show_column_time !== false ? "checked" : ""}> Time</label>
+            <label><input type="checkbox" data-field="show_column_start" ${this._config.show_column_start !== false ? "checked" : ""}> Start</label>
+            <label><input type="checkbox" data-field="show_column_end" ${this._config.show_column_end !== false ? "checked" : ""}> End</label>
           </div>
         </div>
       </div>
