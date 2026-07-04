@@ -143,6 +143,7 @@ A configurable table of recently completed play sessions — one row per session
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players. In **Single Player** mode, the Player column is automatically hidden since it would be redundant.
 * **Number of Sessions to Display:** How many recent sessions to show (default: 10, max: 20). If more than 10 would be shown, the list scrolls instead of growing taller.
 * **Background:** Choose what renders (blurred) behind each row — **Game Artwork**, **Player Avatar**, or **None**.
+* **Show Header Row:** Toggle the column header row on or off. When off, the Visible Columns options below are hidden too, since there's no header left to label them against.
 * **Visible Columns:** Independently toggle the Player, Game, Platform, Duration, Date, Start, and End columns on or off.
 
 ---
@@ -252,6 +253,7 @@ single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated sensor names (used when mode is 'selected')
 max_sessions: 10 # Number of sessions to display (max 20); scrolls once more than 10 are shown
 background: art # Options: art (game artwork), avatar (player avatar), none
+show_header: true # Set to false to hide the column header row (also hides the show_column_* options in the UI editor)
 show_column_player: true # Automatically hidden when mode is 'single', regardless of this setting
 show_column_game: true
 show_column_platform: true

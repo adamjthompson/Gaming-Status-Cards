@@ -2753,6 +2753,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       selected_entities: "",
       max_sessions: 10,
       background: "art",
+      show_header: true,
       show_column_player: true,
       show_column_game: true,
       show_column_platform: true,
@@ -2776,6 +2777,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       selected_entities: config.selected_entities || "",
       max_sessions: config.max_sessions !== undefined ? parseInt(config.max_sessions) || 10 : 10,
       background: config.background || "art",
+      show_header: config.show_header !== false,
       show_column_player: config.show_column_player !== false,
       show_column_game: config.show_column_game !== false,
       show_column_platform: config.show_column_platform !== false,
@@ -2812,6 +2814,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
     }).join(",")
       + "|" + this.config.max_sessions
       + "|" + this.config.background
+      + "|" + this.config.show_header
       + "|" + [this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end].join(",");
 
     if (this._lastHash === hash) return;
@@ -2901,7 +2904,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
           #rs-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
 
           .rs-header-row { display: flex; align-items: center; gap: 8px; padding: 0 10px 8px 10px; box-sizing: border-box; }
-          .rs-header-cell { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .rs-header-cell { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
           .rs-body { display: flex; flex-direction: column; gap: 6px; }
           .rs-body.scrollable { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
@@ -2944,6 +2947,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
     this._titleEl.style.display = this.config.title ? "block" : "none";
 
     const columns = this._getVisibleColumns();
+    this._headerEl.style.display = this.config.show_header !== false ? "flex" : "none";
     this._headerEl.innerHTML = columns.map(c => `<div class="rs-header-cell" style="flex: ${c.flex};">${c.label}</div>`).join("");
 
     // Match the List card's "scrollable" pattern: once more than 10 rows would
@@ -3076,6 +3080,11 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
         </div>
         <hr>
         <div>
+          <label><input type="checkbox" data-field="show_header" ${this._config.show_header !== false ? "checked" : ""}> Show Header Row</label>
+        </div>
+        ${this._config.show_header !== false ? `
+        <hr>
+        <div>
           <div class="section-title">Visible Columns</div>
           <div class="checkbox-group">
             ${mode !== "single" ? `<label><input type="checkbox" data-field="show_column_player" ${this._config.show_column_player !== false ? "checked" : ""}> Player</label>` : ""}
@@ -3086,7 +3095,7 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
             <label><input type="checkbox" data-field="show_column_start" ${this._config.show_column_start !== false ? "checked" : ""}> Start</label>
             <label><input type="checkbox" data-field="show_column_end" ${this._config.show_column_end !== false ? "checked" : ""}> End</label>
           </div>
-        </div>
+        </div>` : ""}
       </div>
     `;
 
@@ -3135,8 +3144,10 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
 
     this.shadowRoot.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
       checkbox.addEventListener("change", (ev) => {
-        this._config = { ...this._config, [ev.target.dataset.field]: ev.target.checked };
+        const field = ev.target.dataset.field;
+        this._config = { ...this._config, [field]: ev.target.checked };
         fireChanged();
+        if (field === "show_header") this.render();
       });
     });
   }
