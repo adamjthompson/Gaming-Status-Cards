@@ -2735,6 +2735,16 @@ class GamingStatusGameChartEditor extends HTMLElement {
 // CARD 7: GAMING STATUS - RECENT SESSIONS
 // ====================================================================
 
+// Same platform brand colors used by the List card's "Platform Native" color mode.
+const GAMING_STATUS_PLATFORM_TINTS = {
+  steam: "2, 173, 239",
+  xbox: "11, 124, 16",
+  playstation: "0, 48, 135",
+  playnite: "255, 88, 51",
+  custom: "100, 50, 100",
+  discord: "88, 101, 242",
+};
+
 class GamingStatusRecentSessionsCard extends HTMLElement {
   constructor() {
     super();
@@ -2753,6 +2763,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       selected_entities: "",
       max_sessions: 10,
       background: "art",
+      use_platform_colors: false,
       show_header: true,
       show_column_player: true,
       show_column_game: true,
@@ -2777,6 +2788,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       selected_entities: config.selected_entities || "",
       max_sessions: config.max_sessions !== undefined ? parseInt(config.max_sessions) || 10 : 10,
       background: config.background || "art",
+      use_platform_colors: config.use_platform_colors === true,
       show_header: config.show_header !== false,
       show_column_player: config.show_column_player !== false,
       show_column_game: config.show_column_game !== false,
@@ -2814,6 +2826,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
     }).join(",")
       + "|" + this.config.max_sessions
       + "|" + this.config.background
+      + "|" + this.config.use_platform_colors
       + "|" + this.config.show_header
       + "|" + [this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end].join(",");
 
@@ -2921,7 +2934,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
           .rs-row.has-bg::before {
             content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; z-index: 0; pointer-events: none;
             background-size: cover; background-position: center;
-            background-image: linear-gradient(to right, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.75) 100%), var(--rs-bg-url);
+            background-image: linear-gradient(to right, var(--rs-tint-start, rgba(0, 0, 0, 0.55)) 0%, var(--rs-tint-end, rgba(0, 0, 0, 0.75)) 100%), var(--rs-bg-url);
             filter: blur(6px);
           }
 
@@ -2973,6 +2986,16 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       else if (this.config.background !== "none") bgUrl = row.hero_art_url || "";
       const hasBg = !!bgUrl;
 
+      let tintStyle = "";
+      if (hasBg && this.config.use_platform_colors) {
+        const platformLower = (row.platform || "").toLowerCase();
+        const tintKey = Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => platformLower.includes(k));
+        if (tintKey) {
+          const rgb = GAMING_STATUS_PLATFORM_TINTS[tintKey];
+          tintStyle = ` --rs-tint-start: rgba(${rgb}, 0.55); --rs-tint-end: rgba(${rgb}, 0.85);`;
+        }
+      }
+
       const cellsHTML = columns.map(c => {
         let value = "";
         let cls = "rs-cell";
@@ -2988,7 +3011,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
         return `<div class="${cls}" style="flex: ${c.flex};">${value}</div>`;
       }).join("");
 
-      return `<div class="rs-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--rs-bg-url: url('${bgUrl}');` : ""}">${cellsHTML}</div>`;
+      return `<div class="rs-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--rs-bg-url: url('${bgUrl}');${tintStyle}` : ""}">${cellsHTML}</div>`;
     }).join("");
   }
 
@@ -3077,6 +3100,10 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
             <label><input type="radio" name="background" data-field="background" value="avatar" ${this._config.background === "avatar" ? "checked" : ""}> Player Avatar</label>
             <label><input type="radio" name="background" data-field="background" value="none" ${this._config.background === "none" ? "checked" : ""}> None</label>
           </div>
+        </div>
+        <div>
+          <label><input type="checkbox" data-field="use_platform_colors" ${this._config.use_platform_colors === true ? "checked" : ""}> Use Platform Colors</label>
+          <div class="helper-text">Tint the blurred background of each row with that platform's brand color (Steam blue, Xbox green, etc.) instead of a neutral black gradient.</div>
         </div>
         <hr>
         <div>
