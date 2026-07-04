@@ -3160,9 +3160,11 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
       });
     }
 
-    this.shadowRoot.getElementById("max_sessions").addEventListener("change", (ev) => {
-      const clamped = Math.min(20, Math.max(1, parseInt(ev.target.value) || 10));
-      ev.target.value = clamped;
+    this.shadowRoot.getElementById("max_sessions").addEventListener("input", (ev) => {
+      const raw = parseInt(ev.target.value);
+      if (isNaN(raw)) return; // let them clear the field / keep typing without fighting the cursor
+      const clamped = Math.min(20, Math.max(1, raw));
+      if (clamped !== raw) ev.target.value = clamped;
       this._config = { ...this._config, max_sessions: clamped };
       fireChanged();
     });
