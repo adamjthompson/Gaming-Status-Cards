@@ -2786,7 +2786,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       mode: config.mode || "all",
       single_entity: config.single_entity || "",
       selected_entities: config.selected_entities || "",
-      max_sessions: config.max_sessions !== undefined ? parseInt(config.max_sessions) || 10 : 10,
+      max_sessions: config.max_sessions !== undefined ? Math.min(20, Math.max(1, parseInt(config.max_sessions) || 10)) : 10,
       background: config.background || "art",
       use_platform_colors: config.use_platform_colors === true,
       show_header: config.show_header !== false,
@@ -2862,7 +2862,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
 
     rows.sort((a, b) => (Date.parse(b.start_time) || 0) - (Date.parse(a.start_time) || 0));
 
-    const limit = Math.max(1, parseInt(this.config.max_sessions) || 10);
+    const limit = Math.min(20, Math.max(1, parseInt(this.config.max_sessions) || 10));
     return rows.slice(0, limit);
   }
 
@@ -3161,7 +3161,9 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
     }
 
     this.shadowRoot.getElementById("max_sessions").addEventListener("change", (ev) => {
-      this._config = { ...this._config, max_sessions: parseInt(ev.target.value) || 10 };
+      const clamped = Math.min(20, Math.max(1, parseInt(ev.target.value) || 10));
+      ev.target.value = clamped;
+      this._config = { ...this._config, max_sessions: clamped };
       fireChanged();
     });
 
