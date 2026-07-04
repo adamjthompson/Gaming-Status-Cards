@@ -80,6 +80,45 @@ function gamingStatusDefaultSingleEntity(config, entities, field) {
   return false;
 }
 
+// Same platform brand colors used by the List card's "Platform Native" color mode.
+const GAMING_STATUS_PLATFORM_TINTS = {
+  steam: "2, 173, 239",
+  xbox: "11, 124, 16",
+  playstation: "0, 48, 135",
+  playnite: "255, 88, 51",
+  custom: "100, 50, 100",
+  discord: "88, 101, 242",
+};
+
+const GAMING_STATUS_PLATFORM_LABELS = {
+  steam: "Steam",
+  xbox: "Xbox",
+  playstation: "PlayStation",
+  playnite: "Playnite",
+  custom: "Custom",
+  discord: "Discord",
+};
+
+// Returns the Set of platform keys that currently have at least one real
+// gaming_status entity, so editors can hide platform-specific options that
+// would otherwise always be dead/empty. Returns null when hass isn't
+// available yet - callers must treat null as "show everything" (fail open).
+function gamingStatusGetAvailablePlatforms(hass) {
+  if (!hass) return null;
+  const keys = Object.keys(hass.states);
+  const available = new Set();
+  Object.keys(GAMING_STATUS_PLATFORM_LABELS).forEach(platform => {
+    const suffix = `_${platform}`;
+    const hasEntity = keys.some(k =>
+      k.startsWith("sensor.gaming_status_") &&
+      k.endsWith(suffix) &&
+      hass.states[k].attributes.secondary !== undefined
+    );
+    if (hasEntity) available.add(platform);
+  });
+  return available;
+}
+
 // ====================================================================
 // CARD 1: GAMING STATUS - LIST
 // ====================================================================
@@ -508,6 +547,18 @@ class GamingStatusCard extends HTMLElement {
   }
 }
 
+const GAMING_STATUS_MODE_OPTIONS = [
+  { value: "all", label: "All Players" },
+  { value: "online", label: "Online Only" },
+  { value: "steam", label: "Steam", platforms: ["steam"] },
+  { value: "xbox", label: "Xbox", platforms: ["xbox"] },
+  { value: "playstation", label: "PlayStation", platforms: ["playstation"] },
+  { value: "pc", label: "PC (Steam, Discord, Playnite, & Custom)", platforms: ["steam", "discord", "playnite", "custom"] },
+  { value: "discord", label: "Discord", platforms: ["discord"] },
+  { value: "playnite", label: "Playnite", platforms: ["playnite"] },
+  { value: "custom", label: "Custom", platforms: ["custom"] },
+];
+
 class GamingStatusCardEditor extends HTMLElement {
   constructor() {
     super();
@@ -518,10 +569,18 @@ class GamingStatusCardEditor extends HTMLElement {
     this.render();
   }
   set hass(hass) {
+    const first = !this._hass;
     this._hass = hass;
+    if (first) this.render();
   }
   render() {
     if (!this._config) return;
+
+    const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
+    const modeOptions = GAMING_STATUS_MODE_OPTIONS.filter(opt =>
+      !opt.platforms || !availablePlatforms || opt.platforms.some(p => availablePlatforms.has(p))
+    );
+
     this.shadowRoot.innerHTML = `
       <style>
         .editor-container { display: flex; flex-direction: column; gap: 20px; color: var(--primary-text-color); }
@@ -535,33 +594,9 @@ class GamingStatusCardEditor extends HTMLElement {
       </style>
       <div class="editor-container">
         <div><div class="section-title">Mode</div><div class="radio-group">
-            <label><input type="radio" name="mode" data-field="mode" value="all" ${
-              this._config.mode === "all" || !this._config.mode ? "checked" : ""
-            }> All Players</label>
-            <label><input type="radio" name="mode" data-field="mode" value="online" ${
-              this._config.mode === "online" ? "checked" : ""
-            }> Online Only</label>
-            <label><input type="radio" name="mode" data-field="mode" value="steam" ${
-              this._config.mode === "steam" ? "checked" : ""
-            }> Steam</label>
-            <label><input type="radio" name="mode" data-field="mode" value="xbox" ${
-              this._config.mode === "xbox" ? "checked" : ""
-            }> Xbox</label>
-            <label><input type="radio" name="mode" data-field="mode" value="playstation" ${
-              this._config.mode === "playstation" ? "checked" : ""
-            }> PlayStation</label>
-            <label><input type="radio" name="mode" data-field="mode" value="pc" ${
-              this._config.mode === "pc" ? "checked" : ""
-            }> PC (Steam, Discord, Playnite, & Custom)</label>
-            <label><input type="radio" name="mode" data-field="mode" value="discord" ${
-              this._config.mode === "discord" ? "checked" : ""
-            }> Discord</label>
-            <label><input type="radio" name="mode" data-field="mode" value="playnite" ${
-              this._config.mode === "playnite" ? "checked" : ""
-            }> Playnite</label>
-            <label><input type="radio" name="mode" data-field="mode" value="custom" ${
-              this._config.mode === "custom" ? "checked" : ""
-            }> Custom</label>
+            ${modeOptions.map(opt => `<label><input type="radio" name="mode" data-field="mode" value="${opt.value}" ${
+              this._config.mode === opt.value || (opt.value === "all" && !this._config.mode) ? "checked" : ""
+            }> ${opt.label}</label>`).join("")}
         </div></div><hr>
         <div><div class="section-title">Color Mode</div><div class="radio-group">
             <label><input type="radio" name="color_mode" data-field="color_mode" value="game" ${
@@ -2735,25 +2770,6 @@ class GamingStatusGameChartEditor extends HTMLElement {
 // CARD 7: GAMING STATUS - RECENT SESSIONS
 // ====================================================================
 
-// Same platform brand colors used by the List card's "Platform Native" color mode.
-const GAMING_STATUS_PLATFORM_TINTS = {
-  steam: "2, 173, 239",
-  xbox: "11, 124, 16",
-  playstation: "0, 48, 135",
-  playnite: "255, 88, 51",
-  custom: "100, 50, 100",
-  discord: "88, 101, 242",
-};
-
-const GAMING_STATUS_PLATFORM_LABELS = {
-  steam: "Steam",
-  xbox: "Xbox",
-  playstation: "PlayStation",
-  playnite: "Playnite",
-  custom: "Custom",
-  discord: "Discord",
-};
-
 class GamingStatusRecentSessionsCard extends HTMLElement {
   constructor() {
     super();
@@ -3083,6 +3099,7 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
+    const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -3109,7 +3126,9 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
           <div class="section-title">Platforms</div>
           <div class="helper-text">Only show sessions from the checked platforms.</div>
           <div class="checkbox-group">
-            ${Object.keys(GAMING_STATUS_PLATFORM_LABELS).map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${GAMING_STATUS_PLATFORM_LABELS[key]}</label>`).join("")}
+            ${Object.keys(GAMING_STATUS_PLATFORM_LABELS)
+              .filter(key => !availablePlatforms || availablePlatforms.has(key))
+              .map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${GAMING_STATUS_PLATFORM_LABELS[key]}</label>`).join("")}
           </div>
         </div>
         <hr>
