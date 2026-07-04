@@ -3068,6 +3068,10 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
         label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
         hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
         .helper-text { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 8px; line-height: 1.4; }
+        .inline-apply { display: flex; gap: 8px; align-items: center; }
+        .inline-apply input { flex: 1; }
+        .inline-apply button { padding: 8px 14px; background: var(--primary-color); color: var(--text-primary-color, #fff); border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .inline-apply button:hover { opacity: 0.9; }
       </style>
       <div class="editor-container">
         <div>
@@ -3100,8 +3104,11 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
         <hr>
         <div>
           <div class="section-title">Number of Sessions to Display</div>
-          <div class="helper-text">Shows the most recently completed sessions, newest first. If more than 10 would be shown, the list scrolls instead of growing taller.</div>
-          <input type="number" id="max_sessions" value="${parseInt(this._config.max_sessions) || 10}" min="1" max="20">
+          <div class="helper-text">Shows the most recently completed sessions, newest first (1-20). If more than 10 would be shown, the list scrolls instead of growing taller. Click Apply to confirm the value.</div>
+          <div class="inline-apply">
+            <input type="number" id="max_sessions" value="${parseInt(this._config.max_sessions) || 10}" min="1" max="20">
+            <button type="button" id="max_sessions_apply">Apply</button>
+          </div>
         </div>
         <hr>
         <div>
@@ -3169,11 +3176,13 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
       });
     }
 
-    this.shadowRoot.getElementById("max_sessions").addEventListener("input", (ev) => {
-      const raw = parseInt(ev.target.value);
-      if (isNaN(raw)) return; // let them clear the field / keep typing without fighting the cursor
-      const clamped = Math.min(20, Math.max(1, raw));
-      if (clamped !== raw) ev.target.value = clamped;
+    // Typing alone never dispatches a config change (avoids the HA editor's
+    // config-changed -> setConfig -> re-render round trip stealing focus
+    // mid-keystroke). The value is only read, clamped, and applied on click.
+    this.shadowRoot.getElementById("max_sessions_apply").addEventListener("click", () => {
+      const input = this.shadowRoot.getElementById("max_sessions");
+      const clamped = Math.min(20, Math.max(1, parseInt(input.value) || 10));
+      input.value = clamped;
       this._config = { ...this._config, max_sessions: clamped };
       fireChanged();
     });

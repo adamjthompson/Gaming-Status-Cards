@@ -141,7 +141,7 @@ A configurable table of recently completed play sessions — one row per session
 **UI Configuration Options:**
 * **Card Title:** Optional title displayed above the table.
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players. In **Single Player** mode, the Player column is automatically hidden since it would be redundant.
-* **Number of Sessions to Display:** How many recent sessions to show (default: 10, max: 20). If more than 10 would be shown, the list scrolls instead of growing taller.
+* **Number of Sessions to Display:** How many recent sessions to show (default: 10, max: 20). If more than 10 would be shown, the list scrolls instead of growing taller. Type a value and click **Apply** to confirm it.
 * **Background:** Choose what renders (blurred) behind each row — **Game Artwork**, **Player Avatar**, or **None**.
 * **Use Platform Colors:** Tint each row's blurred background with that platform's brand color (Steam blue, Xbox green, etc.) instead of a neutral black gradient — same color set as the List card's Platform Native color mode.
 * **Show Header Row:** Toggle the column header row on or off. When off, the Visible Columns options below are hidden too, since there's no header left to label them against.
