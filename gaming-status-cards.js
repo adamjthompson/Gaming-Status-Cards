@@ -2698,6 +2698,413 @@ class GamingStatusGameChartEditor extends HTMLElement {
 }
 
 // ====================================================================
+// CARD 7: GAMING STATUS - RECENT SESSIONS
+// ====================================================================
+
+class GamingStatusRecentSessionsCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+  }
+
+  static getConfigElement() {
+    return document.createElement("gaming-status-recent-sessions-editor");
+  }
+
+  static getStubConfig() {
+    return {
+      title: "",
+      mode: "all",
+      single_entity: "",
+      selected_entities: "",
+      max_sessions: 10,
+      background: "art",
+      show_column_player: true,
+      show_column_game: true,
+      show_column_platform: true,
+      show_column_duration: true,
+      show_column_date: true,
+      show_column_time: true,
+      entities_pattern: "_master",
+    };
+  }
+
+  setConfig(config) {
+    this.config = {
+      ...config,
+      title: config.title || "",
+      mode: config.mode || "all",
+      single_entity: config.single_entity || "",
+      selected_entities: config.selected_entities || "",
+      max_sessions: config.max_sessions !== undefined ? parseInt(config.max_sessions) || 10 : 10,
+      background: config.background || "art",
+      show_column_player: config.show_column_player !== false,
+      show_column_game: config.show_column_game !== false,
+      show_column_platform: config.show_column_platform !== false,
+      show_column_duration: config.show_column_duration !== false,
+      show_column_date: config.show_column_date !== false,
+      show_column_time: config.show_column_time !== false,
+      entities_pattern: config.entities_pattern || "_master",
+    };
+    this._lastHash = "";
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (!this.config) return;
+
+    let entityIds = [];
+    if (this.config.mode === "single" && this.config.single_entity) {
+      if (hass.states[this.config.single_entity]) entityIds.push(this.config.single_entity);
+    } else if (this.config.mode === "selected" && this.config.selected_entities) {
+      entityIds = this.config.selected_entities.split(",").map(e => e.trim()).filter(e => hass.states[e]);
+    } else {
+      entityIds = Object.keys(hass.states).filter(
+        k => (k.startsWith("sensor.gaming_status_") || k.startsWith("binary_sensor.gaming_status_")) &&
+             k.endsWith(this.config.entities_pattern) &&
+             hass.states[k].attributes.secondary !== undefined
+      );
+    }
+    entityIds.sort();
+
+    const hash = entityIds.map(id => {
+      const sessions = hass.states[id]?.attributes?.recent_sessions || [];
+      return `${id}:${sessions.length}:${sessions[0] ? sessions[0].start_time : ""}`;
+    }).join(",")
+      + "|" + this.config.max_sessions
+      + "|" + this.config.background
+      + "|" + [this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_time].join(",");
+
+    if (this._lastHash === hash) return;
+    this._lastHash = hash;
+
+    this.render(this.processData(entityIds));
+  }
+
+  processData(entityIds) {
+    let rows = [];
+    for (const entityId of entityIds) {
+      const stateObj = this._hass.states[entityId];
+      if (!stateObj) continue;
+      const playerName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status| Master/gi, "").trim();
+      const avatar = stateObj.attributes.entity_picture || "";
+      const sessions = stateObj.attributes.recent_sessions || [];
+
+      for (const s of sessions) {
+        rows.push({
+          player: playerName,
+          avatar,
+          game: s.game || "Unknown",
+          platform: s.platform || "",
+          duration_seconds: parseInt(s.duration_seconds) || 0,
+          date: s.date || "",
+          start_time: s.start_time || "",
+          hero_art_url: s.hero_art_url || "",
+        });
+      }
+    }
+
+    rows.sort((a, b) => (Date.parse(b.start_time) || 0) - (Date.parse(a.start_time) || 0));
+
+    const limit = Math.max(1, parseInt(this.config.max_sessions) || 10);
+    return rows.slice(0, limit);
+  }
+
+  _getVisibleColumns() {
+    const isSingle = this.config.mode === "single";
+    const ALL_COLUMNS = [
+      { key: "player", label: "Player", flex: "1.2" },
+      { key: "game", label: "Game", flex: "2" },
+      { key: "platform", label: "Platform", flex: "1" },
+      { key: "duration", label: "Duration", flex: "0.9" },
+      { key: "date", label: "Date", flex: "0.9" },
+      { key: "time", label: "Time", flex: "0.9" },
+    ];
+    return ALL_COLUMNS.filter(c => {
+      if (c.key === "player") return !isSingle && this.config.show_column_player;
+      return this.config[`show_column_${c.key}`];
+    });
+  }
+
+  _formatDuration(seconds) {
+    const totalMins = Math.round(seconds / 60);
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    if (h > 0 && m > 0) return `${h}h ${m}m`;
+    if (h > 0) return `${h}h`;
+    return `${m}m`;
+  }
+
+  _formatDate(dateStr) {
+    if (!dateStr) return "";
+    const d = new Date(`${dateStr}T12:00:00`);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  _formatTime(startTime) {
+    if (!startTime) return "";
+    const d = new Date(startTime);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+
+  render(rows) {
+    const escapeHTML = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    if (!this.content) {
+      this.shadowRoot.innerHTML = `
+        <style>
+          :host { display: block; }
+          ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
+          #rs-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
+
+          .rs-header-row { display: flex; align-items: center; gap: 8px; padding: 0 10px 8px 10px; box-sizing: border-box; }
+          .rs-header-cell { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+          .rs-body { display: flex; flex-direction: column; gap: 6px; }
+          .rs-body.scrollable { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+          .rs-body::-webkit-scrollbar { width: 6px; }
+          .rs-body::-webkit-scrollbar-track { background: transparent; }
+          .rs-body::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, 0.4); border-radius: 3px; }
+          .rs-body::-webkit-scrollbar-thumb:hover { background: rgba(120, 120, 120, 0.8); }
+
+          .rs-row {
+            position: relative; overflow: hidden; border-radius: 8px; display: flex; align-items: center; gap: 8px;
+            padding: 9px 10px; box-sizing: border-box; flex-shrink: 0;
+          }
+          .rs-row.no-bg { background: var(--secondary-background-color, rgba(120, 120, 120, 0.08)); }
+          .rs-row.has-bg::before {
+            content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; z-index: 0; pointer-events: none;
+            background-size: cover; background-position: center;
+            background-image: linear-gradient(to right, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.75) 100%), var(--rs-bg-url);
+            filter: blur(6px);
+          }
+
+          .rs-cell { position: relative; z-index: 1; font-size: 13px; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .rs-cell.primary { font-weight: 600; }
+          .rs-row.has-bg .rs-cell { color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+
+          .rs-empty { padding: 20px; color: var(--secondary-text-color); font-style: italic; }
+        </style>
+        <ha-card>
+          <div id="rs-title"></div>
+          <div id="rs-header" class="rs-header-row"></div>
+          <div id="rs-body" class="rs-body"></div>
+        </ha-card>
+      `;
+      this._titleEl = this.shadowRoot.getElementById("rs-title");
+      this._headerEl = this.shadowRoot.getElementById("rs-header");
+      this._bodyEl = this.shadowRoot.getElementById("rs-body");
+      this.content = this._bodyEl;
+    }
+
+    this._titleEl.textContent = this.config.title || "";
+    this._titleEl.style.display = this.config.title ? "block" : "none";
+
+    const columns = this._getVisibleColumns();
+    this._headerEl.innerHTML = columns.map(c => `<div class="rs-header-cell" style="flex: ${c.flex};">${c.label}</div>`).join("");
+
+    // Match the List card's "scrollable" pattern: once more than 10 rows would
+    // be shown, cap the visible height to roughly 10 rows and scroll instead
+    // of letting the card grow unbounded.
+    if (rows.length > 10) {
+      const rowH = 40, gap = 6;
+      this._bodyEl.style.maxHeight = `${(rowH * 10) + (gap * 9)}px`;
+      this._bodyEl.classList.add("scrollable");
+    } else {
+      this._bodyEl.style.maxHeight = "";
+      this._bodyEl.classList.remove("scrollable");
+    }
+
+    if (!rows.length) {
+      this._bodyEl.innerHTML = `<div class="rs-empty">No recent sessions found.</div>`;
+      return;
+    }
+
+    this._bodyEl.innerHTML = rows.map(row => {
+      let bgUrl = "";
+      if (this.config.background === "avatar") bgUrl = row.avatar;
+      else if (this.config.background !== "none") bgUrl = row.hero_art_url || "";
+      const hasBg = !!bgUrl;
+
+      const cellsHTML = columns.map(c => {
+        let value = "";
+        let cls = "rs-cell";
+        switch (c.key) {
+          case "player": value = escapeHTML(row.player); cls += " primary"; break;
+          case "game": value = escapeHTML(row.game); cls += " primary"; break;
+          case "platform": value = escapeHTML(row.platform); break;
+          case "duration": value = escapeHTML(this._formatDuration(row.duration_seconds)); break;
+          case "date": value = escapeHTML(this._formatDate(row.date)); break;
+          case "time": value = escapeHTML(this._formatTime(row.start_time)); break;
+        }
+        return `<div class="${cls}" style="flex: ${c.flex};">${value}</div>`;
+      }).join("");
+
+      return `<div class="rs-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--rs-bg-url: url('${bgUrl}');` : ""}">${cellsHTML}</div>`;
+    }).join("");
+  }
+
+  getCardSize() {
+    return 4;
+  }
+}
+
+class GamingStatusRecentSessionsEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+  }
+
+  setConfig(config) {
+    this._config = config;
+    this.render();
+  }
+
+  set hass(hass) {
+    const first = !this._hass;
+    this._hass = hass;
+    if (first) this.render();
+  }
+
+  render() {
+    if (!this._config) return;
+    const mode = this._config.mode || "all";
+    const targetSuffix = this._config.entities_pattern || "_master";
+    const entityOptions = this._hass ? Object.keys(this._hass.states)
+      .filter(k => k.endsWith(targetSuffix) && this._hass.states[k].attributes.secondary !== undefined)
+      .map(k => {
+        const name = (this._hass.states[k].attributes.friendly_name || k).replace(/ Gaming Status| Master/gi, "").trim();
+        return `<option value="${k}" ${this._config.single_entity === k ? "selected" : ""}>${this._esc(name)}</option>`;
+      }).join("") : "";
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        .editor-container { display: flex; flex-direction: column; gap: 20px; color: var(--primary-text-color); }
+        .section-title { font-weight: 600; margin-bottom: 8px; }
+        input[type="text"], input[type="number"], select { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
+        input:focus, select:focus { outline: none; border-color: var(--primary-color); }
+        .radio-group, .checkbox-group { display: flex; flex-direction: column; gap: 10px; }
+        label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
+        .helper-text { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 8px; line-height: 1.4; }
+      </style>
+      <div class="editor-container">
+        <div>
+          <div class="section-title">Card Title (Optional)</div>
+          <input type="text" id="title" value="${this._esc(this._config.title || "")}">
+        </div>
+        <hr>
+        <div>
+          <div class="section-title">Player Filter</div>
+          <select id="mode">
+            <option value="all" ${mode === "all" ? "selected" : ""}>All Tracked Players</option>
+            <option value="single" ${mode === "single" ? "selected" : ""}>Single Player</option>
+            <option value="selected" ${mode === "selected" ? "selected" : ""}>Selected Players</option>
+          </select>
+        </div>
+        ${mode === "single" ? `
+        <div>
+          <div class="section-title">Select Player</div>
+          <select id="single_entity">
+            <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player…</option>
+            ${entityOptions}
+          </select>
+        </div>` : ""}
+        ${mode === "selected" ? `
+        <div>
+          <div class="section-title">Selected Entities</div>
+          <div class="helper-text">Comma-separated entity IDs to include.</div>
+          <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="sensor.gaming_status_jack_master, ...">
+        </div>` : ""}
+        <hr>
+        <div>
+          <div class="section-title">Number of Sessions to Display</div>
+          <div class="helper-text">Shows the most recently completed sessions, newest first. If more than 10 would be shown, the list scrolls instead of growing taller.</div>
+          <input type="number" id="max_sessions" value="${parseInt(this._config.max_sessions) || 10}" min="1" max="20">
+        </div>
+        <hr>
+        <div>
+          <div class="section-title">Background</div>
+          <div class="radio-group">
+            <label><input type="radio" name="background" data-field="background" value="art" ${this._config.background !== "avatar" && this._config.background !== "none" ? "checked" : ""}> Game Artwork</label>
+            <label><input type="radio" name="background" data-field="background" value="avatar" ${this._config.background === "avatar" ? "checked" : ""}> Player Avatar</label>
+            <label><input type="radio" name="background" data-field="background" value="none" ${this._config.background === "none" ? "checked" : ""}> None</label>
+          </div>
+        </div>
+        <hr>
+        <div>
+          <div class="section-title">Visible Columns</div>
+          <div class="checkbox-group">
+            ${mode !== "single" ? `<label><input type="checkbox" data-field="show_column_player" ${this._config.show_column_player !== false ? "checked" : ""}> Player</label>` : ""}
+            <label><input type="checkbox" data-field="show_column_game" ${this._config.show_column_game !== false ? "checked" : ""}> Game</label>
+            <label><input type="checkbox" data-field="show_column_platform" ${this._config.show_column_platform !== false ? "checked" : ""}> Platform</label>
+            <label><input type="checkbox" data-field="show_column_duration" ${this._config.show_column_duration !== false ? "checked" : ""}> Duration</label>
+            <label><input type="checkbox" data-field="show_column_date" ${this._config.show_column_date !== false ? "checked" : ""}> Date</label>
+            <label><input type="checkbox" data-field="show_column_time" ${this._config.show_column_time !== false ? "checked" : ""}> Time</label>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const fireChanged = () => {
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+    };
+
+    this.shadowRoot.getElementById("title").addEventListener("change", (ev) => {
+      this._config = { ...this._config, title: ev.target.value };
+      fireChanged();
+    });
+
+    this.shadowRoot.getElementById("mode").addEventListener("change", (ev) => {
+      this._config = { ...this._config, mode: ev.target.value };
+      fireChanged();
+      this.render();
+    });
+
+    const singleEntity = this.shadowRoot.getElementById("single_entity");
+    if (singleEntity) {
+      singleEntity.addEventListener("change", (ev) => {
+        this._config = { ...this._config, single_entity: ev.target.value };
+        fireChanged();
+      });
+    }
+
+    const selectedEntities = this.shadowRoot.getElementById("selected_entities");
+    if (selectedEntities) {
+      selectedEntities.addEventListener("change", (ev) => {
+        this._config = { ...this._config, selected_entities: ev.target.value };
+        fireChanged();
+      });
+    }
+
+    this.shadowRoot.getElementById("max_sessions").addEventListener("change", (ev) => {
+      this._config = { ...this._config, max_sessions: parseInt(ev.target.value) || 10 };
+      fireChanged();
+    });
+
+    this.shadowRoot.querySelectorAll('input[name="background"]').forEach((radio) => {
+      radio.addEventListener("change", (ev) => {
+        this._config = { ...this._config, background: ev.target.value };
+        fireChanged();
+      });
+    });
+
+    this.shadowRoot.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+      checkbox.addEventListener("change", (ev) => {
+        this._config = { ...this._config, [ev.target.dataset.field]: ev.target.checked };
+        fireChanged();
+      });
+    });
+  }
+
+  _esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+}
+
+// ====================================================================
 // REGISTRATION
 // ====================================================================
 
@@ -2727,6 +3134,10 @@ customElements.define("gaming-status-leaderboard-editor", GamingStatusLeaderboar
 // Card 6
 customElements.define("gaming-status-game-chart-card", GamingStatusGameChartCard);
 customElements.define("gaming-status-game-chart-editor", GamingStatusGameChartEditor);
+
+// Card 7
+customElements.define("gaming-status-recent-sessions-card", GamingStatusRecentSessionsCard);
+customElements.define("gaming-status-recent-sessions-editor", GamingStatusRecentSessionsEditor);
 
 // Inject into UI
 window.customCards = window.customCards || [];
@@ -2773,4 +3184,11 @@ window.customCards.push({
   name: "Gaming Status - Weekly Games",
   preview: true,
   description: "A per-player stacked bar chart showing daily hours broken down by game."
+});
+
+window.customCards.push({
+  type: "gaming-status-recent-sessions-card",
+  name: "Gaming Status - Recent Sessions",
+  preview: true,
+  description: "A configurable table of recently completed play sessions with optional blurred artwork backgrounds."
 });
