@@ -3029,6 +3029,15 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
   }
 
   setConfig(config) {
+    // Home Assistant echoes our own config-changed dispatches back through
+    // setConfig(). For fields that update live on every keystroke (Number of
+    // Sessions), rebuilding the whole form here would destroy and recreate
+    // the input mid-typing and steal focus. Skip the rebuild when this is
+    // just an echo of what we already have.
+    if (this._config && this.shadowRoot.firstChild && JSON.stringify(this._config) === JSON.stringify(config)) {
+      this._config = config;
+      return;
+    }
     this._config = config;
     this.render();
   }
