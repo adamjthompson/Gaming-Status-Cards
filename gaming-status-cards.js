@@ -119,6 +119,15 @@ function gamingStatusGetAvailablePlatforms(hass) {
   return available;
 }
 
+// Joins display labels the way natural English lists read: "A", "A & B",
+// "A, B, & C". Used to build the "PC" mode option's label dynamically from
+// whichever of its constituent platforms actually have entities.
+function gamingStatusJoinLabels(labels) {
+  if (labels.length <= 1) return labels.join("");
+  if (labels.length === 2) return labels.join(" & ");
+  return `${labels.slice(0, -1).join(", ")}, & ${labels[labels.length - 1]}`;
+}
+
 // ====================================================================
 // CARD 1: GAMING STATUS - LIST
 // ====================================================================
@@ -577,9 +586,13 @@ class GamingStatusCardEditor extends HTMLElement {
     if (!this._config) return;
 
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
-    const modeOptions = GAMING_STATUS_MODE_OPTIONS.filter(opt =>
-      !opt.platforms || !availablePlatforms || opt.platforms.some(p => availablePlatforms.has(p))
-    );
+    const modeOptions = GAMING_STATUS_MODE_OPTIONS
+      .filter(opt => !opt.platforms || !availablePlatforms || opt.platforms.some(p => availablePlatforms.has(p)))
+      .map(opt => {
+        if (opt.value !== "pc" || !availablePlatforms) return opt;
+        const activeLabels = opt.platforms.filter(p => availablePlatforms.has(p)).map(p => GAMING_STATUS_PLATFORM_LABELS[p]);
+        return { ...opt, label: `PC (${gamingStatusJoinLabels(activeLabels)})` };
+      });
 
     this.shadowRoot.innerHTML = `
       <style>
