@@ -2745,6 +2745,15 @@ const GAMING_STATUS_PLATFORM_TINTS = {
   discord: "88, 101, 242",
 };
 
+const GAMING_STATUS_PLATFORM_LABELS = {
+  steam: "Steam",
+  xbox: "Xbox",
+  playstation: "PlayStation",
+  playnite: "Playnite",
+  custom: "Custom",
+  discord: "Discord",
+};
+
 class GamingStatusRecentSessionsCard extends HTMLElement {
   constructor() {
     super();
@@ -2764,6 +2773,12 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       max_sessions: 10,
       background: "art",
       use_platform_colors: false,
+      show_platform_steam: true,
+      show_platform_xbox: true,
+      show_platform_playstation: true,
+      show_platform_playnite: true,
+      show_platform_custom: true,
+      show_platform_discord: true,
       show_header: true,
       show_column_player: true,
       show_column_game: true,
@@ -2789,6 +2804,12 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       max_sessions: config.max_sessions !== undefined ? Math.min(20, Math.max(1, parseInt(config.max_sessions) || 10)) : 10,
       background: config.background || "art",
       use_platform_colors: config.use_platform_colors === true,
+      show_platform_steam: config.show_platform_steam !== false,
+      show_platform_xbox: config.show_platform_xbox !== false,
+      show_platform_playstation: config.show_platform_playstation !== false,
+      show_platform_playnite: config.show_platform_playnite !== false,
+      show_platform_custom: config.show_platform_custom !== false,
+      show_platform_discord: config.show_platform_discord !== false,
       show_header: config.show_header !== false,
       show_column_player: config.show_column_player !== false,
       show_column_game: config.show_column_game !== false,
@@ -2828,7 +2849,8 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       + "|" + this.config.background
       + "|" + this.config.use_platform_colors
       + "|" + this.config.show_header
-      + "|" + [this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end].join(",");
+      + "|" + [this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end].join(",")
+      + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_playnite, this.config.show_platform_custom, this.config.show_platform_discord].join(",");
 
     if (this._lastHash === hash) return;
     this._lastHash = hash;
@@ -2846,6 +2868,10 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       const sessions = stateObj.attributes.recent_sessions || [];
 
       for (const s of sessions) {
+        const platformLower = (s.platform || "").toLowerCase();
+        const platformKey = Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => platformLower.includes(k));
+        if (platformKey && this.config[`show_platform_${platformKey}`] === false) continue;
+
         rows.push({
           player: playerName,
           avatar,
@@ -3080,6 +3106,14 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
         </div>
         <hr>
         <div>
+          <div class="section-title">Platforms</div>
+          <div class="helper-text">Only show sessions from the checked platforms.</div>
+          <div class="checkbox-group">
+            ${Object.keys(GAMING_STATUS_PLATFORM_LABELS).map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${GAMING_STATUS_PLATFORM_LABELS[key]}</label>`).join("")}
+          </div>
+        </div>
+        <hr>
+        <div>
           <div class="section-title">Player Filter</div>
           <select id="mode">
             <option value="all" ${mode === "all" ? "selected" : ""}>All Tracked Players</option>
@@ -3128,7 +3162,6 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
         <div>
           <label><input type="checkbox" data-field="show_header" ${this._config.show_header !== false ? "checked" : ""}> Show Header Row</label>
         </div>
-        ${this._config.show_header !== false ? `
         <hr>
         <div>
           <div class="section-title">Visible Columns</div>
@@ -3141,7 +3174,7 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
             <label><input type="checkbox" data-field="show_column_start" ${this._config.show_column_start !== false ? "checked" : ""}> Start</label>
             <label><input type="checkbox" data-field="show_column_end" ${this._config.show_column_end !== false ? "checked" : ""}> End</label>
           </div>
-        </div>` : ""}
+        </div>
       </div>
     `;
 
@@ -3200,7 +3233,6 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
         const field = ev.target.dataset.field;
         this._config = { ...this._config, [field]: ev.target.checked };
         fireChanged();
-        if (field === "show_header") this.render();
       });
     });
   }

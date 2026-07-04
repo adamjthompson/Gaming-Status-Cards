@@ -140,11 +140,12 @@ A configurable table of recently completed play sessions — one row per session
 
 **UI Configuration Options:**
 * **Card Title:** Optional title displayed above the table.
+* **Platforms:** Independently check/uncheck Steam, Xbox, PlayStation, Playnite, Custom, and Discord to only show sessions from selected platforms.
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players. In **Single Player** mode, the Player column is automatically hidden since it would be redundant.
 * **Number of Sessions to Display:** How many recent sessions to show (default: 10, max: 20). If more than 10 would be shown, the list scrolls instead of growing taller. Type a value and click **Apply** to confirm it.
 * **Background:** Choose what renders (blurred) behind each row — **Game Artwork**, **Player Avatar**, or **None**.
 * **Use Platform Colors:** Tint each row's blurred background with that platform's brand color (Steam blue, Xbox green, etc.) instead of a neutral black gradient — same color set as the List card's Platform Native color mode.
-* **Show Header Row:** Toggle the column header row on or off. When off, the Visible Columns options below are hidden too, since there's no header left to label them against.
+* **Show Header Row:** Toggle the column header row on or off.
 * **Visible Columns:** Independently toggle the Player, Game, Platform, Duration, Date, Start, and End columns on or off.
 
 ---
@@ -249,13 +250,19 @@ show_legend: true # Set to false to hide the game title legend; column count ada
 ```yaml
 type: custom:gaming-status-recent-sessions-card
 title: Recent Sessions
+show_platform_steam: true # Uncheck any of these to exclude that platform's sessions
+show_platform_xbox: true
+show_platform_playstation: true
+show_platform_playnite: true
+show_platform_custom: true
+show_platform_discord: true
 mode: all # Options: all, single, selected
 single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated sensor names (used when mode is 'selected')
 max_sessions: 10 # Number of sessions to display (max 20); scrolls once more than 10 are shown
 background: art # Options: art (game artwork), avatar (player avatar), none
 use_platform_colors: false # Set to true to tint each row's background with its platform's brand color
-show_header: true # Set to false to hide the column header row (also hides the show_column_* options in the UI editor)
+show_header: true # Set to false to hide the column header row
 show_column_player: true # Automatically hidden when mode is 'single', regardless of this setting
 show_column_game: true
 show_column_platform: true
