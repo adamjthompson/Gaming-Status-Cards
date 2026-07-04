@@ -2992,7 +2992,9 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
         const tintKey = Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => platformLower.includes(k));
         if (tintKey) {
           const rgb = GAMING_STATUS_PLATFORM_TINTS[tintKey];
-          tintStyle = ` --rs-tint-start: rgba(${rgb}, 0.55); --rs-tint-end: rgba(${rgb}, 0.85);`;
+          // Mirrors the List card's look: a fully opaque color wash on the left
+          // that fades into the normal dark overlay (revealing the art) on the right.
+          tintStyle = ` --rs-tint-start: rgb(${rgb}); --rs-tint-end: rgba(0, 0, 0, 0.5);`;
         }
       }
 
@@ -3101,10 +3103,11 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
             <label><input type="radio" name="background" data-field="background" value="none" ${this._config.background === "none" ? "checked" : ""}> None</label>
           </div>
         </div>
+        ${this._config.background !== "none" ? `
         <div>
           <label><input type="checkbox" data-field="use_platform_colors" ${this._config.use_platform_colors === true ? "checked" : ""}> Use Platform Colors</label>
-          <div class="helper-text">Tint the blurred background of each row with that platform's brand color (Steam blue, Xbox green, etc.) instead of a neutral black gradient.</div>
-        </div>
+          <div class="helper-text">Tint the blurred background of each row with that platform's brand color.</div>
+        </div>` : ""}
         <hr>
         <div>
           <label><input type="checkbox" data-field="show_header" ${this._config.show_header !== false ? "checked" : ""}> Show Header Row</label>
@@ -3166,6 +3169,7 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
       radio.addEventListener("change", (ev) => {
         this._config = { ...this._config, background: ev.target.value };
         fireChanged();
+        this.render();
       });
     });
 
