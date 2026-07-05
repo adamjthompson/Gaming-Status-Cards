@@ -37,6 +37,27 @@ function gamingStatusResolvePalette(config) {
   return preset ? preset.colors : GAMING_STATUS_PALETTES.vivid.colors;
 }
 
+// Start-of-window timestamp (ms) for the selected reporting window.
+// Rolling = past 7 days (today + 6 prior days); Calendar = since the most recent
+// Sunday. Uses local-midnight day boundaries to stay consistent with the
+// play_history day windowing used elsewhere in these cards.
+function gamingStatusWindowStart(isCalendar, now) {
+  const ref = now || new Date();
+  const startOfToday = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const daysBack = isCalendar ? ref.getDay() : 6;
+  return startOfToday.getTime() - daysBack * 86400000;
+}
+
+// Buckets a session's platform string into the three groups the Platforms card
+// charts. Anything that isn't Xbox or PlayStation (Steam, Playnite, Discord,
+// Custom, bare PC, …) rolls up into PC, matching the integration's own split.
+function gamingStatusPlatformBucket(platform) {
+  const p = String(platform || "").toLowerCase();
+  if (p.includes("xbox")) return "Xbox";
+  if (p.includes("playstation") || p.includes("ps4") || p.includes("ps5")) return "PlayStation";
+  return "PC";
+}
+
 function gamingStatusPaletteOptionsHTML(selected) {
   const presetOpts = Object.entries(GAMING_STATUS_PALETTES)
     .map(([key, p]) => `<option value="${key}" ${selected === key ? "selected" : ""}>${p.label}</option>`)
@@ -1762,6 +1783,7 @@ class GamingStatusDonutCard extends HTMLElement {
 
     const isCal = this.config.window === "calendar";
     const weeklyAttr = isCal ? "total_weekly_hours" : "rolling_weekly_hours";
+    const windowStart = gamingStatusWindowStart(isCal);
     const hasCustom = this.config.custom_colors && this.config.custom_colors.trim();
     const customPalette = hasCustom ? this.config.custom_colors.split(",").map(c => c.trim()).filter(Boolean) : [];
 
@@ -1777,11 +1799,29 @@ class GamingStatusDonutCard extends HTMLElement {
     for (const entityId of entityIds) {
       const stateObj = this._hass.states[entityId];
       if (!stateObj) continue;
-      const totalHours = parseFloat(stateObj.attributes[weeklyAttr]) || 0;
-      if (totalHours <= 0) continue;
-      const split = stateObj.attributes.platform_split || {};
-      for (const p of platforms) {
-        platformTotals[p.key] += (parseFloat(split[p.key]) || 0) / 100 * totalHours;
+      const attrs = stateObj.attributes;
+      const sessions = attrs.recent_sessions;
+
+      if (Array.isArray(sessions)) {
+        // Derive per-platform hours from the session log, filtered to the selected
+        // window. The platform_split attribute is scoped to the calendar week, so a
+        // fresh week wiped out the chart even under Rolling (past 7 days); computing
+        // from windowed sessions keeps Rolling populated across week boundaries.
+        for (const s of sessions) {
+          const ts = Date.parse(s.start_time || s.date || "");
+          if (isNaN(ts) || ts < windowStart) continue;
+          const hours = (parseInt(s.duration_seconds) || 0) / 3600;
+          if (hours <= 0) continue;
+          platformTotals[gamingStatusPlatformBucket(s.platform)] += hours;
+        }
+      } else {
+        // Fallback for entities without a session log: split the weekly total.
+        const totalHours = parseFloat(attrs[weeklyAttr]) || 0;
+        if (totalHours <= 0) continue;
+        const split = attrs.platform_split || {};
+        for (const p of platforms) {
+          platformTotals[p.key] += (parseFloat(split[p.key]) || 0) / 100 * totalHours;
+        }
       }
     }
 
@@ -2085,6 +2125,22 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     return result;
   }
 
+  // Longest single session (in minutes) within the selected window, computed from
+  // the session log. Returns null when the entity has no session log, so callers
+  // can fall back to the pre-aggregated longest_session attributes.
+  _windowLongestMinutes(attrs, windowStart) {
+    const sessions = attrs.recent_sessions;
+    if (!Array.isArray(sessions)) return null;
+    let maxSecs = 0;
+    for (const s of sessions) {
+      const ts = Date.parse(s.start_time || s.date || "");
+      if (isNaN(ts) || ts < windowStart) continue;
+      const secs = parseInt(s.duration_seconds) || 0;
+      if (secs > maxSecs) maxSecs = secs;
+    }
+    return Math.floor(maxSecs / 60);
+  }
+
   extractMinutes(timeVal) {
     if (timeVal === undefined || timeVal === null || timeVal === "None") return 0;
     if (typeof timeVal === "number") return Math.floor(timeVal / 60);
@@ -2128,6 +2184,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     let finalData = [];
 
     const isCal = this.config.window === "calendar";
+    const windowStart = gamingStatusWindowStart(isCal);
 
     const getBreakdown = (attrs) => isCal
       ? (attrs.calendar_weekly_breakdown || attrs.total_weekly_breakdown || attrs.weekly_breakdown || attrs.weekly_game_breakdown || {})
@@ -2169,9 +2226,17 @@ class GamingStatusLeaderboardCard extends HTMLElement {
           finalData.push({ name: friendlyName, value: count, displayValue: `${count}` });
         }
         else if (this.config.metric === "longest") {
-          const longestStr = getLongest(stateObj.attributes);
-          const mins = this.extractMinutes(longestStr);
-          finalData.push({ name: friendlyName, value: mins, displayValue: String(longestStr) });
+          const windowMins = this._windowLongestMinutes(stateObj.attributes, windowStart);
+          if (windowMins !== null) {
+            // Session-log based: correctly reads 0 when nobody has played in the
+            // window (e.g. Calendar on a Sunday morning) instead of surfacing a
+            // stale all-time longest_session from the attribute fallback chain.
+            finalData.push({ name: friendlyName, value: windowMins, displayValue: this.formatMinutes(windowMins) });
+          } else {
+            const longestStr = getLongest(stateObj.attributes);
+            const mins = this.extractMinutes(longestStr);
+            finalData.push({ name: friendlyName, value: mins, displayValue: String(longestStr) });
+          }
         }
       }
     }
