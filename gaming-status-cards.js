@@ -2125,20 +2125,25 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     return result;
   }
 
-  // Longest single session (in minutes) within the selected window, computed from
-  // the session log. Returns null when the entity has no session log, so callers
-  // can fall back to the pre-aggregated longest_session attributes.
+  // Longest single session within the selected window, computed from the session
+  // log. Returns { mins, game } for the longest session, or null when the entity
+  // has no session log, so callers can fall back to the pre-aggregated
+  // longest_session attributes.
   _windowLongestMinutes(attrs, windowStart) {
     const sessions = attrs.recent_sessions;
     if (!Array.isArray(sessions)) return null;
     let maxSecs = 0;
+    let game = "";
     for (const s of sessions) {
       const ts = Date.parse(s.start_time || s.date || "");
       if (isNaN(ts) || ts < windowStart) continue;
       const secs = parseInt(s.duration_seconds) || 0;
-      if (secs > maxSecs) maxSecs = secs;
+      if (secs > maxSecs) {
+        maxSecs = secs;
+        game = s.game || "";
+      }
     }
-    return Math.floor(maxSecs / 60);
+    return { mins: Math.floor(maxSecs / 60), game };
   }
 
   extractMinutes(timeVal) {
@@ -2226,12 +2231,14 @@ class GamingStatusLeaderboardCard extends HTMLElement {
           finalData.push({ name: friendlyName, value: count, displayValue: `${count}` });
         }
         else if (this.config.metric === "longest") {
-          const windowMins = this._windowLongestMinutes(stateObj.attributes, windowStart);
-          if (windowMins !== null) {
+          const longest = this._windowLongestMinutes(stateObj.attributes, windowStart);
+          if (longest !== null) {
             // Session-log based: correctly reads 0 when nobody has played in the
             // window (e.g. Calendar on a Sunday morning) instead of surfacing a
             // stale all-time longest_session from the attribute fallback chain.
-            finalData.push({ name: friendlyName, value: windowMins, displayValue: this.formatMinutes(windowMins) });
+            // Append the game from that longest session, e.g. "Josh - Marvel Rivals".
+            const label = longest.game ? `${friendlyName} - ${longest.game}` : friendlyName;
+            finalData.push({ name: label, value: longest.mins, displayValue: this.formatMinutes(longest.mins) });
           } else {
             const longestStr = getLongest(stateObj.attributes);
             const mins = this.extractMinutes(longestStr);
