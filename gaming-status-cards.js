@@ -3451,15 +3451,17 @@ class GamingStatusGameManagementCard extends HTMLElement {
 
     this._resolveTarget();
 
-    const stateObj = this._targetEntityId ? hass.states[this._targetEntityId] : null;
-    const sessions = stateObj?.attributes?.recent_sessions || [];
-    const history = stateObj?.attributes?.play_history || {};
+    // Hash on the actual game list/totals (what _getGameOptions derives and
+    // the dropdown displays), not just session count/dates — a rename or
+    // delete leaves both of those unchanged (same sessions, same days, just
+    // relabeled or reduced totals), so hashing them made the card miss its
+    // own service-triggered updates and only show fresh data after a full
+    // reload.
+    const gameOptions = this._getGameOptions(this._targetEntityId);
     const hash = [
       this._selectedPlayerId,
       this._selectedPlatform,
-      sessions.length,
-      sessions[0] ? sessions[0].start_time : "",
-      Object.keys(history).sort().join(","),
+      gameOptions.map(g => `${g.game}:${g.totalSeconds}`).join(","),
     ].join("|");
 
     if (this._lastHash === hash && this.content) return;
