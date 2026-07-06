@@ -3599,7 +3599,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
           ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
           #gm-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
           .gm-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
-          .gm-field label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--secondary-text-color); }
+          .gm-field label { font-size: 12px; font-weight: 600; color: var(--secondary-text-color); }
           select, input[type="text"] { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; font-size: 14px; }
           select:focus, input:focus { outline: none; border-color: var(--primary-color); }
           hr { border: 0; border-top: 1px solid var(--divider-color); margin: 4px 0 14px 0; }
