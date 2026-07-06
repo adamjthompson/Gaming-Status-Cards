@@ -30,7 +30,7 @@ A clean, native-feeling list of your tracked gamers. It dynamically tints the ca
 
 **UI Configuration Options:**
 * **Mode:** Choose who to show. Show everyone, strictly online players, or filter by a specific platform (PC, Custom, Discord, Steam, Xbox, PlayStation, Playnite).
-* **Color Mode:** Select border and background fade colors based on the game's dominant color or the platform color.
+* **Color Mode:** Select border and background fade colors based on the game's dominant color or the platform color. The "Game Artwork (Dynamic)" option is hidden (and the platform color is used automatically) if **Enable Game Color Extraction** is turned off in the integration's Global Settings, since no game color would ever be available.
 * **Offline Image Style:** Choose whether offline players display their last played game's artwork or their player avatar.
 * **Sort By:** Automatically sorts players chronologically by who was `Last Online`. Actively online players are always pinned to the top. Can also be sorted alphabetically by Name or Game Title.
 * **Visibility:** Toggle the platform icon badges and text shadows to fit your dashboard theme.
@@ -144,7 +144,7 @@ A configurable table of recently completed play sessions — one row per session
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players. In **Single Player** mode, the Player column is automatically hidden since it would be redundant.
 * **Number of Sessions to Display:** How many recent sessions to show (default: 10, max: 20). If more than 10 would be shown, the list scrolls instead of growing taller. Type a value and click **Apply** to confirm it.
 * **Background:** Choose what renders (blurred) behind each row — **Game Artwork**, **Player Avatar**, or **None**.
-* **Use Platform Colors:** Tint each row's blurred background with that platform's brand color (Steam blue, Xbox green, etc.) instead of a neutral black gradient — same color set as the List card's Platform Native color mode.
+* **Color Mode:** Choose how each row's blurred background is tinted (hidden when Background is set to None) — **Game Artwork (Dynamic)** colors each row from that session's own recorded game color, or **Platform Native (Pre-Defined)** uses a fixed color per platform (Steam blue, Xbox green, etc.), same color set as the List card's Platform Native color mode. Sessions logged before this option existed have no stored game color and fall back to a neutral black gradient in Dynamic mode. Like the List card, "Game Artwork (Dynamic)" is hidden (and platform colors are used automatically) if **Enable Game Color Extraction** is turned off in the integration's Global Settings.
 * **Show Header Row:** Toggle the column header row on or off.
 * **Visible Columns:** Independently toggle the Player, Game, Platform, Duration, Date, Start, and End columns on or off.
 
@@ -276,7 +276,7 @@ single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated sensor names (used when mode is 'selected')
 max_sessions: 10 # Number of sessions to display (max 20); scrolls once more than 10 are shown
 background: art # Options: art (game artwork), avatar (player avatar), none
-use_platform_colors: false # Set to true to tint each row's background with its platform's brand color
+color_mode: game # Options: game (dynamic, colored from each session's own game), platform (fixed per-platform brand color)
 show_header: true # Set to false to hide the column header row
 show_column_player: true # Automatically hidden when mode is 'single', regardless of this setting
 show_column_game: true

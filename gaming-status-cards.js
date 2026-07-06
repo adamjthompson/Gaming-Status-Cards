@@ -140,6 +140,24 @@ function gamingStatusGetAvailablePlatforms(hass) {
   return available;
 }
 
+// Global integration setting (Global Settings > Enable Game Color
+// Extraction), exposed on every gaming_status entity's attributes. Used to
+// hide "dynamic game color" options entirely when the backend never
+// populates game_dominant_color at all. Fails open (true) until we find an
+// entity that actually reports the attribute, matching this file's existing
+// convention of not hiding options before hass data has loaded.
+function gamingStatusIsColorExtractionEnabled(hass) {
+  if (!hass) return true;
+  for (const key of Object.keys(hass.states)) {
+    if (!key.startsWith("sensor.gaming_status_")) continue;
+    const attrs = hass.states[key].attributes;
+    if (attrs && attrs.color_extraction_enabled !== undefined) {
+      return attrs.color_extraction_enabled !== false;
+    }
+  }
+  return true;
+}
+
 // Joins display labels the way natural English lists read: "A", "A & B",
 // "A, B, & C". Used to build the "PC" mode option's label dynamically from
 // whichever of its constituent platforms actually have entities.
@@ -232,6 +250,7 @@ class GamingStatusCard extends HTMLElement {
   }
 
   processData(entities) {
+    const colorExtractionEnabled = gamingStatusIsColorExtractionEnabled(this._hass);
     let filtered = entities.filter((entity) => {
       const state = entity.state.toLowerCase();
       const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(state);
@@ -361,7 +380,7 @@ class GamingStatusCard extends HTMLElement {
       let gradientColorCSS = "rgba(0, 0, 0, 1)";
       let filterCSS = "blur(5px)";
       
-      const useGameColor = this.config.color_mode !== "platform";
+      const useGameColor = colorExtractionEnabled && this.config.color_mode !== "platform";
       const rawColor = entity.attributes.game_dominant_color;
 
       let parsedGameColor = null;
@@ -607,6 +626,7 @@ class GamingStatusCardEditor extends HTMLElement {
     if (!this._config) return;
 
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
+    const colorExtractionEnabled = gamingStatusIsColorExtractionEnabled(this._hass);
     const modeOptions = GAMING_STATUS_MODE_OPTIONS
       .filter(opt => !opt.platforms || !availablePlatforms || opt.platforms.some(p => availablePlatforms.has(p)))
       .map(opt => {
@@ -632,6 +652,7 @@ class GamingStatusCardEditor extends HTMLElement {
               this._config.mode === opt.value || (opt.value === "all" && !this._config.mode) ? "checked" : ""
             }> ${opt.label}</label>`).join("")}
         </div></div><hr>
+        ${colorExtractionEnabled ? `
         <div><div class="section-title">Color Mode</div><div class="radio-group">
             <label><input type="radio" name="color_mode" data-field="color_mode" value="game" ${
               this._config.color_mode !== "platform" ? "checked" : ""
@@ -639,7 +660,7 @@ class GamingStatusCardEditor extends HTMLElement {
             <label><input type="radio" name="color_mode" data-field="color_mode" value="platform" ${
               this._config.color_mode === "platform" ? "checked" : ""
             }> Platform Native (Pre-Defined)</label>
-        </div></div><hr>
+        </div></div><hr>` : ""}
         <div><div class="section-title">Offline Image Style</div><div class="radio-group">
             <label><input type="radio" name="offline_image" data-field="offline_image" value="game" ${
               this._config.offline_image !== "avatar" ? "checked" : ""
@@ -2873,7 +2894,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       selected_entities: "",
       max_sessions: 10,
       background: "art",
-      use_platform_colors: false,
+      color_mode: "game",
       show_platform_steam: true,
       show_platform_xbox: true,
       show_platform_playstation: true,
@@ -2904,7 +2925,10 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       selected_entities: config.selected_entities || "",
       max_sessions: config.max_sessions !== undefined ? Math.min(20, Math.max(1, parseInt(config.max_sessions) || 10)) : 10,
       background: config.background || "art",
-      use_platform_colors: config.use_platform_colors === true,
+      // Backward compat: the old boolean toggle only ever offered the
+      // platform-tint look; anyone who had it off gets the new default
+      // (dynamic game-color tint) instead of losing color entirely.
+      color_mode: config.color_mode || (config.use_platform_colors === true ? "platform" : "game"),
       show_platform_steam: config.show_platform_steam !== false,
       show_platform_xbox: config.show_platform_xbox !== false,
       show_platform_playstation: config.show_platform_playstation !== false,
@@ -2948,7 +2972,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
     }).join(",")
       + "|" + this.config.max_sessions
       + "|" + this.config.background
-      + "|" + this.config.use_platform_colors
+      + "|" + this.config.color_mode
       + "|" + this.config.show_header
       + "|" + [this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end].join(",")
       + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_playnite, this.config.show_platform_custom, this.config.show_platform_discord].join(",");
@@ -2983,6 +3007,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
           start_time: s.start_time || "",
           end_time: s.end_time || "",
           hero_art_url: s.hero_art_url || "",
+          game_dominant_color: s.game_dominant_color || "",
         });
       }
     }
@@ -3019,6 +3044,25 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
     return `${m}m`;
   }
 
+  // Same hex/rgb parsing the List card uses for its "Game Artwork" color mode.
+  _parseGameColor(rawColor) {
+    if (!rawColor || String(rawColor).toLowerCase() === "null" || String(rawColor).toLowerCase() === "none") return null;
+    const str = String(rawColor).trim().toLowerCase();
+    if (str.startsWith('#')) {
+      let h = str.replace('#', '');
+      if (h.length === 3) h = [...h].map(x => x + x).join('');
+      if (h.length === 6) {
+        const r = parseInt(h.substring(0, 2), 16);
+        const g = parseInt(h.substring(2, 4), 16);
+        const b = parseInt(h.substring(4, 6), 16);
+        if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return `rgb(${r}, ${g}, ${b})`;
+      }
+      return null;
+    }
+    if (str.startsWith('rgb')) return str;
+    return null;
+  }
+
   _formatDate(dateStr) {
     if (!dateStr) return "";
     const d = new Date(`${dateStr}T12:00:00`);
@@ -3035,6 +3079,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
 
   render(rows) {
     const escapeHTML = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const colorExtractionEnabled = gamingStatusIsColorExtractionEnabled(this._hass);
 
     if (!this.content) {
       this.shadowRoot.innerHTML = `
@@ -3114,7 +3159,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       const hasBg = !!bgUrl;
 
       let tintStyle = "";
-      if (hasBg && this.config.use_platform_colors) {
+      if (hasBg && (this.config.color_mode === "platform" || !colorExtractionEnabled)) {
         const platformLower = (row.platform || "").toLowerCase();
         const tintKey = Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => platformLower.includes(k));
         if (tintKey) {
@@ -3122,6 +3167,14 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
           // Mirrors the List card's look: a fully opaque color wash on the left
           // that fades into the normal dark overlay (revealing the art) on the right.
           tintStyle = ` --rs-tint-start: rgb(${rgb}); --rs-tint-end: rgba(0, 0, 0, 0.5);`;
+        }
+      } else if (hasBg) {
+        // "game" (dynamic) mode - color each row from that session's own
+        // recorded dominant color. Sessions logged before this field existed
+        // have none, so they just keep the plain black gradient below.
+        const parsedGameColor = this._parseGameColor(row.game_dominant_color);
+        if (parsedGameColor) {
+          tintStyle = ` --rs-tint-start: ${parsedGameColor}; --rs-tint-end: rgba(0, 0, 0, 0.5);`;
         }
       }
 
@@ -3185,6 +3238,7 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
     }
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
+    const colorExtractionEnabled = gamingStatusIsColorExtractionEnabled(this._hass);
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -3257,10 +3311,14 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
             <label><input type="radio" name="background" data-field="background" value="none" ${this._config.background === "none" ? "checked" : ""}> None</label>
           </div>
         </div>
-        ${this._config.background !== "none" ? `
+        ${this._config.background !== "none" && colorExtractionEnabled ? `
         <div>
-          <label><input type="checkbox" data-field="use_platform_colors" ${this._config.use_platform_colors === true ? "checked" : ""}> Use Platform Colors</label>
-          <div class="helper-text">Tint the blurred background of each row with that platform's brand color.</div>
+          <div class="section-title">Color Mode</div>
+          <div class="radio-group">
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="game" ${this._config.color_mode !== "platform" ? "checked" : ""}> Game Artwork (Dynamic)</label>
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="platform" ${this._config.color_mode === "platform" ? "checked" : ""}> Platform Native (Pre-Defined)</label>
+          </div>
+          <div class="helper-text">Tint each row's blurred background with that session's own game color, or with a fixed color per platform (Steam blue, Xbox green, etc).</div>
         </div>` : ""}
         <hr>
         <div>
@@ -3329,6 +3387,13 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
         this._config = { ...this._config, background: ev.target.value };
         fireChanged();
         this.render();
+      });
+    });
+
+    this.shadowRoot.querySelectorAll('input[name="color_mode"]').forEach((radio) => {
+      radio.addEventListener("change", (ev) => {
+        this._config = { ...this._config, color_mode: ev.target.value };
+        fireChanged();
       });
     });
 
