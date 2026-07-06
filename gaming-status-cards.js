@@ -3347,6 +3347,426 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
 }
 
 // ====================================================================
+// CARD 8: GAMING STATUS - GAME MANAGEMENT
+// ====================================================================
+
+class GamingStatusGameManagementCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._selectedPlayerId = "";
+    this._selectedPlatform = "";
+    this._selectedGame = "";
+    this._newName = "";
+    this._deleteConfirmText = "";
+    this._status = null;
+  }
+
+  static getConfigElement() {
+    return document.createElement("gaming-status-game-management-editor");
+  }
+
+  static getStubConfig() {
+    return { title: "", mode: "all", single_entity: "" };
+  }
+
+  setConfig(config) {
+    this.config = {
+      ...config,
+      title: config.title || "",
+      mode: config.mode || "all",
+      single_entity: config.single_entity || "",
+    };
+    this._lastHash = "";
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (!this.config) return;
+
+    this._resolveTarget();
+
+    const stateObj = this._targetEntityId ? hass.states[this._targetEntityId] : null;
+    const sessions = stateObj?.attributes?.recent_sessions || [];
+    const history = stateObj?.attributes?.play_history || {};
+    const hash = [
+      this._selectedPlayerId,
+      this._selectedPlatform,
+      sessions.length,
+      sessions[0] ? sessions[0].start_time : "",
+      Object.keys(history).sort().join(","),
+    ].join("|");
+
+    if (this._lastHash === hash && this.content) return;
+    this._lastHash = hash;
+
+    this.render();
+  }
+
+  // Resolves which player + which of their entities (master, or one specific
+  // platform sensor) game data should be read from and service calls scoped
+  // to. Shared by set hass() and the player/platform <select> change handlers
+  // so both paths stay in sync without waiting for a fresh hass push.
+  _resolveTarget() {
+    const players = gamingStatusGetPlayerEntities(this._hass, "_master");
+
+    let playerId = this.config.mode === "single" ? this.config.single_entity : this._selectedPlayerId;
+    if (!playerId || !this._hass.states[playerId]) {
+      playerId = players.length ? players[0].id : "";
+    }
+    this._selectedPlayerId = playerId;
+
+    let entityId = playerId;
+    if (playerId && this._selectedPlatform) {
+      const platformEntityId = playerId.replace(/_master$/, `_${this._selectedPlatform}`);
+      if (this._hass.states[platformEntityId]) entityId = platformEntityId;
+    }
+    this._targetEntityId = entityId;
+  }
+
+  // Unions games from recent_sessions + every day in play_history (not just a
+  // recent window, since this is a picker, not a trend chart) and sums each
+  // game's total seconds across all of play_history for the duration label.
+  _getGameOptions(entityId) {
+    const stateObj = entityId ? this._hass.states[entityId] : null;
+    if (!stateObj) return [];
+    const sessions = stateObj.attributes.recent_sessions || [];
+    const history = stateObj.attributes.play_history || {};
+
+    const totals = {};
+    for (const dayData of Object.values(history)) {
+      if (!dayData || typeof dayData !== "object") continue;
+      for (const [game, seconds] of Object.entries(dayData)) {
+        totals[game] = (totals[game] || 0) + (parseFloat(seconds) || 0);
+      }
+    }
+    for (const s of sessions) {
+      if (s.game && !(s.game in totals)) totals[s.game] = 0;
+    }
+
+    return Object.keys(totals)
+      .sort((a, b) => a.localeCompare(b))
+      .map(game => ({ game, totalSeconds: totals[game] }));
+  }
+
+  _formatDuration(seconds) {
+    const totalMins = Math.round(seconds / 60);
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    if (h > 0 && m > 0) return `${h}h ${m}m`;
+    if (h > 0) return `${h}h`;
+    return `${m}m`;
+  }
+
+  // rename_game/delete_game take a plain player NAME (they slugify it
+  // themselves to find the matching entities), not an entity id, so resolve
+  // the already-cleaned name gamingStatusGetPlayerEntities computed for us.
+  _resolvePlayerName(playerId) {
+    const players = gamingStatusGetPlayerEntities(this._hass, "_master");
+    const match = players.find(p => p.id === playerId);
+    return match ? match.name : "";
+  }
+
+  _setStatus(text, type) {
+    this._status = { text, type };
+    this._renderStatus();
+  }
+
+  _renderStatus() {
+    if (!this._statusEl) return;
+    if (!this._status) {
+      this._statusEl.textContent = "";
+      this._statusEl.style.display = "none";
+      return;
+    }
+    this._statusEl.textContent = this._status.text;
+    this._statusEl.style.display = "block";
+    this._statusEl.className = `gm-status ${this._status.type}`;
+  }
+
+  async _handleRename() {
+    const player = this._resolvePlayerName(this._selectedPlayerId);
+    const newName = (this._newName || "").trim();
+    if (!player || !this._selectedGame || !newName) return;
+    try {
+      await this._hass.callService("gaming_status", "rename_game", {
+        player,
+        ...(this._selectedPlatform ? { platform: this._selectedPlatform } : {}),
+        old_name: this._selectedGame,
+        new_name: newName,
+      });
+      this._setStatus(`Renamed "${this._selectedGame}" to "${newName}".`, "success");
+      this._selectedGame = "";
+      this._newName = "";
+      this.render();
+    } catch (err) {
+      this._setStatus(`Rename failed: ${err?.message || err}`, "error");
+    }
+  }
+
+  async _handleDelete() {
+    const player = this._resolvePlayerName(this._selectedPlayerId);
+    if (!player || !this._selectedGame) return;
+    try {
+      await this._hass.callService("gaming_status", "delete_game", {
+        player,
+        ...(this._selectedPlatform ? { platform: this._selectedPlatform } : {}),
+        game: this._selectedGame,
+      });
+      this._setStatus(`Deleted all history for "${this._selectedGame}".`, "success");
+      this._selectedGame = "";
+      this._deleteConfirmText = "";
+      this.render();
+    } catch (err) {
+      this._setStatus(`Delete failed: ${err?.message || err}`, "error");
+    }
+  }
+
+  render() {
+    const escapeHTML = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    if (!this.content) {
+      this.shadowRoot.innerHTML = `
+        <style>
+          :host { display: block; }
+          ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
+          #gm-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
+          .gm-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+          .gm-field label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--secondary-text-color); }
+          select, input[type="text"] { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+          select:focus, input:focus { outline: none; border-color: var(--primary-color); }
+          hr { border: 0; border-top: 1px solid var(--divider-color); margin: 4px 0 14px 0; }
+          .gm-action-row { display: flex; gap: 8px; align-items: flex-end; }
+          .gm-action-row .gm-field { flex: 1; margin-bottom: 0; }
+          button { padding: 9px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; white-space: nowrap; }
+          button:disabled { opacity: 0.4; cursor: not-allowed; }
+          #gm-rename-btn { background: var(--primary-color); color: var(--text-primary-color, #fff); }
+          #gm-rename-btn:not(:disabled):hover { opacity: 0.9; }
+          #gm-delete-btn { background: var(--error-color, #db4437); color: #fff; }
+          #gm-delete-btn:not(:disabled):hover { opacity: 0.9; }
+          .gm-status { margin-top: 12px; padding: 8px 10px; border-radius: 4px; font-size: 13px; }
+          .gm-status.success { background: rgba(76, 175, 80, 0.15); color: var(--success-color, #4caf50); }
+          .gm-status.error { background: rgba(219, 68, 55, 0.15); color: var(--error-color, #db4437); }
+        </style>
+        <ha-card>
+          <div id="gm-title"></div>
+          <div id="gm-body"></div>
+        </ha-card>
+      `;
+      this._titleEl = this.shadowRoot.getElementById("gm-title");
+      this._bodyEl = this.shadowRoot.getElementById("gm-body");
+      this.content = this._bodyEl;
+    }
+
+    this._titleEl.textContent = this.config.title || "";
+    this._titleEl.style.display = this.config.title ? "block" : "none";
+
+    const players = gamingStatusGetPlayerEntities(this._hass, "_master");
+    const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
+    const gameOptions = this._getGameOptions(this._targetEntityId);
+
+    const playerFieldHTML = this.config.mode === "single" ? "" : `
+      <div class="gm-field">
+        <label>Player</label>
+        <select id="gm-player">
+          ${gamingStatusPlayerOptionsHTML(players, this._selectedPlayerId, escapeHTML)}
+        </select>
+      </div>`;
+
+    const platformOptions = Object.keys(GAMING_STATUS_PLATFORM_LABELS)
+      .filter(key => !availablePlatforms || availablePlatforms.has(key))
+      .map(key => `<option value="${key}" ${this._selectedPlatform === key ? "selected" : ""}>${GAMING_STATUS_PLATFORM_LABELS[key]}</option>`)
+      .join("");
+
+    const gameSelectOptions = gameOptions.map(g =>
+      `<option value="${escapeHTML(g.game)}" ${this._selectedGame === g.game ? "selected" : ""}>${escapeHTML(g.game)} — ${this._formatDuration(g.totalSeconds)}</option>`
+    ).join("");
+
+    const newNameTrimmed = (this._newName || "").trim();
+    const renameEnabled = !!(this._selectedGame && newNameTrimmed && newNameTrimmed.toLowerCase() !== this._selectedGame.toLowerCase());
+    const deleteEnabled = !!(this._selectedGame && this._deleteConfirmText === this._selectedGame);
+
+    this._bodyEl.innerHTML = `
+      ${playerFieldHTML}
+      <div class="gm-field">
+        <label>Platform</label>
+        <select id="gm-platform">
+          <option value="" ${!this._selectedPlatform ? "selected" : ""}>All Platforms</option>
+          ${platformOptions}
+        </select>
+      </div>
+      <div class="gm-field">
+        <label>Game</label>
+        <select id="gm-game" ${!gameOptions.length ? "disabled" : ""}>
+          <option value="" ${!this._selectedGame ? "selected" : ""} disabled>${gameOptions.length ? "Select a game…" : "No games found"}</option>
+          ${gameSelectOptions}
+        </select>
+      </div>
+      <hr>
+      <div class="gm-action-row">
+        <div class="gm-field">
+          <label>Rename to</label>
+          <input type="text" id="gm-new-name" placeholder="New name" value="${escapeHTML(this._newName || "")}" ${!this._selectedGame ? "disabled" : ""}>
+        </div>
+        <button id="gm-rename-btn" ${renameEnabled ? "" : "disabled"}>Rename</button>
+      </div>
+      <hr>
+      <div class="gm-action-row">
+        <div class="gm-field">
+          <label>Type "${escapeHTML(this._selectedGame || "")}" to confirm</label>
+          <input type="text" id="gm-delete-confirm" placeholder="${this._selectedGame ? `Type "${escapeHTML(this._selectedGame)}"` : "Select a game first"}" value="${escapeHTML(this._deleteConfirmText || "")}" ${!this._selectedGame ? "disabled" : ""}>
+        </div>
+        <button id="gm-delete-btn" ${deleteEnabled ? "" : "disabled"}>Delete</button>
+      </div>
+      <div id="gm-status" class="gm-status" style="display: none;"></div>
+    `;
+    this._statusEl = this.shadowRoot.getElementById("gm-status");
+    this._renderStatus();
+
+    const playerSelect = this.shadowRoot.getElementById("gm-player");
+    if (playerSelect) {
+      playerSelect.addEventListener("change", (ev) => {
+        this._selectedPlayerId = ev.target.value;
+        this._selectedGame = "";
+        this._newName = "";
+        this._deleteConfirmText = "";
+        this._resolveTarget();
+        this.render();
+      });
+    }
+
+    this.shadowRoot.getElementById("gm-platform").addEventListener("change", (ev) => {
+      this._selectedPlatform = ev.target.value;
+      this._selectedGame = "";
+      this._newName = "";
+      this._deleteConfirmText = "";
+      this._resolveTarget();
+      this.render();
+    });
+
+    this.shadowRoot.getElementById("gm-game").addEventListener("change", (ev) => {
+      this._selectedGame = ev.target.value;
+      this._newName = "";
+      this._deleteConfirmText = "";
+      this.render();
+    });
+
+    this.shadowRoot.getElementById("gm-new-name").addEventListener("input", (ev) => {
+      this._newName = ev.target.value;
+      const trimmed = this._newName.trim();
+      const enabled = !!(this._selectedGame && trimmed && trimmed.toLowerCase() !== this._selectedGame.toLowerCase());
+      this.shadowRoot.getElementById("gm-rename-btn").disabled = !enabled;
+    });
+
+    this.shadowRoot.getElementById("gm-delete-confirm").addEventListener("input", (ev) => {
+      this._deleteConfirmText = ev.target.value;
+      const enabled = !!(this._selectedGame && this._deleteConfirmText === this._selectedGame);
+      this.shadowRoot.getElementById("gm-delete-btn").disabled = !enabled;
+    });
+
+    this.shadowRoot.getElementById("gm-rename-btn").addEventListener("click", () => this._handleRename());
+    this.shadowRoot.getElementById("gm-delete-btn").addEventListener("click", () => this._handleDelete());
+  }
+
+  getCardSize() {
+    return 4;
+  }
+}
+
+class GamingStatusGameManagementEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+  }
+
+  setConfig(config) {
+    if (this._config && this.shadowRoot.firstChild && JSON.stringify(this._config) === JSON.stringify(config)) {
+      this._config = config;
+      return;
+    }
+    this._config = config;
+    this.render();
+  }
+
+  set hass(hass) {
+    const first = !this._hass;
+    this._hass = hass;
+    if (first) this.render();
+  }
+
+  render() {
+    if (!this._config) return;
+    const mode = this._config.mode || "all";
+    const playerEntities = gamingStatusGetPlayerEntities(this._hass, "_master");
+    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+    }
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        .editor-container { display: flex; flex-direction: column; gap: 20px; color: var(--primary-text-color); }
+        .section-title { font-weight: 600; margin-bottom: 8px; }
+        input[type="text"], select { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
+        input:focus, select:focus { outline: none; border-color: var(--primary-color); }
+        hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
+        .helper-text { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 8px; line-height: 1.4; }
+      </style>
+      <div class="editor-container">
+        <div>
+          <div class="section-title">Card Title (Optional)</div>
+          <input type="text" id="title" value="${this._esc(this._config.title || "")}">
+        </div>
+        <hr>
+        <div>
+          <div class="section-title">Player Filter</div>
+          <div class="helper-text">"All Players" shows a player picker on the card itself. "Single Player" pins the card to one player.</div>
+          <select id="mode">
+            <option value="all" ${mode === "all" ? "selected" : ""}>All Players (picker on card)</option>
+            <option value="single" ${mode === "single" ? "selected" : ""}>Single Player</option>
+          </select>
+        </div>
+        ${mode === "single" ? `
+        <div>
+          <div class="section-title">Select Player</div>
+          <select id="single_entity">
+            <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player…</option>
+            ${entityOptions}
+          </select>
+        </div>` : ""}
+      </div>
+    `;
+
+    const fireChanged = () => {
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+    };
+
+    this.shadowRoot.getElementById("title").addEventListener("change", (ev) => {
+      this._config = { ...this._config, title: ev.target.value };
+      fireChanged();
+    });
+
+    this.shadowRoot.getElementById("mode").addEventListener("change", (ev) => {
+      this._config = { ...this._config, mode: ev.target.value };
+      fireChanged();
+      this.render();
+    });
+
+    const singleEntity = this.shadowRoot.getElementById("single_entity");
+    if (singleEntity) {
+      singleEntity.addEventListener("change", (ev) => {
+        this._config = { ...this._config, single_entity: ev.target.value };
+        fireChanged();
+      });
+    }
+  }
+
+  _esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+}
+
+// ====================================================================
 // REGISTRATION
 // ====================================================================
 
@@ -3380,6 +3800,10 @@ customElements.define("gaming-status-game-chart-editor", GamingStatusGameChartEd
 // Card 7
 customElements.define("gaming-status-recent-sessions-card", GamingStatusRecentSessionsCard);
 customElements.define("gaming-status-recent-sessions-editor", GamingStatusRecentSessionsEditor);
+
+// Card 8
+customElements.define("gaming-status-game-management-card", GamingStatusGameManagementCard);
+customElements.define("gaming-status-game-management-editor", GamingStatusGameManagementEditor);
 
 // Inject into UI
 window.customCards = window.customCards || [];
@@ -3433,4 +3857,11 @@ window.customCards.push({
   name: "Gaming Status - Recent Sessions",
   preview: true,
   description: "A configurable table of recently completed play sessions with optional blurred artwork backgrounds."
+});
+
+window.customCards.push({
+  type: "gaming-status-game-management-card",
+  name: "Gaming Status - Game Management",
+  preview: true,
+  description: "Rename or permanently delete a game from a player's stored play history."
 });
