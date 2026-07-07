@@ -148,6 +148,9 @@ A configurable table of recently completed play sessions — one row per session
 * **Show Header Row:** Toggle the column header row on or off.
 * **Visible Columns:** Independently toggle the Player, Game, Platform, Duration, Date, Start, and End columns on or off.
 
+**Recent Sessions Card**
+![Recent Sessions Card Screenshot](images/recent-sessions.png)
+
 ---
 
 ### 8. Gaming Status - Game Management
