@@ -3155,7 +3155,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
     this._bodyEl.innerHTML = rows.map(row => {
       let bgUrl = "";
       if (this.config.background === "avatar") bgUrl = row.avatar;
-      else if (this.config.background !== "none") bgUrl = row.hero_art_url || "";
+      else if (this.config.background !== "none") bgUrl = row.hero_art_url || row.avatar || "";
       const hasBg = !!bgUrl;
 
       let tintStyle = "";
