@@ -83,6 +83,29 @@ function gamingStatusGetPlayerEntities(hass, targetSuffix) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// Resolves the exact entity IDs a single/all/selected mode config should
+// process. Single source of truth for GamingStatusLeaderboardCard, which
+// previously had this "all" mode filter implemented twice (once in set
+// hass() to compute its change-hash, once in updateLeaderboard() to build
+// the actual displayed data) with two different, inconsistent domain/prefix
+// checks -- so the hash could in theory diverge from what actually renders.
+function gamingStatusLeaderboardEntityIds(hass, config) {
+  if (config.mode === "single" && config.single_entity) {
+    return hass.states[config.single_entity] ? [config.single_entity] : [];
+  }
+  if (config.mode === "selected" && config.selected_entities) {
+    return config.selected_entities.split(',').map(e => e.trim()).filter(e => hass.states[e]);
+  }
+  const targetSuffix = config.entities_pattern || "_master";
+  const result = [];
+  for (const key in hass.states) {
+    if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) && key.endsWith(targetSuffix) && hass.states[key].attributes.secondary !== undefined) {
+      result.push(key);
+    }
+  }
+  return result;
+}
+
 function gamingStatusPlayerOptionsHTML(entities, selected, escapeFn) {
   const esc = escapeFn || ((s) => s);
   return entities.map(e => `<option value="${e.id}" ${selected === e.id ? "selected" : ""}>${esc(e.name)}</option>`).join("");
@@ -2106,19 +2129,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       this.content = this.shadowRoot.getElementById("chart-container");
     }
 
-    let entityIdsToProcess = [];
-    if (this.config.mode === "single" && this.config.single_entity) {
-      if (hass.states[this.config.single_entity]) entityIdsToProcess.push(this.config.single_entity);
-    } else if (this.config.mode === "selected" && this.config.selected_entities) {
-      entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => hass.states[e]);
-    } else {
-      const targetSuffix = this.config.entities_pattern || "_master";
-      for (const key in hass.states) {
-        if (key.startsWith("sensor.") && key.endsWith(targetSuffix) && hass.states[key].attributes.secondary !== undefined) {
-          entityIdsToProcess.push(key);
-        }
-      }
-    }
+    let entityIdsToProcess = gamingStatusLeaderboardEntityIds(hass, this.config);
 
     let currentHash = "";
     for (const id of entityIdsToProcess) {
@@ -2193,19 +2204,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     if (!this._hass || !this.content) return;
     const escapeHTML = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-    let entityIdsToProcess = [];
-    if (this.config.mode === "single" && this.config.single_entity) {
-      if (this._hass.states[this.config.single_entity]) entityIdsToProcess.push(this.config.single_entity);
-    } else if (this.config.mode === "selected" && this.config.selected_entities) {
-      entityIdsToProcess = this.config.selected_entities.split(',').map(e => e.trim()).filter(e => this._hass.states[e]);
-    } else {
-      const targetSuffix = this.config.entities_pattern || "_master";
-      for (const key in this._hass.states) {
-        if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) && key.endsWith(targetSuffix) && this._hass.states[key].attributes.secondary !== undefined) {
-          entityIdsToProcess.push(key);
-        }
-      }
-    }
+    let entityIdsToProcess = gamingStatusLeaderboardEntityIds(this._hass, this.config);
 
     let finalData = [];
 
@@ -2220,21 +2219,40 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       ? (attrs.calendar_longest_session || attrs.total_longest_session || attrs.longest_session || "None")
       : (attrs.rolling_longest_session || attrs.longest_session || "None");
 
-    if (this.config.metric === "game_hours") {
+    if (this.config.metric === "game_hours" || this.config.metric === "all_time_top_games") {
+      // "Top Games" style metrics: aggregate across whatever entities the
+      // player filter (single/all/selected) resolved to, keyed by game name.
+      const isAllTime = this.config.metric === "all_time_top_games";
       let gamesMap = {};
       for (const entityId of entityIdsToProcess) {
         const stateObj = this._hass.states[entityId];
-        const phBreakdown = this._getPlayHistoryBreakdown(stateObj.attributes, isCal);
-        for (const [game, seconds] of Object.entries(phBreakdown)) {
-          const mins = Math.floor((parseFloat(seconds) || 0) / 60);
-          if (mins > 0) gamesMap[game] = (gamesMap[game] || 0) + mins;
+        if (isAllTime) {
+          // all_time_top_games is already a bounded, hours-valued list (see
+          // top_n_games in the integration) -- merging multiple entities'
+          // already-truncated lists means a game that never cracked any
+          // single entity's own top slots could be under-ranked here, same
+          // known tradeoff the integration's own Master-sensor merge makes.
+          const topGames = stateObj.attributes.all_time_top_games;
+          if (Array.isArray(topGames)) {
+            for (const entry of topGames) {
+              const game = entry.game;
+              const hours = parseFloat(entry.hours) || 0;
+              if (game && hours > 0) gamesMap[game] = (gamesMap[game] || 0) + hours;
+            }
+          }
+        } else {
+          const phBreakdown = this._getPlayHistoryBreakdown(stateObj.attributes, isCal);
+          for (const [game, seconds] of Object.entries(phBreakdown)) {
+            const mins = Math.floor((parseFloat(seconds) || 0) / 60);
+            if (mins > 0) gamesMap[game] = (gamesMap[game] || 0) + mins;
+          }
         }
       }
-      for (const [game, mins] of Object.entries(gamesMap)) {
+      for (const [game, value] of Object.entries(gamesMap)) {
         finalData.push({
           name: game,
-          value: mins,
-          displayValue: this.formatMinutes(mins)
+          value: value,
+          displayValue: isAllTime ? `${Math.round(value * 10) / 10}h` : this.formatMinutes(value)
         });
       }
     } else {
@@ -2265,6 +2283,14 @@ class GamingStatusLeaderboardCard extends HTMLElement {
             const mins = this.extractMinutes(longestStr);
             finalData.push({ name: friendlyName, value: mins, displayValue: String(longestStr) });
           }
+        }
+        else if (this.config.metric === "all_time_hours") {
+          const hours = parseFloat(stateObj.attributes.all_time_total_hours) || 0;
+          finalData.push({ name: friendlyName, value: hours, displayValue: `${hours}h` });
+        }
+        else if (this.config.metric === "all_time_sessions") {
+          const count = parseInt(stateObj.attributes.all_time_session_count) || 0;
+          finalData.push({ name: friendlyName, value: count, displayValue: `${count}` });
         }
       }
     }
@@ -2349,6 +2375,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity);
 
     const colorPalette = gamingStatusNormalizePalette(this._config);
+    const isAllTimeMetric = ['all_time_hours', 'all_time_sessions', 'all_time_top_games'].includes(this._config.metric);
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -2371,15 +2398,20 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
             <option value="longest" ${this._config.metric === 'longest' ? 'selected' : ''}>Top Players: Longest Gaming Session</option>
             <option value="games" ${this._config.metric === 'games' ? 'selected' : ''}>Top Players: Most Different Games Played</option>
             <option value="game_hours" ${this._config.metric === 'game_hours' ? 'selected' : ''}>Top Games: Hours Per Game (Aggregate)</option>
+            <option value="all_time_hours" ${this._config.metric === 'all_time_hours' ? 'selected' : ''}>Top Players: All-Time Total Hours</option>
+            <option value="all_time_sessions" ${this._config.metric === 'all_time_sessions' ? 'selected' : ''}>Top Players: All-Time Session Count</option>
+            <option value="all_time_top_games" ${this._config.metric === 'all_time_top_games' ? 'selected' : ''}>Top Games: All-Time Hours Per Game (Aggregate)</option>
           </select>
         </label>
 
-        <label>Time Window
-          <select id="window" .configValue="window">
-            <option value="rolling" ${this._config.window !== 'calendar' ? 'selected' : ''}>Rolling (Past 7 Days)</option>
-            <option value="calendar" ${this._config.window === 'calendar' ? 'selected' : ''}>Calendar (Since Sunday)</option>
-          </select>
-        </label>
+        <div id="window-selector" style="display: ${isAllTimeMetric ? 'none' : 'block'}">
+          <label>Time Window
+            <select id="window" .configValue="window">
+              <option value="rolling" ${this._config.window !== 'calendar' ? 'selected' : ''}>Rolling (Past 7 Days)</option>
+              <option value="calendar" ${this._config.window === 'calendar' ? 'selected' : ''}>Calendar (Since Sunday)</option>
+            </select>
+          </label>
+        </div>
 
         <label>Player Filter
           <select id="mode" .configValue="mode">
@@ -2428,6 +2460,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
     const singleSelector = this.shadowRoot.getElementById('single-selector');
     const selectedSelector = this.shadowRoot.getElementById('selected-selector');
     const customColorsSelector = this.shadowRoot.getElementById('custom-colors-selector');
+    const windowSelector = this.shadowRoot.getElementById('window-selector');
 
     this.shadowRoot.querySelectorAll('input, select').forEach(el => {
       el.addEventListener('change', e => {
@@ -2443,6 +2476,11 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
         if (field === 'color_palette') {
             customColorsSelector.style.display = (value === 'custom') ? 'block' : 'none';
+        }
+
+        if (field === 'metric') {
+            const isAllTime = ['all_time_hours', 'all_time_sessions', 'all_time_top_games'].includes(value);
+            windowSelector.style.display = isAllTime ? 'none' : 'block';
         }
 
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
