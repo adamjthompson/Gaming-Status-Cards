@@ -3466,6 +3466,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
     this._selectedPlayerId = "";
     this._selectedPlatform = "";
     this._selectedGame = "";
+    this._selectedSessionStartTime = "";
     this._newName = "";
     this._deleteConfirmText = "";
     this._status = null;
@@ -3500,12 +3501,19 @@ class GamingStatusGameManagementCard extends HTMLElement {
     // delete leaves both of those unchanged (same sessions, same days, just
     // relabeled or reduced totals), so hashing them made the card miss its
     // own service-triggered updates and only show fresh data after a full
-    // reload.
+    // reload. Also append every session's own start_time: deleting an
+    // individual session that's already aged out of the totals above (its
+    // seconds no longer counted in play_history, only in the raw session
+    // log) would otherwise leave this hash unchanged and skip the re-render,
+    // stranding a stale, still-clickable "Delete Session" control.
     const gameOptions = this._getGameOptions(this._targetEntityId);
+    const stateObj = this._targetEntityId ? this._hass.states[this._targetEntityId] : null;
+    const sessionIds = ((stateObj && stateObj.attributes.recent_sessions) || []).map(s => s.start_time).join(",");
     const hash = [
       this._selectedPlayerId,
       this._selectedPlatform,
       gameOptions.map(g => `${g.game}:${g.totalSeconds}`).join(","),
+      sessionIds,
     ].join("|");
 
     if (this._lastHash === hash && this.content) return;
@@ -3558,6 +3566,23 @@ class GamingStatusGameManagementCard extends HTMLElement {
     return Object.keys(totals)
       .sort((a, b) => a.localeCompare(b))
       .map(game => ({ game, totalSeconds: totals[game] }));
+  }
+
+  // Individual sessions for the selected game, still identifiable by their
+  // own start_time. Only sessions still present in recent_sessions (capped
+  // at MAX_RECENT_SESSIONS) qualify -- once a session ages out and gets
+  // folded into play_history's daily aggregate, its start_time is gone and
+  // it can no longer be targeted alone. A plain case-insensitive compare is
+  // enough here (no cross-platform title-variant matching needed) since
+  // these sessions come from the same entity's data the Game dropdown
+  // itself was built from.
+  _getSessionsForGame(entityId, game) {
+    const stateObj = entityId ? this._hass.states[entityId] : null;
+    if (!stateObj || !game) return [];
+    const sessions = stateObj.attributes.recent_sessions || [];
+    return sessions
+      .filter(s => (s.game || "").toLowerCase() === game.toLowerCase())
+      .sort((a, b) => (b.start_time || "").localeCompare(a.start_time || ""));
   }
 
   _formatDuration(seconds) {
@@ -3633,6 +3658,38 @@ class GamingStatusGameManagementCard extends HTMLElement {
     }
   }
 
+  async _handleDeleteSession() {
+    const player = this._resolvePlayerName(this._selectedPlayerId);
+    if (!player || !this._selectedGame || !this._selectedSessionStartTime) return;
+    try {
+      await this._hass.callService("gaming_status", "delete_session", {
+        player,
+        ...(this._selectedPlatform ? { platform: this._selectedPlatform } : {}),
+        game: this._selectedGame,
+        start_time: this._selectedSessionStartTime,
+      });
+      this._setStatus(`Deleted that session of "${this._selectedGame}".`, "success");
+      this._selectedSessionStartTime = "";
+      this.render();
+    } catch (err) {
+      this._setStatus(`Delete session failed: ${err?.message || err}`, "error");
+    }
+  }
+
+  _formatDate(dateStr) {
+    if (!dateStr) return "";
+    const d = new Date(`${dateStr}T12:00:00`);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  _formatTime(startTime) {
+    if (!startTime) return "";
+    const d = new Date(startTime);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+
   render() {
     const escapeHTML = gamingStatusEscapeHTML;
 
@@ -3655,6 +3712,8 @@ class GamingStatusGameManagementCard extends HTMLElement {
           #gm-rename-btn:not(:disabled):hover { opacity: 0.9; }
           #gm-delete-btn { background: var(--error-color, #db4437); color: #fff; }
           #gm-delete-btn:not(:disabled):hover { opacity: 0.9; }
+          #gm-delete-session-btn { background: var(--error-color, #db4437); color: #fff; }
+          #gm-delete-session-btn:not(:disabled):hover { opacity: 0.9; }
           .gm-status { margin-top: 12px; padding: 8px 10px; border-radius: 4px; font-size: 13px; }
           .gm-status.success { background: rgba(76, 175, 80, 0.15); color: var(--success-color, #4caf50); }
           .gm-status.error { background: rgba(219, 68, 55, 0.15); color: var(--error-color, #db4437); }
@@ -3697,6 +3756,16 @@ class GamingStatusGameManagementCard extends HTMLElement {
     const renameEnabled = !!(this._selectedGame && newNameTrimmed && newNameTrimmed.toLowerCase() !== this._selectedGame.toLowerCase());
     const deleteEnabled = !!(this._selectedGame && this._deleteConfirmText === this._selectedGame);
 
+    // Only sessions still present in recent_sessions are individually
+    // addressable (see _getSessionsForGame) -- a game whose only remaining
+    // history has already aged into play_history's daily aggregate shows no
+    // section here at all, rather than an empty/broken one.
+    const sessionOptions = this._selectedGame ? this._getSessionsForGame(this._targetEntityId, this._selectedGame) : [];
+    const sessionSelectOptions = sessionOptions.map(s =>
+      `<option value="${escapeHTML(s.start_time || "")}" ${this._selectedSessionStartTime === s.start_time ? "selected" : ""}>${escapeHTML(this._formatDate(s.date))} ${escapeHTML(this._formatTime(s.start_time))} (${this._formatDuration(s.duration_seconds)})</option>`
+    ).join("");
+    const deleteSessionEnabled = !!this._selectedSessionStartTime;
+
     // Rename/Delete are only meaningful once a game is selected, so the
     // whole section stays out of the DOM (not just disabled) until then --
     // matches the same conditional-HTML pattern playerFieldHTML already uses
@@ -3719,6 +3788,19 @@ class GamingStatusGameManagementCard extends HTMLElement {
         <button id="gm-delete-btn" ${deleteEnabled ? "" : "disabled"}>Delete</button>
       </div>`;
 
+    const sessionDeleteHTML = (!this._selectedGame || !sessionOptions.length) ? "" : `
+      <hr>
+      <div class="gm-action-row">
+        <div class="gm-field">
+          <label>Session to delete</label>
+          <select id="gm-session">
+            <option value="" ${!this._selectedSessionStartTime ? "selected" : ""} disabled>Select a session…</option>
+            ${sessionSelectOptions}
+          </select>
+        </div>
+        <button id="gm-delete-session-btn" ${deleteSessionEnabled ? "" : "disabled"}>Delete Session</button>
+      </div>`;
+
     this._bodyEl.innerHTML = `
       ${playerFieldHTML}
       <div class="gm-field">
@@ -3736,6 +3818,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
         </select>
       </div>
       ${renameDeleteHTML}
+      ${sessionDeleteHTML}
       <div id="gm-status" class="gm-status" style="display: none;"></div>
     `;
     this._statusEl = this.shadowRoot.getElementById("gm-status");
@@ -3746,6 +3829,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
       playerSelect.addEventListener("change", (ev) => {
         this._selectedPlayerId = ev.target.value;
         this._selectedGame = "";
+        this._selectedSessionStartTime = "";
         this._newName = "";
         this._deleteConfirmText = "";
         this._resolveTarget();
@@ -3756,6 +3840,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
     this.shadowRoot.getElementById("gm-platform").addEventListener("change", (ev) => {
       this._selectedPlatform = ev.target.value;
       this._selectedGame = "";
+      this._selectedSessionStartTime = "";
       this._newName = "";
       this._deleteConfirmText = "";
       this._resolveTarget();
@@ -3764,6 +3849,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
 
     this.shadowRoot.getElementById("gm-game").addEventListener("change", (ev) => {
       this._selectedGame = ev.target.value;
+      this._selectedSessionStartTime = "";
       this._newName = "";
       this._deleteConfirmText = "";
       this.render();
@@ -3792,6 +3878,16 @@ class GamingStatusGameManagementCard extends HTMLElement {
     if (renameBtn) renameBtn.addEventListener("click", () => this._handleRename());
     const deleteBtn = this.shadowRoot.getElementById("gm-delete-btn");
     if (deleteBtn) deleteBtn.addEventListener("click", () => this._handleDelete());
+
+    const sessionSelect = this.shadowRoot.getElementById("gm-session");
+    if (sessionSelect) {
+      sessionSelect.addEventListener("change", (ev) => {
+        this._selectedSessionStartTime = ev.target.value;
+        this.shadowRoot.getElementById("gm-delete-session-btn").disabled = !this._selectedSessionStartTime;
+      });
+    }
+    const deleteSessionBtn = this.shadowRoot.getElementById("gm-delete-session-btn");
+    if (deleteSessionBtn) deleteSessionBtn.addEventListener("click", () => this._handleDeleteSession());
   }
 
   getCardSize() {
