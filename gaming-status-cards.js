@@ -3697,6 +3697,28 @@ class GamingStatusGameManagementCard extends HTMLElement {
     const renameEnabled = !!(this._selectedGame && newNameTrimmed && newNameTrimmed.toLowerCase() !== this._selectedGame.toLowerCase());
     const deleteEnabled = !!(this._selectedGame && this._deleteConfirmText === this._selectedGame);
 
+    // Rename/Delete are only meaningful once a game is selected, so the
+    // whole section stays out of the DOM (not just disabled) until then --
+    // matches the same conditional-HTML pattern playerFieldHTML already uses
+    // above for single-vs-multi-player mode.
+    const renameDeleteHTML = !this._selectedGame ? "" : `
+      <hr>
+      <div class="gm-action-row">
+        <div class="gm-field">
+          <label>Rename to</label>
+          <input type="text" id="gm-new-name" placeholder="New name" value="${escapeHTML(this._newName || "")}">
+        </div>
+        <button id="gm-rename-btn" ${renameEnabled ? "" : "disabled"}>Rename</button>
+      </div>
+      <hr>
+      <div class="gm-action-row">
+        <div class="gm-field">
+          <label>Type "${escapeHTML(this._selectedGame)}" to confirm</label>
+          <input type="text" id="gm-delete-confirm" placeholder="Type &quot;${escapeHTML(this._selectedGame)}&quot;" value="${escapeHTML(this._deleteConfirmText || "")}">
+        </div>
+        <button id="gm-delete-btn" ${deleteEnabled ? "" : "disabled"}>Delete</button>
+      </div>`;
+
     this._bodyEl.innerHTML = `
       ${playerFieldHTML}
       <div class="gm-field">
@@ -3713,22 +3735,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
           ${gameSelectOptions}
         </select>
       </div>
-      <hr>
-      <div class="gm-action-row">
-        <div class="gm-field">
-          <label>Rename to</label>
-          <input type="text" id="gm-new-name" placeholder="New name" value="${escapeHTML(this._newName || "")}" ${!this._selectedGame ? "disabled" : ""}>
-        </div>
-        <button id="gm-rename-btn" ${renameEnabled ? "" : "disabled"}>Rename</button>
-      </div>
-      <hr>
-      <div class="gm-action-row">
-        <div class="gm-field">
-          <label>Type "${escapeHTML(this._selectedGame || "")}" to confirm</label>
-          <input type="text" id="gm-delete-confirm" placeholder="${this._selectedGame ? `Type "${escapeHTML(this._selectedGame)}"` : "Select a game first"}" value="${escapeHTML(this._deleteConfirmText || "")}" ${!this._selectedGame ? "disabled" : ""}>
-        </div>
-        <button id="gm-delete-btn" ${deleteEnabled ? "" : "disabled"}>Delete</button>
-      </div>
+      ${renameDeleteHTML}
       <div id="gm-status" class="gm-status" style="display: none;"></div>
     `;
     this._statusEl = this.shadowRoot.getElementById("gm-status");
