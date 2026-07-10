@@ -3769,21 +3769,29 @@ class GamingStatusGameManagementCard extends HTMLElement {
       this.render();
     });
 
-    this.shadowRoot.getElementById("gm-new-name").addEventListener("input", (ev) => {
-      this._newName = ev.target.value;
-      const trimmed = this._newName.trim();
-      const enabled = !!(this._selectedGame && trimmed && trimmed.toLowerCase() !== this._selectedGame.toLowerCase());
-      this.shadowRoot.getElementById("gm-rename-btn").disabled = !enabled;
-    });
+    const newNameInput = this.shadowRoot.getElementById("gm-new-name");
+    if (newNameInput) {
+      newNameInput.addEventListener("input", (ev) => {
+        this._newName = ev.target.value;
+        const trimmed = this._newName.trim();
+        const enabled = !!(this._selectedGame && trimmed && trimmed.toLowerCase() !== this._selectedGame.toLowerCase());
+        this.shadowRoot.getElementById("gm-rename-btn").disabled = !enabled;
+      });
+    }
 
-    this.shadowRoot.getElementById("gm-delete-confirm").addEventListener("input", (ev) => {
-      this._deleteConfirmText = ev.target.value;
-      const enabled = !!(this._selectedGame && this._deleteConfirmText === this._selectedGame);
-      this.shadowRoot.getElementById("gm-delete-btn").disabled = !enabled;
-    });
+    const deleteConfirmInput = this.shadowRoot.getElementById("gm-delete-confirm");
+    if (deleteConfirmInput) {
+      deleteConfirmInput.addEventListener("input", (ev) => {
+        this._deleteConfirmText = ev.target.value;
+        const enabled = !!(this._selectedGame && this._deleteConfirmText === this._selectedGame);
+        this.shadowRoot.getElementById("gm-delete-btn").disabled = !enabled;
+      });
+    }
 
-    this.shadowRoot.getElementById("gm-rename-btn").addEventListener("click", () => this._handleRename());
-    this.shadowRoot.getElementById("gm-delete-btn").addEventListener("click", () => this._handleDelete());
+    const renameBtn = this.shadowRoot.getElementById("gm-rename-btn");
+    if (renameBtn) renameBtn.addEventListener("click", () => this._handleRename());
+    const deleteBtn = this.shadowRoot.getElementById("gm-delete-btn");
+    if (deleteBtn) deleteBtn.addEventListener("click", () => this._handleDelete());
   }
 
   getCardSize() {
