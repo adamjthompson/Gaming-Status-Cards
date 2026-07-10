@@ -66,6 +66,25 @@ function gamingStatusPaletteOptionsHTML(selected) {
 }
 
 // ====================================================================
+// SHARED: GENERAL-PURPOSE HELPERS
+// ====================================================================
+
+const GAMING_STATUS_DEFAULT_ENTITIES_PATTERN = "_master";
+
+// Strips the trailing "Gaming Status"/"Master"/platform-name suffixes HA
+// tacks onto a gaming_status entity's friendly_name, leaving just the
+// player's name (e.g. "Adam Gaming Status Master" -> "Adam"). Includes the
+// platform words (Steam/Xbox/...) too, not just "Master", so this stays
+// correct for any entities_pattern, not only the default "_master" suffix.
+function gamingStatusCleanPlayerName(rawName) {
+  return String(rawName).replace(/ Gaming Status| Master| Chart| Steam| Xbox| PlayStation| PC| Custom| Discord| Playnite/gi, "").trim();
+}
+
+function gamingStatusEscapeHTML(str) {
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// ====================================================================
 // SHARED: PLAYER ENTITY DROPDOWNS (Single Player mode)
 // ====================================================================
 
@@ -78,9 +97,32 @@ function gamingStatusGetPlayerEntities(hass, targetSuffix) {
     .filter(k => k.endsWith(targetSuffix) && hass.states[k].attributes.secondary !== undefined)
     .map(k => ({
       id: k,
-      name: (hass.states[k].attributes.friendly_name || k).replace(/ Gaming Status| Master/gi, "").trim(),
+      name: gamingStatusCleanPlayerName(hass.states[k].attributes.friendly_name || k),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Resolves a "Selected Entities" config string into real entity IDs. Each
+// comma-separated token can be either a full entity_id (kept as-is, so
+// existing configs pasted before this helper existed keep working
+// unchanged) or a bare player name like "adam" (matched case-insensitively
+// against gamingStatusGetPlayerEntities' cleaned display names for the
+// given suffix). Tokens that match neither are silently dropped, same as
+// the previous "only accept entity IDs that actually exist" behavior.
+function gamingStatusResolveSelectedEntities(hass, rawText, targetSuffix) {
+  if (!hass || !rawText) return [];
+  const playerEntities = gamingStatusGetPlayerEntities(hass, targetSuffix || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
+  const idByLowerName = new Map(playerEntities.map(e => [e.name.toLowerCase(), e.id]));
+  const result = [];
+  for (const token of rawText.split(',').map(t => t.trim()).filter(Boolean)) {
+    if (hass.states[token]) {
+      result.push(token);
+    } else {
+      const matchedId = idByLowerName.get(token.toLowerCase());
+      if (matchedId) result.push(matchedId);
+    }
+  }
+  return result;
 }
 
 // Resolves the exact entity IDs a single/all/selected mode config should
@@ -94,9 +136,9 @@ function gamingStatusLeaderboardEntityIds(hass, config) {
     return hass.states[config.single_entity] ? [config.single_entity] : [];
   }
   if (config.mode === "selected" && config.selected_entities) {
-    return config.selected_entities.split(',').map(e => e.trim()).filter(e => hass.states[e]);
+    return gamingStatusResolveSelectedEntities(hass, config.selected_entities, config.entities_pattern);
   }
-  const targetSuffix = config.entities_pattern || "_master";
+  const targetSuffix = config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
   const result = [];
   for (const key in hass.states) {
     if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) && key.endsWith(targetSuffix) && hass.states[key].attributes.secondary !== undefined) {
@@ -122,6 +164,110 @@ function gamingStatusDefaultSingleEntity(config, entities, field) {
     return true;
   }
   return false;
+}
+
+// ====================================================================
+// SHARED: SVG CHART RENDERING (Weekly Hours / Platforms / Weekly Games)
+// ====================================================================
+
+// Returns a stable "re-render from last known args" callback for a chart
+// card, used both by its ResizeObserver and its zero-width retry guard so
+// every chart card wires the exact same recovery behavior.
+function gamingStatusRerenderer(card) {
+  return () => { if (card._lastRenderArgs) card._renderChart(...card._lastRenderArgs); };
+}
+
+// Creates (and starts observing) a debounced ResizeObserver that re-renders
+// via requestAnimationFrame on resize. Returns null (instead of throwing)
+// on runtimes without ResizeObserver. Callers are responsible for only
+// calling this once per card instance (typically guarded by `if (!this._ro)`
+// in _ensureShell()), since observing the same element twice would double
+// up the resize callback.
+function gamingStatusWireResize(contentEl, rerender) {
+  if (typeof ResizeObserver === "undefined") return null;
+  let rafId;
+  const ro = new ResizeObserver(() => {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(rerender);
+  });
+  ro.observe(contentEl);
+  return ro;
+}
+
+// Returns contentEl's current width, or schedules a rAF retry (via
+// `rerender`) and returns 0 if the container hasn't been laid out yet (e.g.
+// a card added to a not-yet-visible tab). Callers should bail out of
+// rendering whenever this returns a falsy value.
+function gamingStatusChartWidth(contentEl, rerender) {
+  const VW = contentEl.clientWidth;
+  if (!VW) requestAnimationFrame(rerender);
+  return VW;
+}
+
+// Shared "did the relevant entities actually change" hash fragment used by
+// the Weekly Hours/Platforms/Weekly Games cards' set hass(). Callers append
+// their own config-specific fields (window, palette, custom colors, etc.)
+// since those legitimately differ per card.
+function gamingStatusEntityHash(hass, entityIds) {
+  return entityIds.map(id => `${id}:${hass.states[id]?.last_updated}`).join(",");
+}
+
+// Wires a floating tooltip to every element matching `selector` inside
+// contentEl. `formatText(rect)` returns the tooltip's text for that
+// element; cursor-following position math is identical across every chart
+// card, so only the text formatting varies per caller.
+function gamingStatusWireTooltip(contentEl, tooltipEl, selector, formatText) {
+  if (!tooltipEl) return;
+  contentEl.querySelectorAll(selector).forEach(rect => {
+    rect.addEventListener("mouseenter", () => {
+      tooltipEl.textContent = formatText(rect);
+      tooltipEl.style.display = "block";
+    });
+    rect.addEventListener("mousemove", (ev) => {
+      tooltipEl.style.left = `${ev.clientX + 14}px`;
+      tooltipEl.style.top = `${ev.clientY - 38}px`;
+    });
+    rect.addEventListener("mouseleave", () => {
+      tooltipEl.style.display = "none";
+    });
+  });
+}
+
+// Wires click-to-pin / hover-to-preview "focus" behavior between a chart's
+// bars and its legend swatches: hovering (or clicking to pin) a legend
+// entry dims every other bar/swatch so the selected one stands out.
+// `dataKey` is the dataset property shared by the main bars
+// (`data-<dataKey>`), their legend swatches (`data-swatch-<dataKey>`), and
+// the legend hit-targets (`data-legend-<dataKey>`) -- e.g. "player" or
+// "game". Not every chart card wants this (the Platforms donut doesn't),
+// so it's opt-in per card rather than folded into gamingStatusWireTooltip.
+function gamingStatusWireLegendFocus(contentEl, dataKey) {
+  const cap = dataKey[0].toUpperCase() + dataKey.slice(1);
+  const swatchKey = "swatch" + cap;
+  const legendKey = "legend" + cap;
+  let focused = null;
+  const applyFocus = (name) => {
+    contentEl.querySelectorAll(`rect[data-${dataKey}]`).forEach(r => {
+      r.style.opacity = r.dataset[dataKey] === name ? "1" : "0.15";
+    });
+    contentEl.querySelectorAll(`rect[data-swatch-${dataKey}]`).forEach(r => {
+      r.style.opacity = r.dataset[swatchKey] === name ? "1" : "0.15";
+    });
+  };
+  const clearFocus = () => {
+    contentEl.querySelectorAll(`rect[data-${dataKey}], rect[data-swatch-${dataKey}]`).forEach(r => {
+      r.style.opacity = "1";
+    });
+  };
+  contentEl.querySelectorAll(`rect[data-legend-${dataKey}]`).forEach(hitRect => {
+    const name = hitRect.dataset[legendKey];
+    hitRect.addEventListener("click", () => {
+      if (focused === name) { focused = null; clearFocus(); }
+      else { focused = name; applyFocus(name); }
+    });
+    hitRect.addEventListener("mouseenter", () => { if (!focused) applyFocus(name); });
+    hitRect.addEventListener("mouseleave", () => { if (!focused) clearFocus(); });
+  });
 }
 
 // Same platform brand colors used by the List card's "Platform Native" color mode.
@@ -220,7 +366,7 @@ class GamingStatusCard extends HTMLElement {
   setConfig(config) {
     this.config = {
       ...config,
-      entities_pattern: config.entities_pattern || "_master",
+      entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       mode: config.mode || "all",
       color_mode: config.color_mode || "game",
       offline_image: config.offline_image || "game",
@@ -237,7 +383,7 @@ class GamingStatusCard extends HTMLElement {
     this._hass = hass;
     if (!this.config) return;
 
-    let targetSuffix = "_master";
+    let targetSuffix = GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     if (["steam", "xbox", "playstation", "pc", "custom", "discord", "playnite"].includes(this.config.mode)) {
       targetSuffix = `_${this.config.mode}`;
     }
@@ -246,7 +392,7 @@ class GamingStatusCard extends HTMLElement {
     let rawEntities = [];
 
     if (this.config.manual_entities && this.config.manual_entities.trim() !== "") {
-      const entityIds = this.config.manual_entities.split(",").map((e) => e.trim());
+      const entityIds = gamingStatusResolveSelectedEntities(hass, this.config.manual_entities, targetSuffix);
       for (const id of entityIds) {
         if (hass.states[id]) {
           rawEntities.push(hass.states[id]);
@@ -446,7 +592,7 @@ class GamingStatusCard extends HTMLElement {
           }
       }
 
-      const friendlyName = (entity.attributes.friendly_name || entity.entity_id).replace(/ Gaming Status| Master| Chart| Steam| Xbox| PlayStation| PC| Custom| Discord| Playnite/gi, "")
+      const friendlyName = gamingStatusCleanPlayerName(entity.attributes.friendly_name || entity.entity_id)
 
       const isStrValid = (val) => val && String(val).toLowerCase() !== "null" && String(val).toLowerCase() !== "none" && val !== "unknown";
       let heroArt = isStrValid(entity.attributes.game_hero_art) ? entity.attributes.game_hero_art : "";
@@ -476,7 +622,7 @@ class GamingStatusCard extends HTMLElement {
   }
 
   render(data) {
-    const escapeHTML = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const escapeHTML = gamingStatusEscapeHTML;
 
     if (!this.content) {
       this.shadowRoot.innerHTML = `
@@ -722,10 +868,10 @@ class GamingStatusCardEditor extends HTMLElement {
         </div><hr>
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
-          <div class="helper-text">Leave blank to automatically grab all sensors. To restrict this card to specific people, enter a comma-separated list of exact entity IDs (e.g. <code>sensor.gaming_status_jack_master, sensor.gaming_status_jill_master</code>).</div>
+          <div class="helper-text">Leave blank to automatically grab all sensors. To restrict this card to specific people, enter a comma-separated list of player names (e.g. <code>adam, josh, liv</code>) or full entity IDs.</div>
           <input type="text" id="manual-entities-input" data-field="manual_entities" value="${
             this._config.manual_entities || ""
-          }" placeholder="sensor.gaming_status_jack_master, ...">
+          }" placeholder="adam, josh, liv">
         </div>
       </div>
     `;
@@ -775,7 +921,7 @@ class GamingSlideshowCard extends HTMLElement {
       auto_hide: true,
       plex_source: "none",
       manual_entities: "",
-      entities_pattern: "_master",
+      entities_pattern: GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
     };
   }
 
@@ -791,7 +937,7 @@ class GamingSlideshowCard extends HTMLElement {
       auto_hide: config.auto_hide !== false,
       plex_source: config.plex_source || (config.include_plex ? "tautulli" : "none"),
       manual_entities: config.manual_entities || "",
-      entities_pattern: config.entities_pattern || "_master",
+      entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       ...config,
     };
   }
@@ -806,9 +952,7 @@ class GamingSlideshowCard extends HTMLElement {
       this.config.manual_entities &&
       this.config.manual_entities.trim() !== ""
     ) {
-      const entityIds = this.config.manual_entities
-        .split(",")
-        .map((e) => e.trim());
+      const entityIds = gamingStatusResolveSelectedEntities(hass, this.config.manual_entities, this.config.entities_pattern);
       for (const id of entityIds) {
         if (hass.states[id]) {
           rawEntities.push(hass.states[id]);
@@ -1162,10 +1306,10 @@ class GamingSlideshowCardEditor extends HTMLElement {
         </div><hr>
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
-          <div class="helper-text">Leave blank to automatically grab all sensors, or restrict by entering comma-separated IDs.</div>
+          <div class="helper-text">Leave blank to automatically grab all sensors, or restrict by entering comma-separated player names (e.g. adam, josh, liv) or full entity IDs.</div>
           <input type="text" id="manual-entities-input-slide" .configValue="manual_entities" value="${
             this._config.manual_entities || ""
-          }" placeholder="sensor.gaming_status_jack_master, ...">
+          }" placeholder="adam, josh, liv">
         </div>
       </div>
     `;
@@ -1297,7 +1441,7 @@ class GamingStatusChartCard extends HTMLElement {
       selected_entities: "",
       color_palette: "vivid",
       custom_colors: "",
-      entities_pattern: "_master",
+      entities_pattern: GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       window: "rolling",
     };
   }
@@ -1314,7 +1458,7 @@ class GamingStatusChartCard extends HTMLElement {
       manual_entities: config.manual_entities || "",
       color_palette: gamingStatusNormalizePalette(config),
       custom_colors: config.custom_colors || "",
-      entities_pattern: config.entities_pattern || "_master",
+      entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       window: config.window || "rolling",
     };
     this._lastHash = "";
@@ -1328,7 +1472,7 @@ class GamingStatusChartCard extends HTMLElement {
     if (this.config.mode === "single" && this.config.single_entity) {
       if (hass.states[this.config.single_entity]) entityIds.push(this.config.single_entity);
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
-      entityIds = this.config.selected_entities.split(",").map(e => e.trim()).filter(e => hass.states[e]);
+      entityIds = gamingStatusResolveSelectedEntities(hass, this.config.selected_entities, this.config.entities_pattern);
     } else {
       entityIds = Object.keys(hass.states).filter(
         k => (k.startsWith("sensor.gaming_status_") || k.startsWith("binary_sensor.gaming_status_")) &&
@@ -1338,7 +1482,7 @@ class GamingStatusChartCard extends HTMLElement {
     }
     entityIds.sort();
 
-    const hash = entityIds.map(id => `${id}:${hass.states[id]?.last_updated}`).join(",")
+    const hash = gamingStatusEntityHash(hass, entityIds)
       + "|" + this.config.window
       + "|" + this.config.color_palette
       + "|" + this.config.custom_colors;
@@ -1359,15 +1503,8 @@ class GamingStatusChartCard extends HTMLElement {
       this._titleEl = this.shadowRoot.getElementById("chart-title");
       this._contentEl = this.shadowRoot.getElementById("chart-content");
       this._tooltipEl = this.shadowRoot.getElementById("chart-tooltip");
-      if (!this._ro && typeof ResizeObserver !== "undefined") {
-        let rafId;
-        this._ro = new ResizeObserver(() => {
-          if (rafId) cancelAnimationFrame(rafId);
-          rafId = requestAnimationFrame(() => {
-            if (this._lastRenderArgs) this._renderChart(...this._lastRenderArgs);
-          });
-        });
-        this._ro.observe(this._contentEl);
+      if (!this._ro) {
+        this._ro = gamingStatusWireResize(this._contentEl, gamingStatusRerenderer(this));
       }
     }
     if (this._titleEl) {
@@ -1394,7 +1531,7 @@ class GamingStatusChartCard extends HTMLElement {
     for (const entityId of entityIds) {
       const stateObj = this._hass.states[entityId];
       if (!stateObj) continue;
-      const name = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status| Master/gi, "").trim();
+      const name = gamingStatusCleanPlayerName(stateObj.attributes.friendly_name || entityId);
       const playHistory = stateObj.attributes.play_history || {};
       const weeklyHours = parseFloat(stateObj.attributes[weeklyAttr]) || 0;
 
@@ -1425,11 +1562,8 @@ class GamingStatusChartCard extends HTMLElement {
   _renderChart(dailyData, players) {
     if (!this._contentEl) return;
     this._lastRenderArgs = [dailyData, players];
-    const VW = this._contentEl.clientWidth;
-    if (!VW) {
-      requestAnimationFrame(() => { if (this._lastRenderArgs) this._renderChart(...this._lastRenderArgs); });
-      return;
-    }
+    const VW = gamingStatusChartWidth(this._contentEl, gamingStatusRerenderer(this));
+    if (!VW) return;
 
     if (!players.length || dailyData.every(d => !Object.keys(d.players).length)) {
       this._contentEl.innerHTML = `<div style="padding:20px;color:var(--secondary-text-color);font-style:italic;">No game activity found for this period.</div>`;
@@ -1536,61 +1670,14 @@ class GamingStatusChartCard extends HTMLElement {
     svg += "</svg>";
     this._contentEl.innerHTML = svg;
 
-    const tooltipEl = this._tooltipEl;
-    if (tooltipEl) {
-      this._contentEl.querySelectorAll("rect[data-player]").forEach(rect => {
-        rect.addEventListener("mouseenter", () => {
-          const totalMins = Math.round(parseFloat(rect.dataset.hours) * 60);
-          const h = Math.floor(totalMins / 60);
-          const m = totalMins % 60;
-          const display = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
-          tooltipEl.textContent = isSingle ? display : `${rect.dataset.player}: ${display}`;
-          tooltipEl.style.display = "block";
-        });
-        rect.addEventListener("mousemove", (ev) => {
-          tooltipEl.style.left = `${ev.clientX + 14}px`;
-          tooltipEl.style.top = `${ev.clientY - 38}px`;
-        });
-        rect.addEventListener("mouseleave", () => {
-          tooltipEl.style.display = "none";
-        });
-      });
-    }
-
-    let focusedPlayer = null;
-    const applyPlayerFocus = (name) => {
-      this._contentEl.querySelectorAll("rect[data-player]").forEach(r => {
-        r.style.opacity = r.dataset.player === name ? "1" : "0.15";
-      });
-      this._contentEl.querySelectorAll("rect[data-swatch-player]").forEach(r => {
-        r.style.opacity = r.dataset.swatchPlayer === name ? "1" : "0.15";
-      });
-    };
-    const clearPlayerFocus = () => {
-      this._contentEl.querySelectorAll("rect[data-player], rect[data-swatch-player]").forEach(r => {
-        r.style.opacity = "1";
-      });
-    };
-    this._contentEl.querySelectorAll("rect[data-legend-player]").forEach(hitRect => {
-      const playerName = hitRect.dataset.legendPlayer;
-      hitRect.addEventListener("click", () => {
-        if (focusedPlayer === playerName) {
-          focusedPlayer = null;
-          clearPlayerFocus();
-        } else {
-          focusedPlayer = playerName;
-          applyPlayerFocus(playerName);
-        }
-      });
-      hitRect.addEventListener("mouseenter", () => {
-        if (focusedPlayer) return;
-        applyPlayerFocus(playerName);
-      });
-      hitRect.addEventListener("mouseleave", () => {
-        if (focusedPlayer) return;
-        clearPlayerFocus();
-      });
+    gamingStatusWireTooltip(this._contentEl, this._tooltipEl, "rect[data-player]", (rect) => {
+      const totalMins = Math.round(parseFloat(rect.dataset.hours) * 60);
+      const h = Math.floor(totalMins / 60);
+      const m = totalMins % 60;
+      const display = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+      return isSingle ? display : `${rect.dataset.player}: ${display}`;
     });
+    gamingStatusWireLegendFocus(this._contentEl, "player");
   }
 
   _niceMax(v) {
@@ -1600,7 +1687,7 @@ class GamingStatusChartCard extends HTMLElement {
   }
 
   _esc(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    return gamingStatusEscapeHTML(s);
   }
 
   getCardSize() { return 5; }
@@ -1621,7 +1708,7 @@ class GamingStatusChartEditor extends HTMLElement {
     if (!this._config) return;
     const mode = this._config.mode || "all";
     const colorPalette = gamingStatusNormalizePalette(this._config);
-    const targetSuffix = this._config.entities_pattern || "_master";
+    const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
     if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
@@ -1670,8 +1757,8 @@ class GamingStatusChartEditor extends HTMLElement {
         ${mode === "selected" ? `
         <div>
           <div class="section-title">Selected Entities</div>
-          <div class="helper-text">Comma-separated entity IDs to include in the chart.</div>
-          <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="sensor.gaming_status_jack_master, ...">
+          <div class="helper-text">Comma-separated player names (or full entity IDs) to include in the chart.</div>
+          <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="adam, josh, liv">
         </div>` : ""}
         <hr>
         <div>
@@ -1717,7 +1804,7 @@ class GamingStatusChartEditor extends HTMLElement {
     });
   }
 
-  _esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  _esc(s) { return gamingStatusEscapeHTML(s); }
 }
 
 // ====================================================================
@@ -1741,7 +1828,7 @@ class GamingStatusDonutCard extends HTMLElement {
       selected_entities: "",
       manual_entities: "",
       custom_colors: "",
-      entities_pattern: "_master",
+      entities_pattern: GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
     };
   }
 
@@ -1754,7 +1841,7 @@ class GamingStatusDonutCard extends HTMLElement {
       selected_entities: config.selected_entities || "",
       manual_entities: config.manual_entities || "",
       custom_colors: config.custom_colors || "",
-      entities_pattern: config.entities_pattern || "_master",
+      entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       ...config,
     };
     this._lastHash = "";
@@ -1768,11 +1855,11 @@ class GamingStatusDonutCard extends HTMLElement {
     if (this.config.mode === "single" && this.config.single_entity) {
       if (hass.states[this.config.single_entity]) entityIds.push(this.config.single_entity);
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
-      entityIds = this.config.selected_entities.split(",").map(e => e.trim()).filter(e => hass.states[e]);
+      entityIds = gamingStatusResolveSelectedEntities(hass, this.config.selected_entities, this.config.entities_pattern);
     } else {
       const manualStr = this.config.manual_entities || "";
       if (manualStr) {
-        entityIds = manualStr.split(",").map(e => e.trim()).filter(e => hass.states[e]);
+        entityIds = gamingStatusResolveSelectedEntities(hass, manualStr, this.config.entities_pattern);
       } else {
         for (const key in hass.states) {
           if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) &&
@@ -1785,7 +1872,7 @@ class GamingStatusDonutCard extends HTMLElement {
     }
     entityIds.sort();
 
-    const hash = entityIds.map(id => `${id}:${hass.states[id]?.last_updated}`).join(",")
+    const hash = gamingStatusEntityHash(hass, entityIds)
       + "|" + this.config.window
       + "|" + this.config.custom_colors;
 
@@ -1805,15 +1892,8 @@ class GamingStatusDonutCard extends HTMLElement {
       this._titleEl = this.shadowRoot.getElementById("d-title");
       this._contentEl = this.shadowRoot.getElementById("d-content");
       this._tooltipEl = this.shadowRoot.getElementById("d-tooltip");
-      if (!this._ro && typeof ResizeObserver !== "undefined") {
-        let rafId;
-        this._ro = new ResizeObserver(() => {
-          if (rafId) cancelAnimationFrame(rafId);
-          rafId = requestAnimationFrame(() => {
-            if (this._lastRenderArgs) this._renderChart(...this._lastRenderArgs);
-          });
-        });
-        this._ro.observe(this._contentEl);
+      if (!this._ro) {
+        this._ro = gamingStatusWireResize(this._contentEl, gamingStatusRerenderer(this));
       }
     }
     if (this._titleEl) {
@@ -1876,11 +1956,8 @@ class GamingStatusDonutCard extends HTMLElement {
   _renderChart(platforms, platformTotals, grandTotal) {
     if (!this._contentEl) return;
     this._lastRenderArgs = [platforms, platformTotals, grandTotal];
-    const VW = this._contentEl.clientWidth;
-    if (!VW) {
-      requestAnimationFrame(() => { if (this._lastRenderArgs) this._renderChart(...this._lastRenderArgs); });
-      return;
-    }
+    const VW = gamingStatusChartWidth(this._contentEl, gamingStatusRerenderer(this));
+    if (!VW) return;
 
     if (grandTotal <= 0) {
       this._contentEl.innerHTML = `<div style="padding:20px;color:var(--secondary-text-color);font-style:italic;">No activity found for this period.</div>`;
@@ -1941,29 +2018,15 @@ class GamingStatusDonutCard extends HTMLElement {
     svg += "</svg>";
     this._contentEl.innerHTML = svg;
 
-    const tooltipEl = this._tooltipEl;
-    const capturedGrandTotal = grandTotal;
-    if (tooltipEl) {
-      this._contentEl.querySelectorAll("rect[data-platform]").forEach(rect => {
-        rect.addEventListener("mouseenter", () => {
-          const h = parseFloat(rect.dataset.hours);
-          const pct = (h / capturedGrandTotal * 100).toFixed(1);
-          tooltipEl.textContent = `${rect.dataset.platform}: ${fmt(h)} (${pct}%)`;
-          tooltipEl.style.display = "block";
-        });
-        rect.addEventListener("mousemove", ev => {
-          tooltipEl.style.left = `${ev.clientX + 14}px`;
-          tooltipEl.style.top = `${ev.clientY - 38}px`;
-        });
-        rect.addEventListener("mouseleave", () => {
-          tooltipEl.style.display = "none";
-        });
-      });
-    }
+    gamingStatusWireTooltip(this._contentEl, this._tooltipEl, "rect[data-platform]", (rect) => {
+      const h = parseFloat(rect.dataset.hours);
+      const pct = (h / grandTotal * 100).toFixed(1);
+      return `${rect.dataset.platform}: ${fmt(h)} (${pct}%)`;
+    });
   }
 
   _esc(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    return gamingStatusEscapeHTML(s);
   }
 
   getCardSize() { return 3; }
@@ -1986,7 +2049,7 @@ class GamingStatusDonutEditor extends HTMLElement {
   render() {
     if (!this._hass || !this._config) return;
 
-    const targetSuffix = this._config.entities_pattern || "_master";
+    const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
     if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
@@ -2027,8 +2090,8 @@ class GamingStatusDonutEditor extends HTMLElement {
         </div>
         <div id="selected-selector" style="display: ${this._config.mode === "selected" ? "block" : "none"}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ""}" placeholder="sensor.gaming_status_jack_master, ...">
-            <span class="helper-text">Comma-separated list of entity IDs to include in the aggregate.</span>
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ""}" placeholder="adam, josh, liv">
+            <span class="helper-text">Comma-separated player names (or full entity IDs) to include in the aggregate.</span>
           </label>
         </div>
         <hr>
@@ -2094,7 +2157,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       max_players: "3",
       color_palette: "vivid",
       custom_colors: "",
-      entities_pattern: "_master"
+      entities_pattern: GAMING_STATUS_DEFAULT_ENTITIES_PATTERN
     };
   }
 
@@ -2108,7 +2171,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       selected_entities: config.selected_entities || "",
       max_players: config.max_players || "3",
       custom_colors: config.custom_colors || "",
-      entities_pattern: config.entities_pattern || "_master",
+      entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       ...config,
       color_palette: gamingStatusNormalizePalette(config),
     };
@@ -2202,7 +2265,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
 
   updateLeaderboard() {
     if (!this._hass || !this.content) return;
-    const escapeHTML = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const escapeHTML = gamingStatusEscapeHTML;
 
     let entityIdsToProcess = gamingStatusLeaderboardEntityIds(this._hass, this.config);
 
@@ -2258,7 +2321,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     } else {
       for (const entityId of entityIdsToProcess) {
         const stateObj = this._hass.states[entityId];
-        const friendlyName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status| Master/gi, "");
+        const friendlyName = gamingStatusCleanPlayerName(stateObj.attributes.friendly_name || entityId);
 
         if (this.config.metric === "hours") {
           const hours = parseFloat(stateObj.attributes[isCal ? "total_weekly_hours" : "rolling_weekly_hours"]) || 0;
@@ -2367,7 +2430,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
   render() {
     if (!this._hass || !this._config) return;
 
-    const targetSuffix = this._config.entities_pattern || "_master";
+    const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
     if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
@@ -2432,8 +2495,8 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
         <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="sensor.gaming_status_jack_master, ...">
-            <span class="helper-text">Enter a comma-separated list of exact entity IDs.</span>
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="adam, josh, liv">
+            <span class="helper-text">Enter a comma-separated list of player names (or full entity IDs).</span>
           </label>
         </div>
 
@@ -2504,7 +2567,7 @@ class GamingStatusGameChartCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return { title: "", mode: "all", entity: "", selected_entities: "", window: "rolling", max_games: 6, color_palette: "vivid", custom_colors: "", entities_pattern: "_master" };
+    return { title: "", mode: "all", entity: "", selected_entities: "", window: "rolling", max_games: 6, color_palette: "vivid", custom_colors: "", entities_pattern: GAMING_STATUS_DEFAULT_ENTITIES_PATTERN };
   }
 
   setConfig(config) {
@@ -2516,7 +2579,7 @@ class GamingStatusGameChartCard extends HTMLElement {
       mode,
       entity: config.entity || "",
       selected_entities: config.selected_entities || "",
-      entities_pattern: config.entities_pattern || "_master",
+      entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       window: config.window || "rolling",
       max_games: parseInt(config.max_games) || 6,
       color_palette: gamingStatusNormalizePalette(config),
@@ -2533,7 +2596,7 @@ class GamingStatusGameChartCard extends HTMLElement {
     if (this.config.mode === "single" && this.config.entity) {
       if (hass.states[this.config.entity]) entityIds.push(this.config.entity);
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
-      entityIds = this.config.selected_entities.split(",").map(e => e.trim()).filter(e => hass.states[e]);
+      entityIds = gamingStatusResolveSelectedEntities(hass, this.config.selected_entities, this.config.entities_pattern);
     } else {
       for (const key in hass.states) {
         if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) &&
@@ -2547,7 +2610,7 @@ class GamingStatusGameChartCard extends HTMLElement {
 
     if (!entityIds.length) return;
 
-    const hash = entityIds.map(id => `${id}:${hass.states[id]?.last_updated}`).join(",")
+    const hash = gamingStatusEntityHash(hass, entityIds)
       + "|" + this.config.window + "|" + this.config.max_games + "|" + this.config.color_palette + "|" + this.config.custom_colors;
     if (this._lastHash === hash) return;
     this._lastHash = hash;
@@ -2565,15 +2628,8 @@ class GamingStatusGameChartCard extends HTMLElement {
       this._titleEl = this.shadowRoot.getElementById("gc-title");
       this._contentEl = this.shadowRoot.getElementById("gc-content");
       this._tooltipEl = this.shadowRoot.getElementById("gc-tooltip");
-      if (!this._ro && typeof ResizeObserver !== "undefined") {
-        let rafId;
-        this._ro = new ResizeObserver(() => {
-          if (rafId) cancelAnimationFrame(rafId);
-          rafId = requestAnimationFrame(() => {
-            if (this._lastRenderArgs) this._renderChart(...this._lastRenderArgs);
-          });
-        });
-        this._ro.observe(this._contentEl);
+      if (!this._ro) {
+        this._ro = gamingStatusWireResize(this._contentEl, gamingStatusRerenderer(this));
       }
     }
     if (this._titleEl) {
@@ -2636,11 +2692,8 @@ class GamingStatusGameChartCard extends HTMLElement {
   _renderChart(dailyData, games) {
     if (!this._contentEl) return;
     this._lastRenderArgs = [dailyData, games];
-    const VW = this._contentEl.clientWidth;
-    if (!VW) {
-      requestAnimationFrame(() => { if (this._lastRenderArgs) this._renderChart(...this._lastRenderArgs); });
-      return;
-    }
+    const VW = gamingStatusChartWidth(this._contentEl, gamingStatusRerenderer(this));
+    if (!VW) return;
 
     if (!games.length || dailyData.every(d => !Object.keys(d.games).length)) {
       this._contentEl.innerHTML = `<div style="padding:20px;color:var(--secondary-text-color);font-style:italic;">No game activity found for this period.</div>`;
@@ -2735,61 +2788,14 @@ class GamingStatusGameChartCard extends HTMLElement {
     svg += "</svg>";
     this._contentEl.innerHTML = svg;
 
-    const tooltipEl = this._tooltipEl;
-    if (tooltipEl) {
-      this._contentEl.querySelectorAll("rect[data-game]").forEach(rect => {
-        rect.addEventListener("mouseenter", () => {
-          const totalMins = Math.round(parseFloat(rect.dataset.hours) * 60);
-          const h = Math.floor(totalMins / 60);
-          const m = totalMins % 60;
-          const display = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
-          tooltipEl.textContent = `${rect.dataset.game}: ${display}`;
-          tooltipEl.style.display = "block";
-        });
-        rect.addEventListener("mousemove", (ev) => {
-          tooltipEl.style.left = `${ev.clientX + 14}px`;
-          tooltipEl.style.top = `${ev.clientY - 38}px`;
-        });
-        rect.addEventListener("mouseleave", () => {
-          tooltipEl.style.display = "none";
-        });
-      });
-    }
-
-    let focusedGame = null;
-    const applyGameFocus = (name) => {
-      this._contentEl.querySelectorAll("rect[data-game]").forEach(r => {
-        r.style.opacity = r.dataset.game === name ? "1" : "0.15";
-      });
-      this._contentEl.querySelectorAll("rect[data-swatch-game]").forEach(r => {
-        r.style.opacity = r.dataset.swatchGame === name ? "1" : "0.15";
-      });
-    };
-    const clearGameFocus = () => {
-      this._contentEl.querySelectorAll("rect[data-game], rect[data-swatch-game]").forEach(r => {
-        r.style.opacity = "1";
-      });
-    };
-    this._contentEl.querySelectorAll("rect[data-legend-game]").forEach(hitRect => {
-      const gameName = hitRect.dataset.legendGame;
-      hitRect.addEventListener("click", () => {
-        if (focusedGame === gameName) {
-          focusedGame = null;
-          clearGameFocus();
-        } else {
-          focusedGame = gameName;
-          applyGameFocus(gameName);
-        }
-      });
-      hitRect.addEventListener("mouseenter", () => {
-        if (focusedGame) return;
-        applyGameFocus(gameName);
-      });
-      hitRect.addEventListener("mouseleave", () => {
-        if (focusedGame) return;
-        clearGameFocus();
-      });
+    gamingStatusWireTooltip(this._contentEl, this._tooltipEl, "rect[data-game]", (rect) => {
+      const totalMins = Math.round(parseFloat(rect.dataset.hours) * 60);
+      const h = Math.floor(totalMins / 60);
+      const m = totalMins % 60;
+      const display = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+      return `${rect.dataset.game}: ${display}`;
     });
+    gamingStatusWireLegendFocus(this._contentEl, "game");
   }
 
   _niceMax(v) {
@@ -2799,7 +2805,7 @@ class GamingStatusGameChartCard extends HTMLElement {
   }
 
   _esc(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    return gamingStatusEscapeHTML(s);
   }
 
   getCardSize() { return 5; }
@@ -2819,7 +2825,7 @@ class GamingStatusGameChartEditor extends HTMLElement {
   render() {
     if (!this._hass || !this._config) return;
 
-    const targetSuffix = this._config.entities_pattern || "_master";
+    const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const mode = this._config.mode || (this._config.entity ? "single" : "all");
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
     if (mode === "single" && !this._config.entity && playerEntities.length) {
@@ -2860,8 +2866,8 @@ class GamingStatusGameChartEditor extends HTMLElement {
         </div>
         <div id="selected-selector" style="display: ${mode === "selected" ? "block" : "none"}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="sensor.gaming_status_jack_master, ...">
-            <span class="helper-text">Comma-separated entity IDs. Game hours are aggregated across all selected players.</span>
+            <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="adam, josh, liv">
+            <span class="helper-text">Comma-separated player names (or full entity IDs). Game hours are aggregated across all selected players.</span>
           </label>
         </div>
         <label>Time Window
@@ -2907,7 +2913,7 @@ class GamingStatusGameChartEditor extends HTMLElement {
     });
   }
 
-  _esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  _esc(s) { return gamingStatusEscapeHTML(s); }
 }
 
 // ====================================================================
@@ -2947,7 +2953,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       show_column_date: true,
       show_column_start: true,
       show_column_end: true,
-      entities_pattern: "_master",
+      entities_pattern: GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
     };
   }
 
@@ -2981,7 +2987,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
       show_column_date: config.show_column_date !== false,
       show_column_start: config.show_column_start !== undefined ? config.show_column_start !== false : legacyTime,
       show_column_end: config.show_column_end !== undefined ? config.show_column_end !== false : legacyTime,
-      entities_pattern: config.entities_pattern || "_master",
+      entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
     };
     this._lastHash = "";
   }
@@ -2994,7 +3000,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
     if (this.config.mode === "single" && this.config.single_entity) {
       if (hass.states[this.config.single_entity]) entityIds.push(this.config.single_entity);
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
-      entityIds = this.config.selected_entities.split(",").map(e => e.trim()).filter(e => hass.states[e]);
+      entityIds = gamingStatusResolveSelectedEntities(hass, this.config.selected_entities, this.config.entities_pattern);
     } else {
       entityIds = Object.keys(hass.states).filter(
         k => (k.startsWith("sensor.gaming_status_") || k.startsWith("binary_sensor.gaming_status_")) &&
@@ -3026,7 +3032,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
     for (const entityId of entityIds) {
       const stateObj = this._hass.states[entityId];
       if (!stateObj) continue;
-      const playerName = (stateObj.attributes.friendly_name || entityId).replace(/ Gaming Status| Master/gi, "").trim();
+      const playerName = gamingStatusCleanPlayerName(stateObj.attributes.friendly_name || entityId);
       const avatar = stateObj.attributes.entity_picture || "";
       const sessions = stateObj.attributes.recent_sessions || [];
 
@@ -3116,7 +3122,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
   }
 
   render(rows) {
-    const escapeHTML = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const escapeHTML = gamingStatusEscapeHTML;
     const colorExtractionEnabled = gamingStatusIsColorExtractionEnabled(this._hass);
 
     if (!this.content) {
@@ -3269,7 +3275,7 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const mode = this._config.mode || "all";
-    const targetSuffix = this._config.entities_pattern || "_master";
+    const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
     if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
@@ -3328,8 +3334,8 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
         ${mode === "selected" ? `
         <div>
           <div class="section-title">Selected Entities</div>
-          <div class="helper-text">Comma-separated entity IDs to include.</div>
-          <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="sensor.gaming_status_jack_master, ...">
+          <div class="helper-text">Comma-separated player names (or full entity IDs) to include.</div>
+          <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="adam, josh, liv">
         </div>` : ""}
         <hr>
         <div>
@@ -3445,7 +3451,7 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
   }
 
   _esc(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    return gamingStatusEscapeHTML(s);
   }
 }
 
@@ -3513,7 +3519,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
   // to. Shared by set hass() and the player/platform <select> change handlers
   // so both paths stay in sync without waiting for a fresh hass push.
   _resolveTarget() {
-    const players = gamingStatusGetPlayerEntities(this._hass, "_master");
+    const players = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
 
     let playerId = this.config.mode === "single" ? this.config.single_entity : this._selectedPlayerId;
     if (!playerId || !this._hass.states[playerId]) {
@@ -3567,7 +3573,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
   // themselves to find the matching entities), not an entity id, so resolve
   // the already-cleaned name gamingStatusGetPlayerEntities computed for us.
   _resolvePlayerName(playerId) {
-    const players = gamingStatusGetPlayerEntities(this._hass, "_master");
+    const players = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
     const match = players.find(p => p.id === playerId);
     return match ? match.name : "";
   }
@@ -3628,7 +3634,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
   }
 
   render() {
-    const escapeHTML = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const escapeHTML = gamingStatusEscapeHTML;
 
     if (!this.content) {
       this.shadowRoot.innerHTML = `
@@ -3666,7 +3672,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
     this._titleEl.textContent = this.config.title || "";
     this._titleEl.style.display = this.config.title ? "block" : "none";
 
-    const players = gamingStatusGetPlayerEntities(this._hass, "_master");
+    const players = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
     const gameOptions = this._getGameOptions(this._targetEntityId);
 
@@ -3802,7 +3808,7 @@ class GamingStatusGameManagementEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const mode = this._config.mode || "all";
-    const playerEntities = gamingStatusGetPlayerEntities(this._hass, "_master");
+    const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
     if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
@@ -3867,7 +3873,7 @@ class GamingStatusGameManagementEditor extends HTMLElement {
   }
 
   _esc(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    return gamingStatusEscapeHTML(s);
   }
 }
 
