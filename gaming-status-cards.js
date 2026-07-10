@@ -3634,7 +3634,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
       this._setStatus(`Renamed "${this._selectedGame}" to "${newName}".`, "success");
       this._selectedGame = "";
       this._newName = "";
-      this.render();
+      this._refreshAfterAction();
     } catch (err) {
       this._setStatus(`Rename failed: ${err?.message || err}`, "error");
     }
@@ -3652,7 +3652,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
       this._setStatus(`Deleted all history for "${this._selectedGame}".`, "success");
       this._selectedGame = "";
       this._deleteConfirmText = "";
-      this.render();
+      this._refreshAfterAction();
     } catch (err) {
       this._setStatus(`Delete failed: ${err?.message || err}`, "error");
     }
@@ -3670,10 +3670,21 @@ class GamingStatusGameManagementCard extends HTMLElement {
       });
       this._setStatus(`Deleted that session of "${this._selectedGame}".`, "success");
       this._selectedSessionStartTime = "";
-      this.render();
+      this._refreshAfterAction();
     } catch (err) {
       this._setStatus(`Delete session failed: ${err?.message || err}`, "error");
     }
+  }
+
+  // A service call resolving only means the backend accepted the change --
+  // this._hass won't reflect the resulting entity state until a later,
+  // separate hass push from the dashboard. Render once now for instant
+  // feedback on local-only state (cleared selections), then once more
+  // shortly after as a safety net once that push has almost certainly
+  // landed, instead of leaving stale totals on screen until a manual reload.
+  _refreshAfterAction() {
+    this.render();
+    setTimeout(() => this.render(), 600);
   }
 
   _formatDate(dateStr) {
