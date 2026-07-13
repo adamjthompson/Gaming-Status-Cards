@@ -51,7 +51,7 @@ A clean, native-feeling list of your tracked gamers. It dynamically tints the ca
 A dynamic, CSS-animated slideshow that cycles through the high-resolution cover art of currently active games and media.
 
 **UI Configuration Options:**
-* **Artwork Type:** Choose which art style to display — Hero (wide landscape), Cover/Grid (portrait), Logo (transparent title art), or Icon (small square).
+* **Artwork Type:** Choose which art style to display: Hero (wide landscape), Cover/Grid (portrait), Logo (transparent title art), or Icon (small square).
 * **Aspect Ratio Override:** Manually define the card's dimensions (e.g., `3840/1240`, `16/9`, `1/1`). Leave blank to automatically use the default ratio for the selected artwork style.
 * **Timing Controls:** Set the exact number of seconds each slide displays, and how long the crossfade transition takes.
 * **Player Avatars:** Automatically superimposes the avatar of the person playing the game into the bottom right corner.
@@ -68,7 +68,7 @@ A native SVG stacked bar chart showing each player's daily gaming hours across a
 
 **UI Configuration Options:**
 * **Chart Title:** Optional title displayed above the chart.
-* **Time Window:** Choose the time period to display — **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**.
+* **Time Window:** Choose the time period to display: **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**.
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Custom Colors:** Override the default vibrant palette with a comma-separated list of CSS colors (e.g., `#ffbe0b, rgb(251, 86, 7), blue`).
 * **Legend:** Toggle the player legend below the chart on or off. Hiding it reclaims the legend area and gives the chart more vertical space. Defaults to on.
@@ -84,7 +84,7 @@ A native SVG stacked bar chart for visualizing platform usage across your squad.
 
 **UI Configuration Options:**
 * **Card Title:** Optional title displayed above the chart.
-* **Time Window:** Choose the time period to display — **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**.
+* **Time Window:** Choose the time period to display: **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**.
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Custom Colors:** Leave blank to use native platform brand colors (Xbox green, PlayStation blue, PC teal). Override with a comma-separated list of CSS colors.
 * **Legend:** Toggle the platform legend below the bar on or off. The legend automatically wraps to multiple rows on narrow screens. Defaults to on.
@@ -100,14 +100,14 @@ A dependency-free native CSS bar chart that ranks your squad across a variety of
 
 **UI Configuration Options:**
 * **Leaderboard Metric:** Choose what stat to rank players by:
-  * **Most Played Hours (Weekly)** — who logged the most time this week.
-  * **Longest Gaming Session** — who had the single longest unbroken session.
-  * **Most Different Games Played** — who has the broadest taste.
-  * **Top Games: Hours Per Game (Aggregate)** — ranks games instead of players, showing which titles consumed the most time across your whole squad this week.
+  * **Most Played Hours (Weekly)** - who logged the most time this week.
+  * **Longest Gaming Session** - who had the single longest unbroken session.
+  * **Most Different Games Played** - who has the broadest taste.
+  * **Top Games: Hours Per Game (Aggregate)** - ranks games instead of players, showing which titles consumed the most time across your whole squad this week.
   * **All-Time Total Hours** — ranks players by their entire lifetime tracked playtime, not just the current window.
-  * **All-Time Session Count** — ranks players by how many completed sessions they've logged, ever.
-  * **Top Games: All-Time Hours Per Game (Aggregate)** — like the weekly version, but ranks games by lifetime hours across your whole squad.
-* **Time Window:** Choose the time period to display — **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**. Automatically hidden when an All-Time metric is selected, since those aren't scoped to a window.
+  * **All-Time Session Count** - ranks players by how many completed sessions they've logged, ever.
+  * **Top Games: All-Time Hours Per Game (Aggregate)** - like the weekly version, but ranks games by lifetime hours across your whole squad.
+* **Time Window:** Choose the time period to display: **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**. Automatically hidden when an All-Time metric is selected, since those aren't scoped to a window.
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Items to Display (Rows):** Set how many ranked entries are shown (default: 3, max: 20).
 * **Custom Colors:** Override the default vibrant palette with a comma-separated list of CSS colors.
@@ -139,7 +139,7 @@ A native SVG stacked bar chart showing daily gaming hours broken down by individ
 ---
 
 ### 7. Gaming Status - Recent Sessions
-A configurable table of recently completed play sessions — one row per session, newest first — with optional blurred artwork behind each row.
+A configurable table of recently completed play sessions (one row per session, newest first) with optional blurred artwork behind each row.
 
 **UI Configuration Options:**
 * **Card Title:** Optional title displayed above the table.
@@ -157,9 +157,9 @@ A configurable table of recently completed play sessions — one row per session
 ---
 
 ### 8. Gaming Status - Game Management
-A utility card for cleaning up mislabeled or unwanted play history — rename a game across a player's stored history (merging it into an existing name if one matches), or permanently purge every trace of a game (sessions, daily/weekly totals, and archived per-day breakdowns). Requires the `gaming_status.rename_game` and `gaming_status.delete_game` services from a recent version of the Gaming Status integration.
+A utility card for cleaning up mislabeled or unwanted play history. Rename a game across a player's stored history (merging it into an existing name if one matches) or permanently purge every trace of a game (sessions, daily/weekly totals, and archived per-day breakdowns).
 
-Unlike the other cards, Platform/Game/Rename/Delete are chosen live on the card itself rather than configured in YAML — the editor only controls which player(s) the card can act on.
+Unlike the other cards, Platform/Game/Rename/Delete are chosen live on the card itself rather than configured in YAML. The editor only controls which player(s) the card can act on.
 
 **UI Configuration Options:**
 * **Card Title:** Optional title displayed above the card.
@@ -167,7 +167,8 @@ Unlike the other cards, Platform/Game/Rename/Delete are chosen live on the card 
 * **Platform (on the card):** Defaults to **All Platforms** (acts across every platform this player has data on). Pick a specific platform to scope the action to just that platform's history.
 * **Game (on the card):** A dropdown of every game found in the selected player/platform's history, labeled with total recorded playtime.
 * **Rename:** Type a new name and click **Rename**. Only enabled once a game is selected and the new name is non-empty and different from the current name.
-* **Delete:** Type the exact game name into the confirmation field to enable the **Delete** button — this permanently removes all history for that game and cannot be undone.
+* **Delete:** Type the exact game name into the confirmation field to enable the **Delete** button. This permanently removes all history for that game and cannot be undone.
+* **Delete Session:** Once a game is selected, a session picker lists that game's individually recorded sessions (newest first). Pick one and click **Delete Session** to remove just that single session (correcting only its contribution to daily/weekly/lifetime totals) without touching any other session of the same game. *Only sessions still present in the platform's recent-session history can be targeted this way; once a session ages out into the archived daily totals, only the whole-game **Delete** remains available for it.*
 
 ---
 
