@@ -642,7 +642,6 @@ class GamingStatusCard extends HTMLElement {
             display: flex; align-items: center; padding: 10px 10px; cursor: pointer; box-sizing: border-box;
             width: 100%; transition: transform 0.2s;
             flex-shrink: 0;
-            -webkit-mask-image: -webkit-radial-gradient(white, black);
           }
           .player-card:active { transform: scale(0.98); }
           .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none;background-image: linear-gradient(to right, var(--card-gradient-color) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); filter: var(--card-filter); }
@@ -3143,7 +3142,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
           .rs-body::-webkit-scrollbar-thumb:hover { background: rgba(120, 120, 120, 0.8); }
 
           .rs-row {
-            position: relative; overflow: hidden; border-radius: 8px; display: flex; align-items: center; gap: 8px;
+            position: relative; overflow: hidden; border-radius: var(--ha-card-border-radius, 12px); display: flex; align-items: center; gap: 8px;
             padding: 9px 10px; box-sizing: border-box; flex-shrink: 0;
           }
           .rs-row.no-bg { background: var(--secondary-background-color, rgba(120, 120, 120, 0.08)); }
