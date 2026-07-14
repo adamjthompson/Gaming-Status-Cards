@@ -3716,7 +3716,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
           hr { border: 0; border-top: 1px solid var(--divider-color); margin: 4px 0 14px 0; }
           .gm-action-row { display: flex; gap: 8px; align-items: flex-end; }
           .gm-action-row .gm-field { flex: 1; margin-bottom: 0; }
-          button { padding: 9px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; white-space: nowrap; }
+          button { width: 140px; padding: 9px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; white-space: nowrap; text-align: center; flex-shrink: 0; }
           button:disabled { opacity: 0.4; cursor: not-allowed; }
           #gm-rename-btn { background: var(--primary-color); color: var(--text-primary-color, #fff); }
           #gm-rename-btn:not(:disabled):hover { opacity: 0.9; }
