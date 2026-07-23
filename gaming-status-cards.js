@@ -3664,7 +3664,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
       this._statusEl.style.display = "none";
       return;
     }
-    this._statusEl.textContent = this._status.text;
+    this._statusEl.innerHTML = this._status.text;
     this._statusEl.style.display = "block";
     this._statusEl.className = `gm-status ${this._status.type}`;
   }
@@ -3680,12 +3680,12 @@ class GamingStatusGameManagementCard extends HTMLElement {
         old_name: this._selectedGame,
         new_name: newName,
       });
-      this._setStatus(`Renamed "${this._selectedGame}" to "${newName}".`, "success");
+      this._setStatus(`Renamed <strong>${escapeHTML(this._selectedGame)}</strong> to <strong>${escapeHTML(newName)}</strong>.`, "success");
       this._selectedGame = "";
       this._newName = "";
       this._refreshAfterAction();
     } catch (err) {
-      this._setStatus(`Rename failed: ${err?.message || err}`, "error");
+      this._setStatus(`Rename failed: ${escapeHTML(String(err?.message || err))}`, "error");
     }
   }
 
@@ -3705,11 +3705,11 @@ class GamingStatusGameManagementCard extends HTMLElement {
         ...(this._selectedPlatform ? { platform: this._selectedPlatform } : {}),
         game: this._selectedGame,
       });
-      this._setStatus(`Deleted all history for "${this._selectedGame}".`, "success");
+      this._setStatus(`Deleted all history for <strong>${escapeHTML(this._selectedGame)}</strong>.`, "success");
       this._selectedGame = "";
       this._refreshAfterAction();
     } catch (err) {
-      this._setStatus(`Delete failed: ${err?.message || err}`, "error");
+      this._setStatus(`Delete failed: ${escapeHTML(String(err?.message || err))}`, "error");
     }
   }
 
@@ -3733,11 +3733,11 @@ class GamingStatusGameManagementCard extends HTMLElement {
         game: this._selectedGame,
         start_time: this._selectedSessionStartTime,
       });
-      this._setStatus(`Deleted that session of "${this._selectedGame}".`, "success");
+      this._setStatus(`Deleted that session of <strong>${escapeHTML(this._selectedGame)}</strong>.`, "success");
       this._selectedSessionStartTime = "";
       this._refreshAfterAction();
     } catch (err) {
-      this._setStatus(`Delete session failed: ${err?.message || err}`, "error");
+      this._setStatus(`Delete session failed: ${escapeHTML(String(err?.message || err))}`, "error");
     }
   }
 
@@ -3760,13 +3760,13 @@ class GamingStatusGameManagementCard extends HTMLElement {
         start_time: startISO,
         end_time: endISO,
       });
-      this._setStatus(`Added a session of "${game}".`, "success");
+      this._setStatus(`Added a session of <strong>${escapeHTML(game)}</strong>.`, "success");
       this._addGame = "";
       this._addStartTime = "";
       this._addEndTime = "";
       this._refreshAfterAction();
     } catch (err) {
-      this._setStatus(`Add session failed: ${err?.message || err}`, "error");
+      this._setStatus(`Add session failed: ${escapeHTML(String(err?.message || err))}`, "error");
     }
   }
 
@@ -3783,13 +3783,13 @@ class GamingStatusGameManagementCard extends HTMLElement {
         to_player: toPlayer,
         to_platform: this._reassignToPlatform,
       });
-      this._setStatus(`Reassigned that session of "${this._selectedGame}" to ${toPlayer}.`, "success");
+      this._setStatus(`Reassigned that session of <strong>${escapeHTML(this._selectedGame)}</strong> to <strong>${escapeHTML(toPlayer)}</strong>.`, "success");
       this._selectedSessionStartTime = "";
       this._reassignToPlayerId = "";
       this._reassignToPlatform = "";
       this._refreshAfterAction();
     } catch (err) {
-      this._setStatus(`Reassign failed: ${err?.message || err}`, "error");
+      this._setStatus(`Reassign failed: ${escapeHTML(String(err?.message || err))}`, "error");
     }
   }
 
