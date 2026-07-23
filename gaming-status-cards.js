@@ -3591,8 +3591,17 @@ class GamingStatusGameManagementCard extends HTMLElement {
         totals[game] = (totals[game] || 0) + (parseFloat(seconds) || 0);
       }
     }
+    // play_history only covers a rolling ~8-day window (older days get
+    // pruned) plus it never includes the still-in-progress current day --
+    // recent_sessions (capped by count, not date) can easily hold sessions
+    // whose date fell outside that window entirely. Credit those directly
+    // from their own duration_seconds instead of leaving them at 0, but skip
+    // any date already folded into a play_history day so it isn't counted
+    // twice.
     for (const s of sessions) {
-      if (s.game && !(s.game in totals)) totals[s.game] = 0;
+      if (!s.game) continue;
+      if (s.date && s.date in history) continue;
+      totals[s.game] = (totals[s.game] || 0) + (parseFloat(s.duration_seconds) || 0);
     }
 
     return Object.keys(totals)
