@@ -3669,6 +3669,33 @@ class GamingStatusGameManagementCard extends HTMLElement {
     this._statusEl.className = `gm-status ${this._status.type}`;
   }
 
+  // In-card modal used in place of window.confirm() -- the native dialog
+  // prefixes itself with the page's origin (e.g. "192.168.1.24:8123 says"),
+  // which isn't something a page can suppress or restyle.
+  _showConfirm(title, lines) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "gm-confirm-overlay";
+      overlay.innerHTML = `
+        <div class="gm-confirm-box">
+          <div class="gm-confirm-title">${gamingStatusEscapeHTML(title)}</div>
+          ${lines.map(l => `<div class="gm-confirm-line">${gamingStatusEscapeHTML(l)}</div>`).join("")}
+          <div class="gm-confirm-actions">
+            <button class="gm-confirm-cancel">Cancel</button>
+            <button class="gm-confirm-yes">Yes</button>
+          </div>
+        </div>`;
+      this.shadowRoot.appendChild(overlay);
+      const finish = (result) => {
+        overlay.remove();
+        resolve(result);
+      };
+      overlay.querySelector(".gm-confirm-yes").addEventListener("click", () => finish(true));
+      overlay.querySelector(".gm-confirm-cancel").addEventListener("click", () => finish(false));
+      overlay.addEventListener("click", (ev) => { if (ev.target === overlay) finish(false); });
+    });
+  }
+
   async _handleRename() {
     const player = this._resolvePlayerName(this._selectedPlayerId);
     const newName = (this._newName || "").trim();
@@ -3680,12 +3707,12 @@ class GamingStatusGameManagementCard extends HTMLElement {
         old_name: this._selectedGame,
         new_name: newName,
       });
-      this._setStatus(`Renamed <strong>${escapeHTML(this._selectedGame)}</strong> to <strong>${escapeHTML(newName)}</strong>.`, "success");
+      this._setStatus(`Renamed <strong>${gamingStatusEscapeHTML(this._selectedGame)}</strong> to <strong>${gamingStatusEscapeHTML(newName)}</strong>.`, "success");
       this._selectedGame = "";
       this._newName = "";
       this._refreshAfterAction();
     } catch (err) {
-      this._setStatus(`Rename failed: ${escapeHTML(String(err?.message || err))}`, "error");
+      this._setStatus(`Rename failed: ${gamingStatusEscapeHTML(String(err?.message || err))}`, "error");
     }
   }
 
@@ -3693,23 +3720,22 @@ class GamingStatusGameManagementCard extends HTMLElement {
     const player = this._resolvePlayerName(this._selectedPlayerId);
     if (!player || !this._selectedGame) return;
     const platformLabel = this._selectedPlatform ? (GAMING_STATUS_PLATFORM_LABELS[this._selectedPlatform] || this._selectedPlatform) : "All Platforms";
-    const confirmMsg = [
-      "Are you sure you want to completely delete this game?",
+    const confirmed = await this._showConfirm("Are you sure you want to completely delete this game?", [
       `Profile: ${player}`,
       `Game: ${this._selectedGame} (${platformLabel})`,
-    ].join("\n");
-    if (!window.confirm(confirmMsg)) return;
+    ]);
+    if (!confirmed) return;
     try {
       await this._hass.callService("gaming_status", "delete_game", {
         player,
         ...(this._selectedPlatform ? { platform: this._selectedPlatform } : {}),
         game: this._selectedGame,
       });
-      this._setStatus(`Deleted all history for <strong>${escapeHTML(this._selectedGame)}</strong>.`, "success");
+      this._setStatus(`Deleted all history for <strong>${gamingStatusEscapeHTML(this._selectedGame)}</strong>.`, "success");
       this._selectedGame = "";
       this._refreshAfterAction();
     } catch (err) {
-      this._setStatus(`Delete failed: ${escapeHTML(String(err?.message || err))}`, "error");
+      this._setStatus(`Delete failed: ${gamingStatusEscapeHTML(String(err?.message || err))}`, "error");
     }
   }
 
@@ -3718,14 +3744,13 @@ class GamingStatusGameManagementCard extends HTMLElement {
     if (!player || !this._selectedGame || !this._selectedSessionStartTime) return;
     const session = this._getSessionsForGame(this._targetEntityId, this._selectedGame)
       .find(s => s.start_time === this._selectedSessionStartTime);
-    const confirmMsg = [
-      "Are you sure you want to delete this session?",
+    const confirmed = await this._showConfirm("Are you sure you want to delete this session?", [
       `Profile: ${player}`,
       `Game: ${this._selectedGame}${session?.platform ? ` (${session.platform})` : ""}`,
       session?.date ? `Date: ${this._formatDateMD(session.date)}` : null,
       session?.duration_seconds != null ? `Duration: ${this._formatDuration(session.duration_seconds)}` : null,
-    ].filter(Boolean).join("\n");
-    if (!window.confirm(confirmMsg)) return;
+    ].filter(Boolean));
+    if (!confirmed) return;
     try {
       await this._hass.callService("gaming_status", "delete_session", {
         player,
@@ -3733,11 +3758,11 @@ class GamingStatusGameManagementCard extends HTMLElement {
         game: this._selectedGame,
         start_time: this._selectedSessionStartTime,
       });
-      this._setStatus(`Deleted that session of <strong>${escapeHTML(this._selectedGame)}</strong>.`, "success");
+      this._setStatus(`Deleted that session of <strong>${gamingStatusEscapeHTML(this._selectedGame)}</strong>.`, "success");
       this._selectedSessionStartTime = "";
       this._refreshAfterAction();
     } catch (err) {
-      this._setStatus(`Delete session failed: ${escapeHTML(String(err?.message || err))}`, "error");
+      this._setStatus(`Delete session failed: ${gamingStatusEscapeHTML(String(err?.message || err))}`, "error");
     }
   }
 
@@ -3760,13 +3785,13 @@ class GamingStatusGameManagementCard extends HTMLElement {
         start_time: startISO,
         end_time: endISO,
       });
-      this._setStatus(`Added a session of <strong>${escapeHTML(game)}</strong>.`, "success");
+      this._setStatus(`Added a session of <strong>${gamingStatusEscapeHTML(game)}</strong>.`, "success");
       this._addGame = "";
       this._addStartTime = "";
       this._addEndTime = "";
       this._refreshAfterAction();
     } catch (err) {
-      this._setStatus(`Add session failed: ${escapeHTML(String(err?.message || err))}`, "error");
+      this._setStatus(`Add session failed: ${gamingStatusEscapeHTML(String(err?.message || err))}`, "error");
     }
   }
 
@@ -3783,13 +3808,13 @@ class GamingStatusGameManagementCard extends HTMLElement {
         to_player: toPlayer,
         to_platform: this._reassignToPlatform,
       });
-      this._setStatus(`Reassigned that session of <strong>${escapeHTML(this._selectedGame)}</strong> to <strong>${escapeHTML(toPlayer)}</strong>.`, "success");
+      this._setStatus(`Reassigned that session of <strong>${gamingStatusEscapeHTML(this._selectedGame)}</strong> to <strong>${gamingStatusEscapeHTML(toPlayer)}</strong>.`, "success");
       this._selectedSessionStartTime = "";
       this._reassignToPlayerId = "";
       this._reassignToPlatform = "";
       this._refreshAfterAction();
     } catch (err) {
-      this._setStatus(`Reassign failed: ${escapeHTML(String(err?.message || err))}`, "error");
+      this._setStatus(`Reassign failed: ${gamingStatusEscapeHTML(String(err?.message || err))}`, "error");
     }
   }
 
@@ -3849,6 +3874,14 @@ class GamingStatusGameManagementCard extends HTMLElement {
           .gm-status { margin-top: 12px; padding: 8px 10px; border-radius: 4px; font-size: 13px; }
           .gm-status.success { background: rgba(76, 175, 80, 0.15); color: var(--success-color, #4caf50); }
           .gm-status.error { background: rgba(219, 68, 55, 0.15); color: var(--error-color, #db4437); }
+          .gm-confirm-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+          .gm-confirm-box { background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); border-radius: 8px; padding: 20px; max-width: 320px; width: calc(100% - 40px); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); box-sizing: border-box; }
+          .gm-confirm-title { font-size: 15px; font-weight: 600; color: var(--primary-text-color); margin-bottom: 12px; }
+          .gm-confirm-line { font-size: 13px; color: var(--primary-text-color); margin-bottom: 4px; }
+          .gm-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+          .gm-confirm-actions button { width: auto; padding: 8px 16px; }
+          .gm-confirm-yes { background: var(--error-color, #db4437); color: #fff; }
+          .gm-confirm-cancel { background: var(--secondary-background-color); color: var(--primary-text-color); }
         </style>
         <ha-card>
           <div id="gm-title"></div>
