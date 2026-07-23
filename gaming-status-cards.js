@@ -3832,11 +3832,26 @@ class GamingStatusGameManagementCard extends HTMLElement {
   // sensor's own state-change event (a separate async task, not synchronous
   // with the service call), so a single fixed delay isn't reliably enough
   // -- especially right after back-to-back actions on the same game.
+  //
+  // The refetches run strictly one at a time (awaited in sequence, not
+  // fired in parallel via setTimeout) so a slower-resolving earlier fetch
+  // can never land after -- and clobber -- a faster-resolving later one
+  // with a stale intermediate merge. A generation token additionally
+  // aborts this whole cycle if another action starts a new one before it
+  // finishes, so leftover polling from a previous rename can't overwrite a
+  // subsequent one's results either.
   _refreshAfterAction() {
     this.render();
-    for (const delay of [0, 400, 900, 1600, 2600]) {
-      setTimeout(() => { this._refetchStates().then(() => this.render()); }, delay);
-    }
+    const token = (this._refreshToken = (this._refreshToken || 0) + 1);
+    (async () => {
+      for (const delay of [0, 400, 900, 1600, 2600]) {
+        if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+        if (this._refreshToken !== token) return;
+        await this._refetchStates();
+        if (this._refreshToken !== token) return;
+        this.render();
+      }
+    })();
   }
 
   async _refetchStates() {
