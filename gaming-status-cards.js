@@ -3563,10 +3563,15 @@ class GamingStatusGameManagementCard extends HTMLElement {
     }
     this._selectedPlayerId = playerId;
 
+    // A specific platform with no sensor for this player (e.g. globally
+    // enabled for someone else but not this player) must resolve to nothing
+    // rather than silently falling back to the master entity -- otherwise
+    // every platform tab would show that player's combined all-platform
+    // history, falsely implying each platform tracked all of it.
     let entityId = playerId;
     if (playerId && this._selectedPlatform) {
       const platformEntityId = playerId.replace(/_master$/, `_${this._selectedPlatform}`);
-      if (this._hass.states[platformEntityId]) entityId = platformEntityId;
+      entityId = this._hass.states[platformEntityId] ? platformEntityId : "";
     }
     this._targetEntityId = entityId;
   }
@@ -3833,10 +3838,10 @@ class GamingStatusGameManagementCard extends HTMLElement {
     // Action chosen first, then only the fields relevant to it show below --
     // keeps five actions' worth of fields from all being visible at once.
     const actionOptions = [
+      { value: "rename", label: "Rename" },
       { value: "add", label: "Add" },
       { value: "delete", label: "Delete" },
       { value: "reassign", label: "Reassign" },
-      { value: "rename", label: "Rename" },
     ].map(a => `<option value="${a.value}" ${this._selectedAction === a.value ? "selected" : ""}>${a.label}</option>`).join("");
 
     const actionFieldHTML = `
@@ -3902,14 +3907,6 @@ class GamingStatusGameManagementCard extends HTMLElement {
       </div>`;
 
     const deleteHTML = (this._selectedAction !== "delete" || !this._selectedGame) ? "" : `
-      <hr>
-      <div class="gm-action-row">
-        <div class="gm-field">
-          <label>Type "${escapeHTML(this._selectedGame)}" to confirm</label>
-          <input type="text" id="gm-delete-confirm" placeholder="Type &quot;${escapeHTML(this._selectedGame)}&quot;" value="${escapeHTML(this._deleteConfirmText || "")}">
-        </div>
-        <button id="gm-delete-btn" ${deleteEnabled ? "" : "disabled"}>Delete</button>
-      </div>
       ${!sessionOptions.length ? "" : `
       <hr>
       <div class="gm-action-row">
@@ -3921,7 +3918,15 @@ class GamingStatusGameManagementCard extends HTMLElement {
           </select>
         </div>
         <button id="gm-delete-session-btn" ${deleteSessionEnabled ? "" : "disabled"}>Delete Session</button>
-      </div>`}`;
+      </div>`}
+      <hr>
+      <div class="gm-action-row">
+        <div class="gm-field">
+          <label>Type "${escapeHTML(this._selectedGame)}" to confirm</label>
+          <input type="text" id="gm-delete-confirm" placeholder="Type &quot;${escapeHTML(this._selectedGame)}&quot;" value="${escapeHTML(this._deleteConfirmText || "")}">
+        </div>
+        <button id="gm-delete-btn" ${deleteEnabled ? "" : "disabled"}>Delete</button>
+      </div>`;
 
     // Destination platforms for reassignment are scoped to whichever player
     // is currently picked in "Reassign to player" -- mirrors _resolveTarget's
