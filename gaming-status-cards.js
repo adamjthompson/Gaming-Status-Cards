@@ -3824,34 +3824,20 @@ class GamingStatusGameManagementCard extends HTMLElement {
   // arrives soon (a rename/delete/reassign changes history attributes, not
   // an entity's live state, so it may not prompt a push at all). Render
   // once now for instant feedback on local-only state (cleared selections),
-  // then actively refetch current states over the WS API rather than
-  // passively waiting -- that's the only way to reliably pick up the change
-  // without a full page reload. Several staggered refetches follow to cover
-  // the "All Platforms" case, where the displayed entity is the master
-  // sensor: it only re-merges reactively off the just-renamed platform
-  // sensor's own state-change event (a separate async task, not synchronous
-  // with the service call), so a single fixed delay isn't reliably enough
-  // -- especially right after back-to-back actions on the same game.
-  //
-  // The refetches run strictly one at a time (awaited in sequence, not
-  // fired in parallel via setTimeout) so a slower-resolving earlier fetch
-  // can never land after -- and clobber -- a faster-resolving later one
-  // with a stale intermediate merge. A generation token additionally
-  // aborts this whole cycle if another action starts a new one before it
-  // finishes, so leftover polling from a previous rename can't overwrite a
-  // subsequent one's results either.
+  // then refetch current states once over the WS API rather than passively
+  // waiting -- that's what actually picks up the change without a full page
+  // reload. This used to also poll several more times on a delay to cover
+  // the "All Platforms" case (the master sensor re-merging off the platform
+  // sensor's own state-change event asynchronously) -- that's now handled
+  // backend-side instead (the service call doesn't return until master has
+  // already recomputed), so a single refetch here is enough. The repeated
+  // polling was removed because it was both ineffective at the actual
+  // problem and actively harmful: each poll fully rebuilds the card's DOM,
+  // which drops focus out of an open dropdown if you clicked back into it
+  // while a cycle was still running.
   _refreshAfterAction() {
     this.render();
-    const token = (this._refreshToken = (this._refreshToken || 0) + 1);
-    (async () => {
-      for (const delay of [0, 400, 900, 1600, 2600]) {
-        if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
-        if (this._refreshToken !== token) return;
-        await this._refetchStates();
-        if (this._refreshToken !== token) return;
-        this.render();
-      }
-    })();
+    this._refetchStates().then(() => this.render());
   }
 
   async _refetchStates() {
