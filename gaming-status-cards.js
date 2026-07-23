@@ -3635,6 +3635,14 @@ class GamingStatusGameManagementCard extends HTMLElement {
     return `${m}m`;
   }
 
+  // "YYYY-MM-DD" -> "M/D", for compact display in confirmation dialogs.
+  _formatDateMD(dateStr) {
+    const parts = (dateStr || "").split("-");
+    if (parts.length !== 3) return dateStr || "";
+    const [, m, d] = parts;
+    return `${parseInt(m, 10)}/${parseInt(d, 10)}`;
+  }
+
   // rename_game/delete_game take a plain player NAME (they slugify it
   // themselves to find the matching entities), not an entity id, so resolve
   // the already-cleaned name gamingStatusGetPlayerEntities computed for us.
@@ -3684,7 +3692,13 @@ class GamingStatusGameManagementCard extends HTMLElement {
   async _handleDelete() {
     const player = this._resolvePlayerName(this._selectedPlayerId);
     if (!player || !this._selectedGame) return;
-    if (!window.confirm(`Completely remove ${this._selectedGame} from ${player}'s profile?`)) return;
+    const platformLabel = this._selectedPlatform ? (GAMING_STATUS_PLATFORM_LABELS[this._selectedPlatform] || this._selectedPlatform) : "All Platforms";
+    const confirmMsg = [
+      "Are you sure you want to completely delete this game?",
+      `Profile: ${player}`,
+      `Game: ${this._selectedGame} (${platformLabel})`,
+    ].join("\n");
+    if (!window.confirm(confirmMsg)) return;
     try {
       await this._hass.callService("gaming_status", "delete_game", {
         player,
@@ -3702,6 +3716,16 @@ class GamingStatusGameManagementCard extends HTMLElement {
   async _handleDeleteSession() {
     const player = this._resolvePlayerName(this._selectedPlayerId);
     if (!player || !this._selectedGame || !this._selectedSessionStartTime) return;
+    const session = this._getSessionsForGame(this._targetEntityId, this._selectedGame)
+      .find(s => s.start_time === this._selectedSessionStartTime);
+    const confirmMsg = [
+      "Are you sure you want to delete this session?",
+      `Profile: ${player}`,
+      `Game: ${this._selectedGame}${session?.platform ? ` (${session.platform})` : ""}`,
+      session?.date ? `Date: ${this._formatDateMD(session.date)}` : null,
+      session?.duration_seconds != null ? `Duration: ${this._formatDuration(session.duration_seconds)}` : null,
+    ].filter(Boolean).join("\n");
+    if (!window.confirm(confirmMsg)) return;
     try {
       await this._hass.callService("gaming_status", "delete_session", {
         player,
