@@ -3473,10 +3473,19 @@ function gamingStatusLocalDateTimeToISO(value) {
   return `${value}:00${sign}${pad(Math.floor(absMin / 60))}:${pad(absMin % 60)}`;
 }
 
+// Formats the current moment as a local "YYYY-MM-DDTHH:mm" string, matching
+// the value format of <input type="datetime-local">, for use as its `max`.
+function gamingStatusNowLocalDateTimeString() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 class GamingStatusGameManagementCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this._selectedAction = "rename";
     this._selectedPlayerId = "";
     this._selectedPlatform = "";
     this._selectedGame = "";
@@ -3816,6 +3825,21 @@ class GamingStatusGameManagementCard extends HTMLElement {
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
     const gameOptions = this._getGameOptions(this._targetEntityId);
 
+    // Action chosen first, then only the fields relevant to it show below --
+    // keeps five actions' worth of fields from all being visible at once.
+    const actionOptions = [
+      { value: "add", label: "Add" },
+      { value: "delete", label: "Delete" },
+      { value: "reassign", label: "Reassign" },
+      { value: "rename", label: "Rename" },
+    ].map(a => `<option value="${a.value}" ${this._selectedAction === a.value ? "selected" : ""}>${a.label}</option>`).join("");
+
+    const actionFieldHTML = `
+      <div class="gm-field">
+        <label>Action</label>
+        <select id="gm-action">${actionOptions}</select>
+      </div>`;
+
     const playerFieldHTML = this.config.mode === "single" ? "" : `
       <div class="gm-field">
         <label>Player</label>
@@ -3833,6 +3857,17 @@ class GamingStatusGameManagementCard extends HTMLElement {
       `<option value="${escapeHTML(g.game)}" ${this._selectedGame === g.game ? "selected" : ""}>${escapeHTML(g.game)} — ${this._formatDuration(g.totalSeconds)}</option>`
     ).join("");
 
+    // Only rename/delete/reassign operate on an existing game -- add names a
+    // brand new one via free text instead, so the picker stays out of the way.
+    const gameFieldHTML = this._selectedAction === "add" ? "" : `
+      <div class="gm-field">
+        <label>Game</label>
+        <select id="gm-game" ${!gameOptions.length ? "disabled" : ""}>
+          <option value="" ${!this._selectedGame ? "selected" : ""} disabled>${gameOptions.length ? "Select a game…" : "No games found"}</option>
+          ${gameSelectOptions}
+        </select>
+      </div>`;
+
     const newNameTrimmed = (this._newName || "").trim();
     const renameEnabled = !!(this._selectedGame && newNameTrimmed && newNameTrimmed.toLowerCase() !== this._selectedGame.toLowerCase());
     const deleteEnabled = !!(this._selectedGame && this._deleteConfirmText === this._selectedGame);
@@ -3847,11 +3882,11 @@ class GamingStatusGameManagementCard extends HTMLElement {
     ).join("");
     const deleteSessionEnabled = !!this._selectedSessionStartTime;
 
-    // Rename/Delete are only meaningful once a game is selected, so the
-    // whole section stays out of the DOM (not just disabled) until then --
-    // matches the same conditional-HTML pattern playerFieldHTML already uses
-    // above for single-vs-multi-player mode.
-    const renameDeleteHTML = !this._selectedGame ? "" : `
+    // Each action-specific section stays out of the DOM entirely (not just
+    // disabled) unless its action is the one currently selected AND a game
+    // is picked (matches the same conditional-HTML pattern playerFieldHTML
+    // already uses above for single-vs-multi-player mode).
+    const renameHTML = (this._selectedAction !== "rename" || !this._selectedGame) ? "" : `
       <hr>
       <div class="gm-action-row">
         <div class="gm-field">
@@ -3859,7 +3894,9 @@ class GamingStatusGameManagementCard extends HTMLElement {
           <input type="text" id="gm-new-name" placeholder="New name" value="${escapeHTML(this._newName || "")}">
         </div>
         <button id="gm-rename-btn" ${renameEnabled ? "" : "disabled"}>Rename</button>
-      </div>
+      </div>`;
+
+    const deleteHTML = (this._selectedAction !== "delete" || !this._selectedGame) ? "" : `
       <hr>
       <div class="gm-action-row">
         <div class="gm-field">
@@ -3867,7 +3904,19 @@ class GamingStatusGameManagementCard extends HTMLElement {
           <input type="text" id="gm-delete-confirm" placeholder="Type &quot;${escapeHTML(this._selectedGame)}&quot;" value="${escapeHTML(this._deleteConfirmText || "")}">
         </div>
         <button id="gm-delete-btn" ${deleteEnabled ? "" : "disabled"}>Delete</button>
-      </div>`;
+      </div>
+      ${!sessionOptions.length ? "" : `
+      <hr>
+      <div class="gm-action-row">
+        <div class="gm-field">
+          <label>Session to delete</label>
+          <select id="gm-session">
+            <option value="" ${!this._selectedSessionStartTime ? "selected" : ""} disabled>Select a session…</option>
+            ${sessionSelectOptions}
+          </select>
+        </div>
+        <button id="gm-delete-session-btn" ${deleteSessionEnabled ? "" : "disabled"}>Delete Session</button>
+      </div>`}`;
 
     // Destination platforms for reassignment are scoped to whichever player
     // is currently picked in "Reassign to player" -- mirrors _resolveTarget's
@@ -3879,17 +3928,16 @@ class GamingStatusGameManagementCard extends HTMLElement {
       .join("");
     const reassignEnabled = !!(this._selectedSessionStartTime && this._reassignToPlayerId && this._reassignToPlatform);
 
-    const sessionDeleteHTML = (!this._selectedGame || !sessionOptions.length) ? "" : `
+    const reassignHTML = (this._selectedAction !== "reassign" || !this._selectedGame || !sessionOptions.length) ? "" : `
       <hr>
       <div class="gm-action-row">
         <div class="gm-field">
-          <label>Session to delete or reassign</label>
+          <label>Session to reassign</label>
           <select id="gm-session">
             <option value="" ${!this._selectedSessionStartTime ? "selected" : ""} disabled>Select a session…</option>
             ${sessionSelectOptions}
           </select>
         </div>
-        <button id="gm-delete-session-btn" ${deleteSessionEnabled ? "" : "disabled"}>Delete Session</button>
       </div>
       <div class="gm-action-row">
         <div class="gm-field">
@@ -3912,13 +3960,16 @@ class GamingStatusGameManagementCard extends HTMLElement {
     // Add Session is independent of an existing game selection -- available
     // as soon as a specific platform (not "All Platforms") is picked above,
     // since a new session must go to exactly one sensor.
+    const addNowLocal = gamingStatusNowLocalDateTimeString();
+    const addNow = new Date();
     const addStartDate = this._addStartTime ? new Date(this._addStartTime) : null;
     const addEndDate = this._addEndTime ? new Date(this._addEndTime) : null;
-    const addDurationValid = !!(addStartDate && addEndDate && !isNaN(addStartDate.getTime()) && !isNaN(addEndDate.getTime()) && addEndDate > addStartDate);
+    const addFutureError = !!((addStartDate && !isNaN(addStartDate.getTime()) && addStartDate > addNow) || (addEndDate && !isNaN(addEndDate.getTime()) && addEndDate > addNow));
+    const addDurationValid = !!(addStartDate && addEndDate && !isNaN(addStartDate.getTime()) && !isNaN(addEndDate.getTime()) && addEndDate > addStartDate && !addFutureError);
     const addDurationText = addDurationValid ? this._formatDuration((addEndDate - addStartDate) / 1000) : "";
     const addSessionEnabled = !!(this._selectedPlayerId && this._selectedPlatform && (this._addGame || "").trim() && addDurationValid);
 
-    const addSessionHTML = (!this._selectedPlayerId || !this._selectedPlatform) ? "" : `
+    const addSessionHTML = (this._selectedAction !== "add" || !this._selectedPlayerId || !this._selectedPlatform) ? "" : `
       <hr>
       <div class="gm-field">
         <label>Add Session — Game Title</label>
@@ -3941,6 +3992,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
       </div>`;
 
     this._bodyEl.innerHTML = `
+      ${actionFieldHTML}
       ${playerFieldHTML}
       <div class="gm-field">
         <label>Platform</label>
@@ -3949,20 +4001,31 @@ class GamingStatusGameManagementCard extends HTMLElement {
           ${platformOptions}
         </select>
       </div>
-      <div class="gm-field">
-        <label>Game</label>
-        <select id="gm-game" ${!gameOptions.length ? "disabled" : ""}>
-          <option value="" ${!this._selectedGame ? "selected" : ""} disabled>${gameOptions.length ? "Select a game…" : "No games found"}</option>
-          ${gameSelectOptions}
-        </select>
-      </div>
-      ${renameDeleteHTML}
-      ${sessionDeleteHTML}
+      ${gameFieldHTML}
+      ${renameHTML}
+      ${deleteHTML}
+      ${reassignHTML}
       ${addSessionHTML}
       <div id="gm-status" class="gm-status" style="display: none;"></div>
     `;
     this._statusEl = this.shadowRoot.getElementById("gm-status");
     this._renderStatus();
+
+    const actionSelect = this.shadowRoot.getElementById("gm-action");
+    if (actionSelect) {
+      actionSelect.addEventListener("change", (ev) => {
+        this._selectedAction = ev.target.value;
+        this._newName = "";
+        this._deleteConfirmText = "";
+        this._selectedSessionStartTime = "";
+        this._reassignToPlayerId = "";
+        this._reassignToPlatform = "";
+        this._addGame = "";
+        this._addStartTime = "";
+        this._addEndTime = "";
+        this.render();
+      });
+    }
 
     const playerSelect = this.shadowRoot.getElementById("gm-player");
     if (playerSelect) {
@@ -3997,15 +4060,18 @@ class GamingStatusGameManagementCard extends HTMLElement {
       this.render();
     });
 
-    this.shadowRoot.getElementById("gm-game").addEventListener("change", (ev) => {
-      this._selectedGame = ev.target.value;
-      this._selectedSessionStartTime = "";
-      this._newName = "";
-      this._deleteConfirmText = "";
-      this._reassignToPlayerId = "";
-      this._reassignToPlatform = "";
-      this.render();
-    });
+    const gameSelect = this.shadowRoot.getElementById("gm-game");
+    if (gameSelect) {
+      gameSelect.addEventListener("change", (ev) => {
+        this._selectedGame = ev.target.value;
+        this._selectedSessionStartTime = "";
+        this._newName = "";
+        this._deleteConfirmText = "";
+        this._reassignToPlayerId = "";
+        this._reassignToPlatform = "";
+        this.render();
+      });
+    }
 
     const newNameInput = this.shadowRoot.getElementById("gm-new-name");
     if (newNameInput) {
@@ -4031,11 +4097,16 @@ class GamingStatusGameManagementCard extends HTMLElement {
     const deleteBtn = this.shadowRoot.getElementById("gm-delete-btn");
     if (deleteBtn) deleteBtn.addEventListener("click", () => this._handleDelete());
 
+    // Shared by both Delete's and Reassign's session picker -- only one of
+    // the two is ever actually in the DOM at a time (they're mutually
+    // exclusive action tabs), so each button lookup is guarded individually
+    // rather than assumed to exist.
     const sessionSelect = this.shadowRoot.getElementById("gm-session");
     if (sessionSelect) {
       sessionSelect.addEventListener("change", (ev) => {
         this._selectedSessionStartTime = ev.target.value;
-        this.shadowRoot.getElementById("gm-delete-session-btn").disabled = !this._selectedSessionStartTime;
+        const deleteSessionBtnEl = this.shadowRoot.getElementById("gm-delete-session-btn");
+        if (deleteSessionBtnEl) deleteSessionBtnEl.disabled = !this._selectedSessionStartTime;
         const reassignBtn = this.shadowRoot.getElementById("gm-reassign-btn");
         if (reassignBtn) reassignBtn.disabled = !(this._selectedSessionStartTime && this._reassignToPlayerId && this._reassignToPlatform);
       });
