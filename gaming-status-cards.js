@@ -3710,6 +3710,11 @@ class GamingStatusGameManagementCard extends HTMLElement {
     const startISO = gamingStatusLocalDateTimeToISO(this._addStartTime);
     const endISO = gamingStatusLocalDateTimeToISO(this._addEndTime);
     if (!player || !this._selectedPlatform || !game || !startISO || !endISO) return;
+    const now = new Date();
+    if (new Date(startISO) > now || new Date(endISO) > now) {
+      this._setStatus("Start/end time cannot be in the future.", "error");
+      return;
+    }
     try {
       await this._hass.callService("gaming_status", "add_session", {
         player,
@@ -3978,14 +3983,14 @@ class GamingStatusGameManagementCard extends HTMLElement {
       <div class="gm-action-row">
         <div class="gm-field">
           <label>Start time</label>
-          <input type="datetime-local" id="gm-add-start" value="${escapeHTML(this._addStartTime || "")}">
+          <input type="datetime-local" id="gm-add-start" max="${addNowLocal}" value="${escapeHTML(this._addStartTime || "")}">
         </div>
         <div class="gm-field">
           <label>End time</label>
-          <input type="datetime-local" id="gm-add-end" value="${escapeHTML(this._addEndTime || "")}">
+          <input type="datetime-local" id="gm-add-end" max="${addNowLocal}" value="${escapeHTML(this._addEndTime || "")}">
         </div>
       </div>
-      <div id="gm-add-duration" style="font-size: 12px; color: var(--secondary-text-color); margin-bottom: 10px;">${addDurationText ? `Duration: ${addDurationText}` : ""}</div>
+      <div id="gm-add-duration" style="font-size: 12px; color: var(--secondary-text-color); margin-bottom: 10px;">${addFutureError ? `<span style="color: var(--error-color, #db4437);">Start/end time cannot be in the future.</span>` : (addDurationText ? `Duration: ${addDurationText}` : "")}</div>
       <div class="gm-action-row">
         <div class="gm-field"></div>
         <button id="gm-add-session-btn" ${addSessionEnabled ? "" : "disabled"}>Add Session</button>
