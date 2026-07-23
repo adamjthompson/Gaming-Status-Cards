@@ -3684,7 +3684,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
   async _handleDelete() {
     const player = this._resolvePlayerName(this._selectedPlayerId);
     if (!player || !this._selectedGame) return;
-    if (!window.confirm(`Completely remove "${this._selectedGame}" from ${player}'s profile?`)) return;
+    if (!window.confirm(`Completely remove ${this._selectedGame} from ${player}'s profile?`)) return;
     try {
       await this._hass.callService("gaming_status", "delete_game", {
         player,
@@ -3889,7 +3889,6 @@ class GamingStatusGameManagementCard extends HTMLElement {
     const newNameTrimmed = (this._newName || "").trim();
     const renameEnabled = !!(this._selectedGame && newNameTrimmed && newNameTrimmed.toLowerCase() !== this._selectedGame.toLowerCase());
     const deleteEnabled = !!this._selectedGame;
-    const selectedPlayerName = this._resolvePlayerName(this._selectedPlayerId);
 
     // Only sessions still present in recent_sessions are individually
     // addressable (see _getSessionsForGame) -- a game whose only remaining
@@ -3931,7 +3930,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
       <hr>
       <div class="gm-action-row">
         <div class="gm-field">
-          <label>Delete "${escapeHTML(this._selectedGame)}" from ${escapeHTML(selectedPlayerName)}</label>
+          <label>Delete game from profile</label>
         </div>
         <button id="gm-delete-btn" ${deleteEnabled ? "" : "disabled"}>Delete</button>
       </div>`;
