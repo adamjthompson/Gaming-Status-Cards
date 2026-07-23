@@ -3820,13 +3820,35 @@ class GamingStatusGameManagementCard extends HTMLElement {
 
   // A service call resolving only means the backend accepted the change --
   // this._hass won't reflect the resulting entity state until a later,
-  // separate hass push from the dashboard. Render once now for instant
-  // feedback on local-only state (cleared selections), then once more
-  // shortly after as a safety net once that push has almost certainly
-  // landed, instead of leaving stale totals on screen until a manual reload.
+  // separate hass push from the dashboard, and nothing guarantees one
+  // arrives soon (a rename/delete/reassign changes history attributes, not
+  // an entity's live state, so it may not prompt a push at all). Render
+  // once now for instant feedback on local-only state (cleared selections),
+  // then actively refetch current states over the WS API rather than
+  // passively waiting -- that's the only way to reliably pick up the change
+  // without a full page reload. A second refetch after a short delay covers
+  // the "All Platforms" case, where the displayed entity is the master
+  // sensor merging from the just-renamed platform sensor on its own
+  // (slightly lagged) state-change listener, not the entity the service
+  // call itself wrote to.
   _refreshAfterAction() {
     this.render();
-    setTimeout(() => this.render(), 600);
+    this._refetchStates().then(() => this.render());
+    setTimeout(() => { this._refetchStates().then(() => this.render()); }, 600);
+  }
+
+  async _refetchStates() {
+    try {
+      const freshStates = await this._hass.callWS({ type: "get_states" });
+      const statesById = {};
+      for (const s of freshStates) statesById[s.entity_id] = s;
+      this._hass = { ...this._hass, states: { ...this._hass.states, ...statesById } };
+      this._resolveTarget();
+    } catch (e) {
+      // No WS connection available (or the call failed) -- fall back to
+      // whatever hass we already have; a subsequent natural hass push, or a
+      // manual reload, will still eventually pick up the change.
+    }
   }
 
   _formatDate(dateStr) {
