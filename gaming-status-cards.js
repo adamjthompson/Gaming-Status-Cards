@@ -3458,6 +3458,21 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
 // CARD 8: GAMING STATUS - GAME MANAGEMENT
 // ====================================================================
 
+// Converts an <input type="datetime-local"> value (e.g. "2026-07-18T12:37",
+// no seconds/offset -- always parsed by the browser as local time) into the
+// ISO-with-local-offset format already used throughout stored session data
+// (e.g. "2026-07-18T12:37:00-04:00"). Returns null for an empty/invalid value.
+function gamingStatusLocalDateTimeToISO(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, "0");
+  const offsetMin = -d.getTimezoneOffset();
+  const sign = offsetMin >= 0 ? "+" : "-";
+  const absMin = Math.abs(offsetMin);
+  return `${value}:00${sign}${pad(Math.floor(absMin / 60))}:${pad(absMin % 60)}`;
+}
+
 class GamingStatusGameManagementCard extends HTMLElement {
   constructor() {
     super();
@@ -3468,6 +3483,11 @@ class GamingStatusGameManagementCard extends HTMLElement {
     this._selectedSessionStartTime = "";
     this._newName = "";
     this._deleteConfirmText = "";
+    this._addGame = "";
+    this._addStartTime = "";
+    this._addEndTime = "";
+    this._reassignToPlayerId = "";
+    this._reassignToPlatform = "";
     this._status = null;
   }
 
@@ -3675,6 +3695,53 @@ class GamingStatusGameManagementCard extends HTMLElement {
     }
   }
 
+  async _handleAddSession() {
+    const player = this._resolvePlayerName(this._selectedPlayerId);
+    const game = (this._addGame || "").trim();
+    const startISO = gamingStatusLocalDateTimeToISO(this._addStartTime);
+    const endISO = gamingStatusLocalDateTimeToISO(this._addEndTime);
+    if (!player || !this._selectedPlatform || !game || !startISO || !endISO) return;
+    try {
+      await this._hass.callService("gaming_status", "add_session", {
+        player,
+        platform: this._selectedPlatform,
+        game,
+        start_time: startISO,
+        end_time: endISO,
+      });
+      this._setStatus(`Added a session of "${game}".`, "success");
+      this._addGame = "";
+      this._addStartTime = "";
+      this._addEndTime = "";
+      this._refreshAfterAction();
+    } catch (err) {
+      this._setStatus(`Add session failed: ${err?.message || err}`, "error");
+    }
+  }
+
+  async _handleReassignSession() {
+    const fromPlayer = this._resolvePlayerName(this._selectedPlayerId);
+    const toPlayer = this._resolvePlayerName(this._reassignToPlayerId);
+    if (!fromPlayer || !this._selectedGame || !this._selectedSessionStartTime || !toPlayer || !this._reassignToPlatform) return;
+    try {
+      await this._hass.callService("gaming_status", "reassign_session", {
+        from_player: fromPlayer,
+        ...(this._selectedPlatform ? { from_platform: this._selectedPlatform } : {}),
+        game: this._selectedGame,
+        start_time: this._selectedSessionStartTime,
+        to_player: toPlayer,
+        to_platform: this._reassignToPlatform,
+      });
+      this._setStatus(`Reassigned that session of "${this._selectedGame}" to ${toPlayer}.`, "success");
+      this._selectedSessionStartTime = "";
+      this._reassignToPlayerId = "";
+      this._reassignToPlatform = "";
+      this._refreshAfterAction();
+    } catch (err) {
+      this._setStatus(`Reassign failed: ${err?.message || err}`, "error");
+    }
+  }
+
   // A service call resolving only means the backend accepted the change --
   // this._hass won't reflect the resulting entity state until a later,
   // separate hass push from the dashboard. Render once now for instant
@@ -3724,6 +3791,10 @@ class GamingStatusGameManagementCard extends HTMLElement {
           #gm-delete-btn:not(:disabled):hover { opacity: 0.9; }
           #gm-delete-session-btn { background: var(--error-color, #db4437); color: #fff; }
           #gm-delete-session-btn:not(:disabled):hover { opacity: 0.9; }
+          #gm-reassign-btn { background: var(--primary-color); color: var(--text-primary-color, #fff); }
+          #gm-reassign-btn:not(:disabled):hover { opacity: 0.9; }
+          #gm-add-session-btn { background: var(--primary-color); color: var(--text-primary-color, #fff); }
+          #gm-add-session-btn:not(:disabled):hover { opacity: 0.9; }
           .gm-status { margin-top: 12px; padding: 8px 10px; border-radius: 4px; font-size: 13px; }
           .gm-status.success { background: rgba(76, 175, 80, 0.15); color: var(--success-color, #4caf50); }
           .gm-status.error { background: rgba(219, 68, 55, 0.15); color: var(--error-color, #db4437); }
@@ -3798,17 +3869,75 @@ class GamingStatusGameManagementCard extends HTMLElement {
         <button id="gm-delete-btn" ${deleteEnabled ? "" : "disabled"}>Delete</button>
       </div>`;
 
+    // Destination platforms for reassignment are scoped to whichever player
+    // is currently picked in "Reassign to player" -- mirrors _resolveTarget's
+    // own existence-check pattern, so a platform the destination player
+    // doesn't actually have configured is never offered.
+    const reassignPlatformOptions = !this._reassignToPlayerId ? "" : Object.keys(GAMING_STATUS_PLATFORM_LABELS)
+      .filter(key => this._hass.states[this._reassignToPlayerId.replace(/_master$/, `_${key}`)])
+      .map(key => `<option value="${key}" ${this._reassignToPlatform === key ? "selected" : ""}>${GAMING_STATUS_PLATFORM_LABELS[key]}</option>`)
+      .join("");
+    const reassignEnabled = !!(this._selectedSessionStartTime && this._reassignToPlayerId && this._reassignToPlatform);
+
     const sessionDeleteHTML = (!this._selectedGame || !sessionOptions.length) ? "" : `
       <hr>
       <div class="gm-action-row">
         <div class="gm-field">
-          <label>Session to delete</label>
+          <label>Session to delete or reassign</label>
           <select id="gm-session">
             <option value="" ${!this._selectedSessionStartTime ? "selected" : ""} disabled>Select a session…</option>
             ${sessionSelectOptions}
           </select>
         </div>
         <button id="gm-delete-session-btn" ${deleteSessionEnabled ? "" : "disabled"}>Delete Session</button>
+      </div>
+      <div class="gm-action-row">
+        <div class="gm-field">
+          <label>Reassign to player</label>
+          <select id="gm-reassign-player">
+            <option value="" ${!this._reassignToPlayerId ? "selected" : ""} disabled>Select a player…</option>
+            ${gamingStatusPlayerOptionsHTML(players, this._reassignToPlayerId, escapeHTML)}
+          </select>
+        </div>
+        <div class="gm-field">
+          <label>Reassign to platform</label>
+          <select id="gm-reassign-platform" ${!this._reassignToPlayerId ? "disabled" : ""}>
+            <option value="" ${!this._reassignToPlatform ? "selected" : ""} disabled>${this._reassignToPlayerId ? "Select a platform…" : "Pick a player first"}</option>
+            ${reassignPlatformOptions}
+          </select>
+        </div>
+        <button id="gm-reassign-btn" ${reassignEnabled ? "" : "disabled"}>Reassign</button>
+      </div>`;
+
+    // Add Session is independent of an existing game selection -- available
+    // as soon as a specific platform (not "All Platforms") is picked above,
+    // since a new session must go to exactly one sensor.
+    const addStartDate = this._addStartTime ? new Date(this._addStartTime) : null;
+    const addEndDate = this._addEndTime ? new Date(this._addEndTime) : null;
+    const addDurationValid = !!(addStartDate && addEndDate && !isNaN(addStartDate.getTime()) && !isNaN(addEndDate.getTime()) && addEndDate > addStartDate);
+    const addDurationText = addDurationValid ? this._formatDuration((addEndDate - addStartDate) / 1000) : "";
+    const addSessionEnabled = !!(this._selectedPlayerId && this._selectedPlatform && (this._addGame || "").trim() && addDurationValid);
+
+    const addSessionHTML = (!this._selectedPlayerId || !this._selectedPlatform) ? "" : `
+      <hr>
+      <div class="gm-field">
+        <label>Add Session — Game Title</label>
+        <input type="text" id="gm-add-game" placeholder="Game title" value="${escapeHTML(this._addGame || "")}">
+      </div>
+      <div class="gm-action-row">
+        <div class="gm-field">
+          <label>Start time</label>
+          <input type="datetime-local" id="gm-add-start" value="${escapeHTML(this._addStartTime || "")}">
+        </div>
+        <div class="gm-field">
+          <label>End time</label>
+          <input type="datetime-local" id="gm-add-end" value="${escapeHTML(this._addEndTime || "")}">
+        </div>
+      </div>
+      <div id="gm-add-duration" style="font-size: 12px; color: var(--secondary-text-color); margin-bottom: 10px;">${addDurationText ? `Duration: ${addDurationText}` : ""}</div>
+      <div class="gm-action-row">
+        <div class="gm-field"></div>
+        <button id="gm-add-session-btn" ${addSessionEnabled ? "" : "disabled"}>Add Session</button>
       </div>`;
 
     this._bodyEl.innerHTML = `
@@ -3829,6 +3958,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
       </div>
       ${renameDeleteHTML}
       ${sessionDeleteHTML}
+      ${addSessionHTML}
       <div id="gm-status" class="gm-status" style="display: none;"></div>
     `;
     this._statusEl = this.shadowRoot.getElementById("gm-status");
@@ -3842,6 +3972,11 @@ class GamingStatusGameManagementCard extends HTMLElement {
         this._selectedSessionStartTime = "";
         this._newName = "";
         this._deleteConfirmText = "";
+        this._addGame = "";
+        this._addStartTime = "";
+        this._addEndTime = "";
+        this._reassignToPlayerId = "";
+        this._reassignToPlatform = "";
         this._resolveTarget();
         this.render();
       });
@@ -3853,6 +3988,11 @@ class GamingStatusGameManagementCard extends HTMLElement {
       this._selectedSessionStartTime = "";
       this._newName = "";
       this._deleteConfirmText = "";
+      this._addGame = "";
+      this._addStartTime = "";
+      this._addEndTime = "";
+      this._reassignToPlayerId = "";
+      this._reassignToPlatform = "";
       this._resolveTarget();
       this.render();
     });
@@ -3862,6 +4002,8 @@ class GamingStatusGameManagementCard extends HTMLElement {
       this._selectedSessionStartTime = "";
       this._newName = "";
       this._deleteConfirmText = "";
+      this._reassignToPlayerId = "";
+      this._reassignToPlatform = "";
       this.render();
     });
 
@@ -3894,10 +4036,65 @@ class GamingStatusGameManagementCard extends HTMLElement {
       sessionSelect.addEventListener("change", (ev) => {
         this._selectedSessionStartTime = ev.target.value;
         this.shadowRoot.getElementById("gm-delete-session-btn").disabled = !this._selectedSessionStartTime;
+        const reassignBtn = this.shadowRoot.getElementById("gm-reassign-btn");
+        if (reassignBtn) reassignBtn.disabled = !(this._selectedSessionStartTime && this._reassignToPlayerId && this._reassignToPlatform);
       });
     }
     const deleteSessionBtn = this.shadowRoot.getElementById("gm-delete-session-btn");
     if (deleteSessionBtn) deleteSessionBtn.addEventListener("click", () => this._handleDeleteSession());
+
+    const reassignPlayerSelect = this.shadowRoot.getElementById("gm-reassign-player");
+    if (reassignPlayerSelect) {
+      reassignPlayerSelect.addEventListener("change", (ev) => {
+        this._reassignToPlayerId = ev.target.value;
+        this._reassignToPlatform = "";
+        this.render();
+      });
+    }
+    const reassignPlatformSelect = this.shadowRoot.getElementById("gm-reassign-platform");
+    if (reassignPlatformSelect) {
+      reassignPlatformSelect.addEventListener("change", (ev) => {
+        this._reassignToPlatform = ev.target.value;
+        const reassignBtn = this.shadowRoot.getElementById("gm-reassign-btn");
+        if (reassignBtn) reassignBtn.disabled = !(this._selectedSessionStartTime && this._reassignToPlayerId && this._reassignToPlatform);
+      });
+    }
+    const reassignBtn = this.shadowRoot.getElementById("gm-reassign-btn");
+    if (reassignBtn) reassignBtn.addEventListener("click", () => this._handleReassignSession());
+
+    const addGameInput = this.shadowRoot.getElementById("gm-add-game");
+    const addStartInput = this.shadowRoot.getElementById("gm-add-start");
+    const addEndInput = this.shadowRoot.getElementById("gm-add-end");
+    const updateAddSessionState = () => {
+      const addSessionBtn = this.shadowRoot.getElementById("gm-add-session-btn");
+      if (!addSessionBtn) return;
+      const s = addStartInput && addStartInput.value ? new Date(addStartInput.value) : null;
+      const e = addEndInput && addEndInput.value ? new Date(addEndInput.value) : null;
+      const durationValid = !!(s && e && !isNaN(s.getTime()) && !isNaN(e.getTime()) && e > s);
+      const durationEl = this.shadowRoot.getElementById("gm-add-duration");
+      if (durationEl) durationEl.textContent = durationValid ? `Duration: ${this._formatDuration((e - s) / 1000)}` : "";
+      addSessionBtn.disabled = !(this._selectedPlayerId && this._selectedPlatform && (this._addGame || "").trim() && durationValid);
+    };
+    if (addGameInput) {
+      addGameInput.addEventListener("input", (ev) => {
+        this._addGame = ev.target.value;
+        updateAddSessionState();
+      });
+    }
+    if (addStartInput) {
+      addStartInput.addEventListener("input", (ev) => {
+        this._addStartTime = ev.target.value;
+        updateAddSessionState();
+      });
+    }
+    if (addEndInput) {
+      addEndInput.addEventListener("input", (ev) => {
+        this._addEndTime = ev.target.value;
+        updateAddSessionState();
+      });
+    }
+    const addSessionBtn = this.shadowRoot.getElementById("gm-add-session-btn");
+    if (addSessionBtn) addSessionBtn.addEventListener("click", () => this._handleAddSession());
   }
 
   getCardSize() {

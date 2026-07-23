@@ -157,7 +157,7 @@ A configurable table of recently completed play sessions (one row per session, n
 ---
 
 ### 8. Gaming Status - Game Management
-A utility card for cleaning up mislabeled or unwanted play history. Rename a game across a player's stored history (merging it into an existing name if one matches) or permanently purge every trace of a game (sessions, daily/weekly totals, and archived per-day breakdowns).
+A utility card for cleaning up mislabeled or unwanted play history. Rename a game across a player's stored history (merging it into an existing name if one matches), permanently purge every trace of a game (sessions, daily/weekly totals, and archived per-day breakdowns), delete or reassign an individual session, or manually backfill a session that was never tracked.
 
 Unlike the other cards, Platform/Game/Rename/Delete are chosen live on the card itself rather than configured in YAML. The editor only controls which player(s) the card can act on.
 
@@ -169,6 +169,8 @@ Unlike the other cards, Platform/Game/Rename/Delete are chosen live on the card 
 * **Rename:** Type a new name and click **Rename**. Only enabled once a game is selected and the new name is non-empty and different from the current name.
 * **Delete:** Type the exact game name into the confirmation field to enable the **Delete** button. This permanently removes all history for that game and cannot be undone.
 * **Delete Session:** Once a game is selected, a session picker lists that game's individually recorded sessions (newest first). Pick one and click **Delete Session** to remove just that single session (correcting only its contribution to daily/weekly/lifetime totals) without touching any other session of the same game. *Only sessions still present in the platform's recent-session history can be targeted this way; once a session ages out into the archived daily totals, only the whole-game **Delete** remains available for it.*
+* **Reassign Session:** Right below the session picker, choose a destination **player** and **platform** (the platform list is scoped to whatever that player actually has configured) and click **Reassign** to move the selected session to them instead — corrects totals on both ends. Useful when a session was tracked under the wrong person's profile, e.g. the wrong account signed into a shared Xbox/Steam app or console.
+* **Add Session:** Available as soon as a specific platform (not **All Platforms**) is selected, independent of any game selection. Enter a game title and a start/end time (a live duration preview appears once both are set) and click **Add Session** to manually backfill history that was never tracked — e.g. play that happened while the integration was offline, or a title that wasn't detected.
 
 ---
 
