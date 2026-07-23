@@ -3491,7 +3491,6 @@ class GamingStatusGameManagementCard extends HTMLElement {
     this._selectedGame = "";
     this._selectedSessionStartTime = "";
     this._newName = "";
-    this._deleteConfirmText = "";
     this._addGame = "";
     this._addStartTime = "";
     this._addEndTime = "";
@@ -3676,6 +3675,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
   async _handleDelete() {
     const player = this._resolvePlayerName(this._selectedPlayerId);
     if (!player || !this._selectedGame) return;
+    if (!window.confirm(`Completely remove "${this._selectedGame}" from ${player}'s profile?`)) return;
     try {
       await this._hass.callService("gaming_status", "delete_game", {
         player,
@@ -3684,7 +3684,6 @@ class GamingStatusGameManagementCard extends HTMLElement {
       });
       this._setStatus(`Deleted all history for "${this._selectedGame}".`, "success");
       this._selectedGame = "";
-      this._deleteConfirmText = "";
       this._refreshAfterAction();
     } catch (err) {
       this._setStatus(`Delete failed: ${err?.message || err}`, "error");
@@ -3880,7 +3879,8 @@ class GamingStatusGameManagementCard extends HTMLElement {
 
     const newNameTrimmed = (this._newName || "").trim();
     const renameEnabled = !!(this._selectedGame && newNameTrimmed && newNameTrimmed.toLowerCase() !== this._selectedGame.toLowerCase());
-    const deleteEnabled = !!(this._selectedGame && this._deleteConfirmText === this._selectedGame);
+    const deleteEnabled = !!this._selectedGame;
+    const selectedPlayerName = this._resolvePlayerName(this._selectedPlayerId);
 
     // Only sessions still present in recent_sessions are individually
     // addressable (see _getSessionsForGame) -- a game whose only remaining
@@ -3922,8 +3922,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
       <hr>
       <div class="gm-action-row">
         <div class="gm-field">
-          <label>Type "${escapeHTML(this._selectedGame)}" to confirm</label>
-          <input type="text" id="gm-delete-confirm" placeholder="Type &quot;${escapeHTML(this._selectedGame)}&quot;" value="${escapeHTML(this._deleteConfirmText || "")}">
+          <label>Delete "${escapeHTML(this._selectedGame)}" from ${escapeHTML(selectedPlayerName)}</label>
         </div>
         <button id="gm-delete-btn" ${deleteEnabled ? "" : "disabled"}>Delete</button>
       </div>`;
@@ -4026,7 +4025,6 @@ class GamingStatusGameManagementCard extends HTMLElement {
       actionSelect.addEventListener("change", (ev) => {
         this._selectedAction = ev.target.value;
         this._newName = "";
-        this._deleteConfirmText = "";
         this._selectedSessionStartTime = "";
         this._reassignToPlayerId = "";
         this._reassignToPlatform = "";
@@ -4044,7 +4042,6 @@ class GamingStatusGameManagementCard extends HTMLElement {
         this._selectedGame = "";
         this._selectedSessionStartTime = "";
         this._newName = "";
-        this._deleteConfirmText = "";
         this._addGame = "";
         this._addStartTime = "";
         this._addEndTime = "";
@@ -4060,7 +4057,6 @@ class GamingStatusGameManagementCard extends HTMLElement {
       this._selectedGame = "";
       this._selectedSessionStartTime = "";
       this._newName = "";
-      this._deleteConfirmText = "";
       this._addGame = "";
       this._addStartTime = "";
       this._addEndTime = "";
@@ -4076,7 +4072,6 @@ class GamingStatusGameManagementCard extends HTMLElement {
         this._selectedGame = ev.target.value;
         this._selectedSessionStartTime = "";
         this._newName = "";
-        this._deleteConfirmText = "";
         this._reassignToPlayerId = "";
         this._reassignToPlatform = "";
         this.render();
@@ -4090,15 +4085,6 @@ class GamingStatusGameManagementCard extends HTMLElement {
         const trimmed = this._newName.trim();
         const enabled = !!(this._selectedGame && trimmed && trimmed.toLowerCase() !== this._selectedGame.toLowerCase());
         this.shadowRoot.getElementById("gm-rename-btn").disabled = !enabled;
-      });
-    }
-
-    const deleteConfirmInput = this.shadowRoot.getElementById("gm-delete-confirm");
-    if (deleteConfirmInput) {
-      deleteConfirmInput.addEventListener("input", (ev) => {
-        this._deleteConfirmText = ev.target.value;
-        const enabled = !!(this._selectedGame && this._deleteConfirmText === this._selectedGame);
-        this.shadowRoot.getElementById("gm-delete-btn").disabled = !enabled;
       });
     }
 
