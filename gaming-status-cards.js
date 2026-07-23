@@ -3826,15 +3826,17 @@ class GamingStatusGameManagementCard extends HTMLElement {
   // once now for instant feedback on local-only state (cleared selections),
   // then actively refetch current states over the WS API rather than
   // passively waiting -- that's the only way to reliably pick up the change
-  // without a full page reload. A second refetch after a short delay covers
+  // without a full page reload. Several staggered refetches follow to cover
   // the "All Platforms" case, where the displayed entity is the master
-  // sensor merging from the just-renamed platform sensor on its own
-  // (slightly lagged) state-change listener, not the entity the service
-  // call itself wrote to.
+  // sensor: it only re-merges reactively off the just-renamed platform
+  // sensor's own state-change event (a separate async task, not synchronous
+  // with the service call), so a single fixed delay isn't reliably enough
+  // -- especially right after back-to-back actions on the same game.
   _refreshAfterAction() {
     this.render();
-    this._refetchStates().then(() => this.render());
-    setTimeout(() => { this._refetchStates().then(() => this.render()); }, 600);
+    for (const delay of [0, 400, 900, 1600, 2600]) {
+      setTimeout(() => { this._refetchStates().then(() => this.render()); }, delay);
+    }
   }
 
   async _refetchStates() {
