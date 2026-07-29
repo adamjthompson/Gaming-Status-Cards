@@ -327,6 +327,25 @@ function gamingStatusIsColorExtractionEnabled(hass) {
   return true;
 }
 
+// Same pattern as gamingStatusIsColorExtractionEnabled, for the global
+// "Enable Achievement/Trophy Tracking" setting -- used by the Recent
+// Achievements card to show a friendly "not enabled" empty state instead
+// of a permanently-empty table when no player has this turned on. Fails
+// open (true) until hass data has actually loaded, same reasoning as
+// above: don't flash the "disabled" message before we've had a chance to
+// check the real value.
+function gamingStatusIsAchievementTrackingEnabled(hass) {
+  if (!hass) return true;
+  for (const key of Object.keys(hass.states)) {
+    if (!key.startsWith("sensor.gaming_status_")) continue;
+    const attrs = hass.states[key].attributes;
+    if (attrs && attrs.achievement_tracking_enabled !== undefined) {
+      return attrs.achievement_tracking_enabled !== false;
+    }
+  }
+  return true;
+}
+
 // Joins display labels the way natural English lists read: "A", "A & B",
 // "A, B, & C". Used to build the "PC" mode option's label dynamically from
 // whichever of its constituent platforms actually have entities.
@@ -3455,6 +3474,526 @@ class GamingStatusRecentSessionsEditor extends HTMLElement {
 }
 
 // ====================================================================
+// CARD 7B: GAMING STATUS - RECENT ACHIEVEMENTS
+// ====================================================================
+// Sibling to Recent Sessions above -- same shape (title, all/single/
+// selected player filter, count-to-display with the same scroll
+// mechanism, background, color mode, header toggle, column toggles) but
+// reads the recent_achievements attribute (an achievement/trophy unlock
+// history, persisted and accumulated across games -- unlike the older
+// recent_unlocked_achievements/recent_unlocked_trophies attributes, which
+// only ever reflect whatever game is currently being played) instead of
+// recent_sessions, and only offers the three platforms that ever produce
+// achievement data (Steam/Xbox/PlayStation -- Custom/Discord/Playnite
+// never do).
+
+class GamingStatusRecentAchievementsCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+  }
+
+  static getConfigElement() {
+    return document.createElement("gaming-status-recent-achievements-editor");
+  }
+
+  static getStubConfig() {
+    return {
+      title: "",
+      mode: "all",
+      single_entity: "",
+      selected_entities: "",
+      max_achievements: 10,
+      background: "art",
+      color_mode: "game",
+      show_platform_steam: true,
+      show_platform_xbox: true,
+      show_platform_playstation: true,
+      show_header: true,
+      show_column_player: true,
+      show_column_game: true,
+      show_column_platform: true,
+      show_column_achievement: true,
+      show_column_date: true,
+      show_column_time: true,
+      entities_pattern: GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
+    };
+  }
+
+  setConfig(config) {
+    this.config = {
+      ...config,
+      title: config.title || "",
+      mode: config.mode || "all",
+      single_entity: config.single_entity || "",
+      selected_entities: config.selected_entities || "",
+      max_achievements: config.max_achievements !== undefined ? Math.min(20, Math.max(1, parseInt(config.max_achievements) || 10)) : 10,
+      background: config.background || "art",
+      color_mode: config.color_mode || "game",
+      show_platform_steam: config.show_platform_steam !== false,
+      show_platform_xbox: config.show_platform_xbox !== false,
+      show_platform_playstation: config.show_platform_playstation !== false,
+      show_header: config.show_header !== false,
+      show_column_player: config.show_column_player !== false,
+      show_column_game: config.show_column_game !== false,
+      show_column_platform: config.show_column_platform !== false,
+      show_column_achievement: config.show_column_achievement !== false,
+      show_column_date: config.show_column_date !== false,
+      show_column_time: config.show_column_time !== false,
+      entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
+    };
+    this._lastHash = "";
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (!this.config) return;
+
+    let entityIds = [];
+    if (this.config.mode === "single" && this.config.single_entity) {
+      if (hass.states[this.config.single_entity]) entityIds.push(this.config.single_entity);
+    } else if (this.config.mode === "selected" && this.config.selected_entities) {
+      entityIds = gamingStatusResolveSelectedEntities(hass, this.config.selected_entities, this.config.entities_pattern);
+    } else {
+      entityIds = Object.keys(hass.states).filter(
+        k => (k.startsWith("sensor.gaming_status_") || k.startsWith("binary_sensor.gaming_status_")) &&
+             k.endsWith(this.config.entities_pattern) &&
+             hass.states[k].attributes.secondary !== undefined
+      );
+    }
+    entityIds.sort();
+
+    const trackingEnabled = gamingStatusIsAchievementTrackingEnabled(hass);
+
+    const hash = entityIds.map(id => {
+      const unlocks = hass.states[id]?.attributes?.recent_achievements || [];
+      return `${id}:${unlocks.length}:${unlocks[0] ? unlocks[0].unlocked_at : ""}`;
+    }).join(",")
+      + "|" + trackingEnabled
+      + "|" + this.config.max_achievements
+      + "|" + this.config.background
+      + "|" + this.config.color_mode
+      + "|" + this.config.show_header
+      + "|" + [this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_achievement, this.config.show_column_date, this.config.show_column_time].join(",")
+      + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation].join(",");
+
+    if (this._lastHash === hash) return;
+    this._lastHash = hash;
+
+    this.render(trackingEnabled ? this.processData(entityIds) : [], trackingEnabled);
+  }
+
+  processData(entityIds) {
+    let rows = [];
+    for (const entityId of entityIds) {
+      const stateObj = this._hass.states[entityId];
+      if (!stateObj) continue;
+      const playerName = gamingStatusCleanPlayerName(stateObj.attributes.friendly_name || entityId);
+      const avatar = stateObj.attributes.entity_picture || "";
+      const unlocks = stateObj.attributes.recent_achievements || [];
+
+      for (const u of unlocks) {
+        const platformLower = (u.platform || "").toLowerCase();
+        const platformKey = ["steam", "xbox", "playstation"].find(k => platformLower.includes(k));
+        if (platformKey && this.config[`show_platform_${platformKey}`] === false) continue;
+
+        rows.push({
+          player: playerName,
+          avatar,
+          game: u.game || "Unknown",
+          platform: u.platform || "",
+          name: u.name || "",
+          unlocked_at: u.unlocked_at || "",
+          hero_art_url: u.hero_art_url || "",
+          game_dominant_color: u.game_dominant_color || "",
+        });
+      }
+    }
+
+    rows.sort((a, b) => (Date.parse(b.unlocked_at) || 0) - (Date.parse(a.unlocked_at) || 0));
+
+    const limit = Math.min(20, Math.max(1, parseInt(this.config.max_achievements) || 10));
+    return rows.slice(0, limit);
+  }
+
+  _getVisibleColumns() {
+    const isSingle = this.config.mode === "single";
+    const ALL_COLUMNS = [
+      { key: "player", label: "Player", flex: "1.2" },
+      { key: "game", label: "Game", flex: "1.6" },
+      { key: "platform", label: "Platform", flex: "1" },
+      { key: "achievement", label: "Achievement", flex: "2" },
+      { key: "date", label: "Date", flex: "0.9" },
+      { key: "time", label: "Time", flex: "0.9" },
+    ];
+    return ALL_COLUMNS.filter(c => {
+      if (c.key === "player") return !isSingle && this.config.show_column_player;
+      return this.config[`show_column_${c.key}`];
+    });
+  }
+
+  // Same hex/rgb parsing Recent Sessions/List cards use for "Game Artwork" color mode.
+  _parseGameColor(rawColor) {
+    if (!rawColor || String(rawColor).toLowerCase() === "null" || String(rawColor).toLowerCase() === "none") return null;
+    const str = String(rawColor).trim().toLowerCase();
+    if (str.startsWith('#')) {
+      let h = str.replace('#', '');
+      if (h.length === 3) h = [...h].map(x => x + x).join('');
+      if (h.length === 6) {
+        const r = parseInt(h.substring(0, 2), 16);
+        const g = parseInt(h.substring(2, 4), 16);
+        const b = parseInt(h.substring(4, 6), 16);
+        if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return `rgb(${r}, ${g}, ${b})`;
+      }
+      return null;
+    }
+    if (str.startsWith('rgb')) return str;
+    return null;
+  }
+
+  _formatDate(dateStr) {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  _formatTime(dateStr) {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+
+  render(rows, trackingEnabled) {
+    const escapeHTML = gamingStatusEscapeHTML;
+    const colorExtractionEnabled = gamingStatusIsColorExtractionEnabled(this._hass);
+
+    if (!this.content) {
+      this.shadowRoot.innerHTML = `
+        <style>
+          :host { display: block; }
+          ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
+          #ra-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
+
+          .ra-header-row { display: flex; align-items: center; gap: 8px; padding: 0 10px 8px 10px; box-sizing: border-box; }
+          .ra-header-cell { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+          .ra-body { display: flex; flex-direction: column; gap: 6px; }
+          .ra-body.scrollable { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+          .ra-body::-webkit-scrollbar { width: 6px; }
+          .ra-body::-webkit-scrollbar-track { background: transparent; }
+          .ra-body::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, 0.4); border-radius: 3px; }
+          .ra-body::-webkit-scrollbar-thumb:hover { background: rgba(120, 120, 120, 0.8); }
+
+          .ra-row {
+            position: relative; overflow: hidden; border-radius: var(--ha-card-border-radius, 12px); display: flex; align-items: center; gap: 8px;
+            padding: 9px 10px; box-sizing: border-box; flex-shrink: 0;
+          }
+          .ra-row.no-bg { background: var(--secondary-background-color, rgba(120, 120, 120, 0.08)); }
+          .ra-row.has-bg::before {
+            content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; z-index: 0; pointer-events: none;
+            background-size: cover; background-position: center;
+            background-image: linear-gradient(to right, var(--ra-tint-start, rgba(0, 0, 0, 0.55)) 0%, var(--ra-tint-end, rgba(0, 0, 0, 0.75)) 100%), var(--ra-bg-url);
+            filter: blur(6px);
+          }
+
+          .ra-cell { position: relative; z-index: 1; font-size: 13px; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .ra-cell.primary { font-weight: 600; }
+          .ra-row.has-bg .ra-cell { color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+
+          .ra-empty { padding: 20px; color: var(--secondary-text-color); font-style: italic; }
+        </style>
+        <ha-card>
+          <div id="ra-title"></div>
+          <div id="ra-header" class="ra-header-row"></div>
+          <div id="ra-body" class="ra-body"></div>
+        </ha-card>
+      `;
+      this._titleEl = this.shadowRoot.getElementById("ra-title");
+      this._headerEl = this.shadowRoot.getElementById("ra-header");
+      this._bodyEl = this.shadowRoot.getElementById("ra-body");
+      this.content = this._bodyEl;
+    }
+
+    this._titleEl.textContent = this.config.title || "";
+    this._titleEl.style.display = this.config.title ? "block" : "none";
+
+    const columns = this._getVisibleColumns();
+    this._headerEl.style.display = (this.config.show_header !== false && trackingEnabled) ? "flex" : "none";
+    this._headerEl.innerHTML = columns.map(c => `<div class="ra-header-cell" style="flex: ${c.flex};">${c.label}</div>`).join("");
+
+    if (!trackingEnabled) {
+      this._bodyEl.style.maxHeight = "";
+      this._bodyEl.classList.remove("scrollable");
+      this._bodyEl.innerHTML = `<div class="ra-empty">Achievement/Trophy Tracking isn't enabled. Turn it on under Achievements &amp; Ratings to start building this history.</div>`;
+      return;
+    }
+
+    // Same fixed-10-row scroll cap Recent Sessions uses.
+    if (rows.length > 10) {
+      const rowH = 40, gap = 6;
+      this._bodyEl.style.maxHeight = `${(rowH * 10) + (gap * 9)}px`;
+      this._bodyEl.classList.add("scrollable");
+    } else {
+      this._bodyEl.style.maxHeight = "";
+      this._bodyEl.classList.remove("scrollable");
+    }
+
+    if (!rows.length) {
+      this._bodyEl.innerHTML = `<div class="ra-empty">No recent achievements found.</div>`;
+      return;
+    }
+
+    this._bodyEl.innerHTML = rows.map(row => {
+      let bgUrl = "";
+      if (this.config.background === "avatar") bgUrl = row.avatar;
+      else if (this.config.background !== "none") bgUrl = row.hero_art_url || row.avatar || "";
+      const hasBg = !!bgUrl;
+
+      let tintStyle = "";
+      if (hasBg && (this.config.color_mode === "platform" || !colorExtractionEnabled)) {
+        const platformLower = (row.platform || "").toLowerCase();
+        const tintKey = Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => platformLower.includes(k));
+        if (tintKey) {
+          const rgb = GAMING_STATUS_PLATFORM_TINTS[tintKey];
+          tintStyle = ` --ra-tint-start: rgb(${rgb}); --ra-tint-end: rgba(0, 0, 0, 0.5);`;
+        }
+      } else if (hasBg) {
+        const parsedGameColor = this._parseGameColor(row.game_dominant_color);
+        if (parsedGameColor) {
+          tintStyle = ` --ra-tint-start: ${parsedGameColor}; --ra-tint-end: rgba(0, 0, 0, 0.5);`;
+        }
+      }
+
+      const cellsHTML = columns.map(c => {
+        let value = "";
+        let cls = "ra-cell";
+        switch (c.key) {
+          case "player": value = escapeHTML(row.player); cls += " primary"; break;
+          case "game": value = escapeHTML(row.game); cls += " primary"; break;
+          case "platform": value = escapeHTML(row.platform); break;
+          case "achievement": value = escapeHTML(row.name); break;
+          case "date": value = escapeHTML(this._formatDate(row.unlocked_at)); break;
+          case "time": value = escapeHTML(this._formatTime(row.unlocked_at)); break;
+        }
+        return `<div class="${cls}" style="flex: ${c.flex};">${value}</div>`;
+      }).join("");
+
+      return `<div class="ra-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--ra-bg-url: url('${bgUrl}');${tintStyle}` : ""}">${cellsHTML}</div>`;
+    }).join("");
+  }
+
+  getCardSize() {
+    return 4;
+  }
+}
+
+class GamingStatusRecentAchievementsEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+  }
+
+  setConfig(config) {
+    // Same focus-preserving echo-guard as the Recent Sessions editor -- HA
+    // echoes our own config-changed dispatches back through setConfig(), and
+    // rebuilding the form on every one of those would steal focus mid-typing.
+    if (this._config && this.shadowRoot.firstChild && JSON.stringify(this._config) === JSON.stringify(config)) {
+      this._config = config;
+      return;
+    }
+    this._config = config;
+    this.render();
+  }
+
+  set hass(hass) {
+    const first = !this._hass;
+    this._hass = hass;
+    if (first) this.render();
+  }
+
+  render() {
+    if (!this._config) return;
+    const mode = this._config.mode || "all";
+    const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
+    const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
+    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+    }
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
+    const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
+    const colorExtractionEnabled = gamingStatusIsColorExtractionEnabled(this._hass);
+    const achievementPlatforms = ["steam", "xbox", "playstation"];
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        .editor-container { display: flex; flex-direction: column; gap: 20px; color: var(--primary-text-color); }
+        .section-title { font-weight: 600; margin-bottom: 8px; }
+        input[type="text"], input[type="number"], select { width: 100%; padding: 8px; background: var(--secondary-background-color); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box; }
+        input:focus, select:focus { outline: none; border-color: var(--primary-color); }
+        .radio-group, .checkbox-group { display: flex; flex-direction: column; gap: 10px; }
+        label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
+        .helper-text { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 8px; line-height: 1.4; }
+        .inline-apply { display: flex; gap: 8px; align-items: center; }
+        .inline-apply input { flex: 1; }
+        .inline-apply button { padding: 8px 14px; background: var(--primary-color); color: var(--text-primary-color, #fff); border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .inline-apply button:hover { opacity: 0.9; }
+      </style>
+      <div class="editor-container">
+        <div>
+          <div class="section-title">Card Title (Optional)</div>
+          <input type="text" id="title" value="${this._esc(this._config.title || "")}">
+        </div>
+        <hr>
+        <div>
+          <div class="section-title">Platforms</div>
+          <div class="helper-text">Only show achievements/trophies from the checked platforms.</div>
+          <div class="checkbox-group">
+            ${achievementPlatforms
+              .filter(key => !availablePlatforms || availablePlatforms.has(key))
+              .map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${GAMING_STATUS_PLATFORM_LABELS[key]}</label>`).join("")}
+          </div>
+        </div>
+        <hr>
+        <div>
+          <div class="section-title">Player Filter</div>
+          <select id="mode">
+            <option value="all" ${mode === "all" ? "selected" : ""}>All Tracked Players</option>
+            <option value="single" ${mode === "single" ? "selected" : ""}>Single Player</option>
+            <option value="selected" ${mode === "selected" ? "selected" : ""}>Selected Players</option>
+          </select>
+        </div>
+        ${mode === "single" ? `
+        <div>
+          <div class="section-title">Select Player</div>
+          <select id="single_entity">
+            <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player…</option>
+            ${entityOptions}
+          </select>
+        </div>` : ""}
+        ${mode === "selected" ? `
+        <div>
+          <div class="section-title">Selected Entities</div>
+          <div class="helper-text">Comma-separated player names (or full entity IDs) to include.</div>
+          <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="adam, josh, liv">
+        </div>` : ""}
+        <hr>
+        <div>
+          <div class="section-title">Number of Achievements to Display</div>
+          <div class="helper-text">Shows the most recently unlocked achievements/trophies, newest first (1-20). If more than 10 would be shown, the list scrolls instead of growing taller. Click Apply to confirm the value.</div>
+          <div class="inline-apply">
+            <input type="number" id="max_achievements" value="${parseInt(this._config.max_achievements) || 10}" min="1" max="20">
+            <button type="button" id="max_achievements_apply">Apply</button>
+          </div>
+        </div>
+        <hr>
+        <div>
+          <div class="section-title">Background</div>
+          <div class="radio-group">
+            <label><input type="radio" name="background" data-field="background" value="art" ${this._config.background !== "avatar" && this._config.background !== "none" ? "checked" : ""}> Game Artwork</label>
+            <label><input type="radio" name="background" data-field="background" value="avatar" ${this._config.background === "avatar" ? "checked" : ""}> Player Avatar</label>
+            <label><input type="radio" name="background" data-field="background" value="none" ${this._config.background === "none" ? "checked" : ""}> None</label>
+          </div>
+        </div>
+        ${this._config.background !== "none" && colorExtractionEnabled ? `
+        <div>
+          <div class="section-title">Color Mode</div>
+          <div class="radio-group">
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="game" ${this._config.color_mode !== "platform" ? "checked" : ""}> Game Artwork (Dynamic)</label>
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="platform" ${this._config.color_mode === "platform" ? "checked" : ""}> Platform Native (Pre-Defined)</label>
+          </div>
+          <div class="helper-text">Tint each row's blurred background with that unlock's own game color, or with a fixed color per platform (Steam blue, Xbox green, etc).</div>
+        </div>` : ""}
+        <hr>
+        <div>
+          <label><input type="checkbox" data-field="show_header" ${this._config.show_header !== false ? "checked" : ""}> Show Header Row</label>
+        </div>
+        <hr>
+        <div>
+          <div class="section-title">Visible Columns</div>
+          <div class="checkbox-group">
+            ${mode !== "single" ? `<label><input type="checkbox" data-field="show_column_player" ${this._config.show_column_player !== false ? "checked" : ""}> Player</label>` : ""}
+            <label><input type="checkbox" data-field="show_column_game" ${this._config.show_column_game !== false ? "checked" : ""}> Game</label>
+            <label><input type="checkbox" data-field="show_column_platform" ${this._config.show_column_platform !== false ? "checked" : ""}> Platform</label>
+            <label><input type="checkbox" data-field="show_column_achievement" ${this._config.show_column_achievement !== false ? "checked" : ""}> Achievement</label>
+            <label><input type="checkbox" data-field="show_column_date" ${this._config.show_column_date !== false ? "checked" : ""}> Date</label>
+            <label><input type="checkbox" data-field="show_column_time" ${this._config.show_column_time !== false ? "checked" : ""}> Time</label>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const fireChanged = () => {
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+    };
+
+    this.shadowRoot.getElementById("title").addEventListener("change", (ev) => {
+      this._config = { ...this._config, title: ev.target.value };
+      fireChanged();
+    });
+
+    this.shadowRoot.getElementById("mode").addEventListener("change", (ev) => {
+      this._config = { ...this._config, mode: ev.target.value };
+      fireChanged();
+      this.render();
+    });
+
+    const singleEntity = this.shadowRoot.getElementById("single_entity");
+    if (singleEntity) {
+      singleEntity.addEventListener("change", (ev) => {
+        this._config = { ...this._config, single_entity: ev.target.value };
+        fireChanged();
+      });
+    }
+
+    const selectedEntities = this.shadowRoot.getElementById("selected_entities");
+    if (selectedEntities) {
+      selectedEntities.addEventListener("change", (ev) => {
+        this._config = { ...this._config, selected_entities: ev.target.value };
+        fireChanged();
+      });
+    }
+
+    this.shadowRoot.getElementById("max_achievements_apply").addEventListener("click", () => {
+      const input = this.shadowRoot.getElementById("max_achievements");
+      const clamped = Math.min(20, Math.max(1, parseInt(input.value) || 10));
+      input.value = clamped;
+      this._config = { ...this._config, max_achievements: clamped };
+      fireChanged();
+    });
+
+    this.shadowRoot.querySelectorAll('input[name="background"]').forEach((radio) => {
+      radio.addEventListener("change", (ev) => {
+        this._config = { ...this._config, background: ev.target.value };
+        fireChanged();
+        this.render();
+      });
+    });
+
+    this.shadowRoot.querySelectorAll('input[name="color_mode"]').forEach((radio) => {
+      radio.addEventListener("change", (ev) => {
+        this._config = { ...this._config, color_mode: ev.target.value };
+        fireChanged();
+      });
+    });
+
+    this.shadowRoot.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+      checkbox.addEventListener("change", (ev) => {
+        const field = ev.target.dataset.field;
+        this._config = { ...this._config, [field]: ev.target.checked };
+        fireChanged();
+      });
+    });
+  }
+
+  _esc(s) {
+    return gamingStatusEscapeHTML(s);
+  }
+}
+
+// ====================================================================
 // CARD 8: GAMING STATUS - GAME MANAGEMENT
 // ====================================================================
 
@@ -4387,6 +4926,10 @@ customElements.define("gaming-status-game-chart-editor", GamingStatusGameChartEd
 customElements.define("gaming-status-recent-sessions-card", GamingStatusRecentSessionsCard);
 customElements.define("gaming-status-recent-sessions-editor", GamingStatusRecentSessionsEditor);
 
+// Card 7B
+customElements.define("gaming-status-recent-achievements-card", GamingStatusRecentAchievementsCard);
+customElements.define("gaming-status-recent-achievements-editor", GamingStatusRecentAchievementsEditor);
+
 // Card 8
 customElements.define("gaming-status-game-management-card", GamingStatusGameManagementCard);
 customElements.define("gaming-status-game-management-editor", GamingStatusGameManagementEditor);
@@ -4443,6 +4986,13 @@ window.customCards.push({
   name: "Gaming Status - Recent Sessions",
   preview: true,
   description: "A configurable table of recently completed play sessions with optional blurred artwork backgrounds."
+});
+
+window.customCards.push({
+  type: "gaming-status-recent-achievements-card",
+  name: "Gaming Status - Recent Achievements",
+  preview: true,
+  description: "A configurable table of recently unlocked achievements/trophies with optional blurred artwork backgrounds."
 });
 
 window.customCards.push({
