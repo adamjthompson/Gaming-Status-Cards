@@ -4060,7 +4060,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
     const hash = [
       this._selectedPlayerId,
       this._selectedPlatform,
-      gameOptions.map(g => `${g.game}:${g.totalSeconds}`).join(","),
+      gameOptions.map(g => `${g.game}:${g.totalSeconds}:${g.achievementCount}`).join(","),
       sessionIds,
     ].join("|");
 
@@ -4104,6 +4104,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
     if (!stateObj) return [];
     const sessions = stateObj.attributes.recent_sessions || [];
     const history = stateObj.attributes.play_history || {};
+    const achievements = stateObj.attributes.recent_achievements || [];
 
     const totals = {};
     for (const dayData of Object.values(history)) {
@@ -4125,9 +4126,47 @@ class GamingStatusGameManagementCard extends HTMLElement {
       totals[s.game] = (totals[s.game] || 0) + (parseFloat(s.duration_seconds) || 0);
     }
 
-    return Object.keys(totals)
+    // Achievement/trophy-only games -- discovered via the library scan,
+    // never actually tracked as "currently playing" in real time -- have no
+    // entry in play_history/recent_sessions at all, so without this they'd
+    // have no way to ever appear in this picker. Union them in too, counted
+    // by unlock count instead of playtime.
+    const achievementCounts = {};
+    for (const a of achievements) {
+      if (!a.game) continue;
+      achievementCounts[a.game] = (achievementCounts[a.game] || 0) + 1;
+    }
+
+    const allGames = new Set([...Object.keys(totals), ...Object.keys(achievementCounts)]);
+    return Array.from(allGames)
       .sort((a, b) => a.localeCompare(b))
-      .map(game => ({ game, totalSeconds: totals[game] }));
+      .map(game => ({
+        game,
+        totalSeconds: totals[game] || 0,
+        achievementCount: achievementCounts[game] || 0,
+      }));
+  }
+
+  // totalSeconds takes priority since it's the more informative number when
+  // both exist; an achievement-only game (0 playtime) falls back to its
+  // unlock count instead of a meaningless "0m".
+  _formatGameOptionLabel(g) {
+    if (g.totalSeconds > 0) return this._formatDuration(g.totalSeconds);
+    if (g.achievementCount > 0) return `${g.achievementCount} achievement${g.achievementCount === 1 ? "" : "s"}`;
+    return this._formatDuration(0);
+  }
+
+  // Delete permanently purges stored history -- an achievement-only game
+  // (0 playtime, discovered via the library scan) has no playtime/session
+  // history to actually remove, and would simply reappear at its next
+  // scheduled scan anyway, so Delete specifically excludes it rather than
+  // offering an action that can't accomplish anything. Rename/Reassign are
+  // unaffected -- Reassign naturally has nothing to reassign for such a
+  // game (no sessions), and Rename is exactly how these get cleaned up.
+  _getGameOptionsForAction(entityId, action) {
+    const options = this._getGameOptions(entityId);
+    if (action !== "delete") return options;
+    return options.filter(g => g.totalSeconds > 0);
   }
 
   // Individual sessions for the selected game, still identifiable by their
@@ -4444,7 +4483,16 @@ class GamingStatusGameManagementCard extends HTMLElement {
 
     const players = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
-    const gameOptions = this._getGameOptions(this._targetEntityId);
+    const gameOptions = this._getGameOptionsForAction(this._targetEntityId, this._selectedAction);
+    // A game picked under Rename can still be selected internally after
+    // switching to Delete (the action switch doesn't clear it) even though
+    // Delete's filtered list no longer includes it -- without this, the
+    // <select> would silently fall back to showing some other game as
+    // selected while this._selectedGame (what a click would actually act
+    // on) still pointed at the excluded one.
+    if (this._selectedGame && !gameOptions.some(g => g.game === this._selectedGame)) {
+      this._selectedGame = "";
+    }
 
     // Action chosen first, then only the fields relevant to it show below --
     // keeps five actions' worth of fields from all being visible at once.
@@ -4475,7 +4523,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
       .join("");
 
     const gameSelectOptions = gameOptions.map(g =>
-      `<option value="${escapeHTML(g.game)}" ${this._selectedGame === g.game ? "selected" : ""}>${escapeHTML(g.game)} — ${this._formatDuration(g.totalSeconds)}</option>`
+      `<option value="${escapeHTML(g.game)}" ${this._selectedGame === g.game ? "selected" : ""}>${escapeHTML(g.game)} — ${this._formatGameOptionLabel(g)}</option>`
     ).join("");
 
     // Only rename/delete/reassign operate on an existing game -- add names a
