@@ -3883,8 +3883,8 @@ class GamingStatusRecentAchievementsEditor extends HTMLElement {
         <div>
           <div class="section-title">Color Mode</div>
           <div class="radio-group">
-            <label><input type="radio" name="color_mode" data-field="color_mode" value="platform" ${this._config.color_mode !== "none" ? "checked" : ""}> Platform Native</label>
             <label><input type="radio" name="color_mode" data-field="color_mode" value="none" ${this._config.color_mode === "none" ? "checked" : ""}> None</label>
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="platform" ${this._config.color_mode !== "none" ? "checked" : ""}> Platform Native</label>
           </div>
           <div class="helper-text">Tint each row's blurred background with a fixed color per platform (Steam blue, Xbox green, etc), or leave it untinted.</div>
         </div>` : ""}
