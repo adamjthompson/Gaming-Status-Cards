@@ -3614,6 +3614,7 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
           name: u.name || "",
           unlocked_at: u.unlocked_at || "",
           hero_art_url: u.hero_art_url || "",
+          icon_url: u.icon_url || "",
         });
       }
     }
@@ -3689,6 +3690,7 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
           .ra-cell { position: relative; z-index: 1; font-size: 13px; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .ra-cell.primary { font-weight: 600; }
           .ra-row.has-bg .ra-cell { color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+          .ra-achievement-icon { width: 20px; height: 20px; border-radius: 4px; object-fit: cover; vertical-align: middle; margin-right: 6px; flex-shrink: 0; }
 
           .ra-empty { padding: 20px; color: var(--secondary-text-color); font-style: italic; }
         </style>
@@ -3756,7 +3758,9 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
           case "player": value = escapeHTML(row.player); cls += " primary"; break;
           case "game": value = escapeHTML(row.game); cls += " primary"; break;
           case "platform": value = escapeHTML(row.platform); break;
-          case "achievement": value = escapeHTML(row.name); break;
+          case "achievement":
+            value = (row.icon_url ? `<img class="ra-achievement-icon" src="${escapeHTML(row.icon_url)}" alt="" loading="lazy">` : "") + escapeHTML(row.name);
+            break;
           case "date": value = escapeHTML(this._formatDate(row.unlocked_at)); break;
           case "time": value = escapeHTML(this._formatTime(row.unlocked_at)); break;
         }
