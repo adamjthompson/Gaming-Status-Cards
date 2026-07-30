@@ -3576,7 +3576,12 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
 
     const hash = entityIds.map(id => {
       const unlocks = hass.states[id]?.attributes?.recent_achievements || [];
-      return `${id}:${unlocks.length}:${unlocks[0] ? unlocks[0].unlocked_at : ""}`;
+      // A refresh can patch icon_url onto an already-recorded entry in place
+      // (see sensor.py's _ingest_recent_unlocks) without changing the count
+      // or the newest entry's timestamp -- fold in an icon-presence flag per
+      // unlock too, or that kind of update would never trigger a re-render.
+      const iconFlags = unlocks.map(u => u.icon_url ? "1" : "0").join("");
+      return `${id}:${unlocks.length}:${unlocks[0] ? unlocks[0].unlocked_at : ""}:${iconFlags}`;
     }).join(",")
       + "|" + trackingEnabled
       + "|" + this.config.max_achievements
@@ -3738,6 +3743,7 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
     this._bodyEl.innerHTML = rows.map(row => {
       let bgUrl = "";
       if (this.config.background === "avatar") bgUrl = row.avatar;
+      else if (this.config.background === "icon") bgUrl = row.icon_url || row.hero_art_url || row.avatar || "";
       else if (this.config.background !== "none") bgUrl = row.hero_art_url || row.avatar || "";
       const hasBg = !!bgUrl;
 
@@ -3878,10 +3884,12 @@ class GamingStatusRecentAchievementsEditor extends HTMLElement {
         <div>
           <div class="section-title">Background</div>
           <div class="radio-group">
-            <label><input type="radio" name="background" data-field="background" value="art" ${this._config.background !== "avatar" && this._config.background !== "none" ? "checked" : ""}> Game Artwork</label>
+            <label><input type="radio" name="background" data-field="background" value="art" ${this._config.background !== "avatar" && this._config.background !== "none" && this._config.background !== "icon" ? "checked" : ""}> Game Artwork</label>
+            <label><input type="radio" name="background" data-field="background" value="icon" ${this._config.background === "icon" ? "checked" : ""}> Achievement Icon</label>
             <label><input type="radio" name="background" data-field="background" value="avatar" ${this._config.background === "avatar" ? "checked" : ""}> Player Avatar</label>
             <label><input type="radio" name="background" data-field="background" value="none" ${this._config.background === "none" ? "checked" : ""}> None</label>
           </div>
+          <div class="helper-text">Achievement Icon falls back to the game's artwork (then the player's avatar) for any unlock that doesn't have its own icon captured yet.</div>
         </div>
         ${this._config.background !== "none" ? `
         <div>
