@@ -2,7 +2,7 @@
 
 A collection of beautiful, highly customizable dashboard cards designed specifically to work with the **[Gaming Status Integration](https://github.com/adamjthompson/Gaming-Status)**.
 
-This plugin includes nine unique cards to visualize (and manage) your squad's gaming habits: a clean **List Card**, a dynamic CSS-animated **Slideshow Card**, a player-based **Weekly Hours Card**, a platform **Platforms Card**, a **Leaderboard Card**, a game-based **Weekly Games Card**, a session-by-session **Recent Sessions Card**, an unlock-by-unlock **Recent Achievements Card**, and a **Game Management Card** for cleaning up mislabeled or unwanted history.
+This plugin includes twelve unique cards to visualize (and manage) your squad's gaming habits: a clean **List Card**, a dynamic CSS-animated **Slideshow Card**, a player-based **Weekly Hours Card**, a platform **Platforms Card**, a **Leaderboard Card**, a game-based **Weekly Games Card**, a session-by-session **Recent Sessions Card**, an unlock-by-unlock **Recent Achievements Card**, a **Game Management Card** for cleaning up mislabeled or unwanted history, an **Achievement Icons Card**, a **PlayStation Trophies Card**, and a **100% Completion Card**.
 
 **Best of all: Zero YAML required.** All cards feature a complete visual UI editor right inside Home Assistant!
 
@@ -191,11 +191,57 @@ Pick an **Action** first — **Add**, **Delete**, **Reassign**, or **Rename** �
 
 ---
 
+### 10. Gaming Status - Achievement Icons
+
+A compact grid of the most recently unlocked achievement/trophy icons across your household, with hover detail. *Requires **Enable Achievement/Trophy Tracking** under the integration's Achievements & Ratings menu — the card shows a friendly notice instead of an empty grid if it's off.*
+
+**UI Configuration Options:**
+* **Card Title:** Optional title displayed above the grid.
+* **Platforms:** Independently check/uncheck Steam, Xbox, and PlayStation to only include unlocks from selected platforms.
+* **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players.
+* **Icons Per Row:** How many icons appear in each row (2–6).
+* **Rows:** How many rows to show. Total icons displayed = Icons Per Row × Rows.
+* **Icon Background:** A backdrop behind each icon — **None (Transparent)**, **Black**, or **White** — since some platforms' icons have transparent backgrounds that disappear against a similarly-colored card.
+* **Hover Info:** Independently toggle which fields appear when hovering an icon — Player (hidden automatically in Single Player mode), Platform, Game, Achievement, and Date/Time. The tooltip matches the same style used by the Weekly Hours/Platforms/Weekly Games charts.
+
+An icon without its own captured artwork falls back to that unlock's game artwork, then a generic trophy glyph — recency order is always preserved regardless of which unlocks have art.
+
+---
+
+### 11. Gaming Status - PlayStation Trophies
+
+A single player's lifetime Bronze/Silver/Gold/Platinum trophy totals, styled after PSN's own trophy case. *Requires **Full Game Library Scan** to be enabled for PlayStation — the card shows a friendly notice instead if that data source isn't available for the selected player.*
+
+**UI Configuration Options:**
+* **Card Title:** Optional title displayed above the row.
+* **Player:** A single player dropdown (this card always shows exactly one player at a time).
+* **Background:** A backdrop behind the row of four trophy icons — **None (Transparent)**, **Black**, or **White**.
+
+Each tier tries to load PSN's own official trophy image first; if that fails to load, it falls back to a `mdi:trophy` icon tinted to approximate that tier's real-world color (bronze/silver/gold/a pale "platinum chrome" blue).
+
+---
+
+### 12. Gaming Status - 100% Completion
+
+Cover art for a single player's fully-completed games (100% of achievements/trophies earned), shown as a slideshow or a scrollable grid. *Requires **Full Game Library Scan** to be enabled for at least one platform — the card shows a friendly notice instead if that data source isn't available for the selected player.*
+
+**UI Configuration Options:**
+* **Card Title:** Optional title displayed above the card.
+* **Player:** A single player dropdown.
+* **Platforms:** Independently check/uncheck Steam, Xbox, and PlayStation to only include 100%-complete games from selected platforms.
+* **Max Games to Display:** How many completed games to show at most (1–50). Click **Apply** to confirm the value.
+* **Display Mode:** **Grid** (a responsive grid of cover art) or **Slideshow** (one game crossfading into the next, using the same CSS-animated crossfade as the Slideshow card).
+* **Grid Columns** *(Grid mode only):* 1–4 covers per row.
+* **Rows Before Scrolling** *(Grid mode only):* How many rows show before the grid scrolls instead of growing taller (default: 3).
+* **Time Per Slide** / **Transition Fade Time** *(Slideshow mode only):* Seconds each game's cover is shown, and seconds spent crossfading into the next one.
+
+---
+
 ## Advanced Configuration (Manual Entities / Selected Players)
 
 By default, all cards are entirely plug-and-play. They automatically scan your Home Assistant instance for any sensors generated by the Gaming Status integration (and Plex/Tautulli, if enabled) and populate the UI.
 
-The **List** and **Slideshow** cards feature a **Manual Entities** override in their Advanced section. The **Weekly Hours**, **Platforms**, **Leaderboard**, **Weekly Games**, **Recent Sessions**, and **Recent Achievements** cards use a **Player Filter** setting instead, with a **Selected Players** option that reveals the same kind of field.
+The **List** and **Slideshow** cards feature a **Manual Entities** override in their Advanced section. The **Weekly Hours**, **Platforms**, **Leaderboard**, **Weekly Games**, **Recent Sessions**, **Recent Achievements**, and **Achievement Icons** cards use a **Player Filter** setting instead, with a **Selected Players** option that reveals the same kind of field. (**PlayStation Trophies** and **100% Completion** are always scoped to a single player, so they use a plain player dropdown instead.)
 
 In both cases, just enter a comma-separated list of **player names** — e.g. `adam, josh, liv` — no need to look up or type full entity IDs. Full entity IDs are still accepted too (handy for non-gamer entities like Plex sessions below, or in the rare case a name is ambiguous), and any entry that doesn't match a known player name or an existing entity is silently ignored rather than causing an error.
 
@@ -341,4 +387,48 @@ type: custom:gaming-status-game-management-card
 title: Game Management
 mode: all # Options: all, single
 single_entity: " " # A single player's master sensor ID (used when mode is 'single')
+```
+
+**The Achievement Icons Card:**
+```yaml
+type: custom:gaming-status-achievement-icons-card
+title: Achievement Icons
+show_platform_steam: true # Uncheck any of these to exclude that platform's unlocks
+show_platform_xbox: true
+show_platform_playstation: true
+mode: all # Options: all, single, selected
+single_entity: " " # A single sensor ID (used when mode is 'single')
+selected_entities: " " # Comma-separated player names or entity IDs (used when mode is 'selected')
+icons_per_row: 4 # Options: 2, 3, 4, 5, 6
+rows: 1 # 1-5; total icons shown = icons_per_row * rows
+icon_background: none # Options: none (transparent), black, white
+show_hover_player: true # Automatically hidden when mode is 'single', regardless of this setting
+show_hover_platform: true
+show_hover_game: true
+show_hover_achievement: true
+show_hover_datetime: true
+```
+
+**The PlayStation Trophies Card:**
+```yaml
+type: custom:gaming-status-playstation-trophies-card
+title: PlayStation Trophies
+single_entity: " " # A single player's master sensor ID
+background: none # Options: none (transparent), black, white
+```
+
+**The 100% Completion Card:**
+```yaml
+type: custom:gaming-status-completion-card
+title: 100% Completion
+single_entity: " " # A single player's master sensor ID
+show_platform_steam: true # Uncheck any of these to exclude that platform's games
+show_platform_xbox: true
+show_platform_playstation: true
+max_games: 12 # Number of games to display (max 50)
+display_mode: grid # Options: grid, slideshow
+grid_columns: 3 # Options: 1, 2, 3, 4 (grid mode only)
+grid_max_rows: 3 # Rows before the grid scrolls (grid mode only)
+time_per_slide: 5 # Seconds per slide (slideshow mode only)
+transition_time: 1 # Crossfade duration in seconds (slideshow mode only)
 ```
