@@ -3505,7 +3505,7 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
       selected_entities: "",
       max_achievements: 10,
       background: "art",
-      color_mode: "game",
+      color_mode: "platform",
       show_platform_steam: true,
       show_platform_xbox: true,
       show_platform_playstation: true,
@@ -3529,7 +3529,16 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
       selected_entities: config.selected_entities || "",
       max_achievements: config.max_achievements !== undefined ? Math.min(20, Math.max(1, parseInt(config.max_achievements) || 10)) : 10,
       background: config.background || "art",
-      color_mode: config.color_mode || "game",
+      // Unlike Recent Sessions, this card has no working "dynamic game
+      // color" mode -- game_dominant_color is only ever populated for a
+      // title tracked live through real-time play, and most achievement
+      // entries here come from the library scan instead (a game not
+      // currently/recently being played is the whole point of that
+      // feature), so it's essentially always empty. Only "platform" and
+      // "none" are real options; any other stored value (including a
+      // pre-existing "game" from before this was simplified) normalizes
+      // to "platform".
+      color_mode: config.color_mode === "none" ? "none" : "platform",
       show_platform_steam: config.show_platform_steam !== false,
       show_platform_xbox: config.show_platform_xbox !== false,
       show_platform_playstation: config.show_platform_playstation !== false,
@@ -3605,7 +3614,6 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
           name: u.name || "",
           unlocked_at: u.unlocked_at || "",
           hero_art_url: u.hero_art_url || "",
-          game_dominant_color: u.game_dominant_color || "",
         });
       }
     }
@@ -3632,25 +3640,6 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
     });
   }
 
-  // Same hex/rgb parsing Recent Sessions/List cards use for "Game Artwork" color mode.
-  _parseGameColor(rawColor) {
-    if (!rawColor || String(rawColor).toLowerCase() === "null" || String(rawColor).toLowerCase() === "none") return null;
-    const str = String(rawColor).trim().toLowerCase();
-    if (str.startsWith('#')) {
-      let h = str.replace('#', '');
-      if (h.length === 3) h = [...h].map(x => x + x).join('');
-      if (h.length === 6) {
-        const r = parseInt(h.substring(0, 2), 16);
-        const g = parseInt(h.substring(2, 4), 16);
-        const b = parseInt(h.substring(4, 6), 16);
-        if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return `rgb(${r}, ${g}, ${b})`;
-      }
-      return null;
-    }
-    if (str.startsWith('rgb')) return str;
-    return null;
-  }
-
   _formatDate(dateStr) {
     if (!dateStr) return "";
     const d = new Date(dateStr);
@@ -3667,7 +3656,6 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
 
   render(rows, trackingEnabled) {
     const escapeHTML = gamingStatusEscapeHTML;
-    const colorExtractionEnabled = gamingStatusIsColorExtractionEnabled(this._hass);
 
     if (!this.content) {
       this.shadowRoot.innerHTML = `
@@ -3752,17 +3740,12 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
       const hasBg = !!bgUrl;
 
       let tintStyle = "";
-      if (hasBg && (this.config.color_mode === "platform" || !colorExtractionEnabled)) {
+      if (hasBg && this.config.color_mode !== "none") {
         const platformLower = (row.platform || "").toLowerCase();
         const tintKey = Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => platformLower.includes(k));
         if (tintKey) {
           const rgb = GAMING_STATUS_PLATFORM_TINTS[tintKey];
           tintStyle = ` --ra-tint-start: rgb(${rgb}); --ra-tint-end: rgba(0, 0, 0, 0.5);`;
-        }
-      } else if (hasBg) {
-        const parsedGameColor = this._parseGameColor(row.game_dominant_color);
-        if (parsedGameColor) {
-          tintStyle = ` --ra-tint-start: ${parsedGameColor}; --ra-tint-end: rgba(0, 0, 0, 0.5);`;
         }
       }
 
@@ -3823,7 +3806,6 @@ class GamingStatusRecentAchievementsEditor extends HTMLElement {
     }
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
-    const colorExtractionEnabled = gamingStatusIsColorExtractionEnabled(this._hass);
     const achievementPlatforms = ["steam", "xbox", "playstation"];
 
     this.shadowRoot.innerHTML = `
@@ -3897,14 +3879,14 @@ class GamingStatusRecentAchievementsEditor extends HTMLElement {
             <label><input type="radio" name="background" data-field="background" value="none" ${this._config.background === "none" ? "checked" : ""}> None</label>
           </div>
         </div>
-        ${this._config.background !== "none" && colorExtractionEnabled ? `
+        ${this._config.background !== "none" ? `
         <div>
           <div class="section-title">Color Mode</div>
           <div class="radio-group">
-            <label><input type="radio" name="color_mode" data-field="color_mode" value="game" ${this._config.color_mode !== "platform" ? "checked" : ""}> Game Artwork (Dynamic)</label>
-            <label><input type="radio" name="color_mode" data-field="color_mode" value="platform" ${this._config.color_mode === "platform" ? "checked" : ""}> Platform Native (Pre-Defined)</label>
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="platform" ${this._config.color_mode !== "none" ? "checked" : ""}> Platform Native</label>
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="none" ${this._config.color_mode === "none" ? "checked" : ""}> None</label>
           </div>
-          <div class="helper-text">Tint each row's blurred background with that unlock's own game color, or with a fixed color per platform (Steam blue, Xbox green, etc).</div>
+          <div class="helper-text">Tint each row's blurred background with a fixed color per platform (Steam blue, Xbox green, etc), or leave it untinted.</div>
         </div>` : ""}
         <hr>
         <div>
