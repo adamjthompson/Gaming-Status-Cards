@@ -2,7 +2,7 @@
 
 A collection of beautiful, highly customizable dashboard cards designed specifically to work with the **[Gaming Status Integration](https://github.com/adamjthompson/Gaming-Status)**.
 
-This plugin includes twelve unique cards to visualize (and manage) your squad's gaming habits: a clean **List Card**, a dynamic CSS-animated **Slideshow Card**, a player-based **Weekly Hours Card**, a platform **Platforms Card**, a **Leaderboard Card**, a game-based **Weekly Games Card**, a session-by-session **Recent Sessions Card**, an unlock-by-unlock **Recent Achievements Card**, a **Game Management Card** for cleaning up mislabeled or unwanted history, an **Achievement Icons Card**, a **PlayStation Trophies Card**, and a **100% Completion Card**.
+This plugin includes fifteen unique cards to visualize (and manage) your squad's gaming habits: a clean **List Card**, a dynamic CSS-animated **Slideshow Card**, a player-based **Weekly Hours Card**, a platform **Platforms Card**, a **Leaderboard Card**, a game-based **Weekly Games Card**, a session-by-session **Recent Sessions Card**, an unlock-by-unlock **Recent Achievements Card**, a **Game Management Card** for cleaning up mislabeled or unwanted history, an **Achievement Icons Card**, a **PlayStation Trophies Card**, a **100% Completion Card**, a **Near Completion Card**, a **Stats Card**, and a **Library Card**.
 
 **Best of all: Zero YAML required.** All cards feature a complete visual UI editor right inside Home Assistant!
 
@@ -216,6 +216,8 @@ A single player's lifetime Bronze/Silver/Gold/Platinum trophy totals, styled aft
 * **Card Title:** Optional title displayed above the row.
 * **Player:** A single player dropdown (this card always shows exactly one player at a time).
 * **Background:** A backdrop behind the row of four trophy icons — **None (Transparent)**, **Black**, or **White**.
+* **Show Tier Labels:** Toggle the "Bronze"/"Silver"/"Gold"/"Platinum" text under each icon.
+* **Show Total Available:** Toggle the "of Y" total-possible line under each earned count.
 
 Each tier tries to load PSN's own official trophy image first; if that fails to load, it falls back to a `mdi:trophy` icon tinted to approximate that tier's real-world color (bronze/silver/gold/a pale "platinum chrome" blue).
 
@@ -230,10 +232,56 @@ Cover art for a single player's fully-completed games (100% of achievements/trop
 * **Player:** A single player dropdown.
 * **Platforms:** Independently check/uncheck Steam, Xbox, and PlayStation to only include 100%-complete games from selected platforms.
 * **Max Games to Display:** How many completed games to show at most (1–50). Click **Apply** to confirm the value.
-* **Display Mode:** **Grid** (a responsive grid of cover art) or **Slideshow** (one game crossfading into the next, using the same CSS-animated crossfade as the Slideshow card).
-* **Grid Columns** *(Grid mode only):* 1–4 covers per row.
+* **Artwork:** Which image to show per game — **Cover** (default, portrait poster), **Hero** (wide banner), **Logo**, or **Icon**. Falls back to Cover, then Hero, if the selected type wasn't captured for a given game. The full image always displays letterboxed rather than cropped.
+* **Display Mode:** **Grid** (a responsive grid of artwork) or **Slideshow** (one game crossfading into the next, using the same CSS-animated crossfade as the Slideshow card).
+* **Grid Columns** *(Grid mode only):* 1–4 images per row.
 * **Rows Before Scrolling** *(Grid mode only):* How many rows show before the grid scrolls instead of growing taller (default: 3).
-* **Time Per Slide** / **Transition Fade Time** *(Slideshow mode only):* Seconds each game's cover is shown, and seconds spent crossfading into the next one.
+* **Time Per Slide** / **Transition Fade Time** *(Slideshow mode only):* Seconds each game's artwork is shown, and seconds spent crossfading into the next one.
+
+In Grid mode, hovering an image shows a tooltip with the game's title (and platform, if more than one platform is checked) — matching the same tooltip style used elsewhere in this bundle. Slideshow mode shows artwork only, with no title or tooltip — a hover tooltip isn't technically possible there, since every slide occupies the same on-screen position and only differs by which one is currently faded in.
+
+---
+
+### 13. Gaming Status - Near Completion
+
+A leaderboard-style, ranked bar list of a single player's games closest to (but not yet at) 100% completion — highest percentage at the top. *Requires **Full Game Library Scan** to be enabled for at least one platform — the card shows a friendly notice instead if that data source isn't available for the selected player.*
+
+**UI Configuration Options:**
+* **Card Title:** Optional title displayed above the list.
+* **Player:** A single player dropdown.
+* **Platforms:** Independently check/uncheck Steam, Xbox, and PlayStation.
+* **Max Games to Display:** How many games to show at most (1–50). Click **Apply** to confirm the value.
+* **Bar Color:** **Platform Colors** (default — each bar tinted by that game's own platform: Steam blue, Xbox green, PlayStation blue), or the same named palettes (Vivid, Material, Muted, Soft) and Custom Colors option available on the Leaderboard/Weekly Games/Platforms cards.
+
+Games already at 100% are intentionally excluded — those are the dedicated 100% Completion card's job.
+
+---
+
+### 14. Gaming Status - Stats
+
+A configurable, two-column summary of a single player's completion/trophy/achievement stats. *Requires **Full Game Library Scan** to be enabled for at least one platform — the card shows a friendly notice instead if that data source isn't available for the selected player.*
+
+**UI Configuration Options:**
+* **Card Title:** Optional title displayed above the grid.
+* **Player:** A single player dropdown.
+* **Platforms:** Independently check/uncheck Steam, Xbox, and PlayStation — unchecking a platform removes its contribution from every stat below, not just the platform-specific ones.
+* **Stats to Display:** Independently toggle any of: Games Tracked, Average Completion, Total Gamerscore, Total Trophies, Platinum/Gold/Silver/Bronze Trophies, Steam Achievements, and Total Steam Hours. Each shows as "earned / total" where a total naturally exists (all except Games Tracked, Average Completion, and Total Steam Hours).
+
+---
+
+### 15. Gaming Status - Library
+
+A scrollable, artwork-and-stats browser of a single player's full game library for one platform at a time. *Requires **Full Game Library Scan** to be enabled for the selected platform — the card shows a friendly notice instead if that data source isn't available for the selected player.*
+
+**UI Configuration Options:**
+* **Card Title:** Optional title displayed above the list.
+* **Player:** A single player dropdown.
+* **Platform:** Steam, Xbox, or PlayStation — a single platform at a time (radio buttons, not checkboxes, since each game row's available stat fields depend on which platform is selected).
+* **Exclude Games With Zero Completion:** Hide games with no progress at all (unchecked by default — shows everything).
+* **Artwork:** Same **Cover** (default) / **Hero** / **Logo** / **Icon** options as the 100% Completion card. Cover/Logo/Icon display to the left of each game's data; Hero displays above it instead, since a wide banner doesn't suit a narrow side thumbnail.
+* **Scroll After (Entries):** How many games show before the list scrolls instead of growing taller (default: 4).
+* **Show Total:** Toggle a "`N` games" count above the list.
+* **Fields to Display:** Title, Completion Percentage, and either **Trophy Counts** (PlayStation — four lines, one per tier: "Bronze: X / Y", etc.) or **Achievement Count** (Steam/Xbox — one "X / Y" line), whichever applies to the selected platform.
 
 ---
 
@@ -241,7 +289,7 @@ Cover art for a single player's fully-completed games (100% of achievements/trop
 
 By default, all cards are entirely plug-and-play. They automatically scan your Home Assistant instance for any sensors generated by the Gaming Status integration (and Plex/Tautulli, if enabled) and populate the UI.
 
-The **List** and **Slideshow** cards feature a **Manual Entities** override in their Advanced section. The **Weekly Hours**, **Platforms**, **Leaderboard**, **Weekly Games**, **Recent Sessions**, **Recent Achievements**, and **Achievement Icons** cards use a **Player Filter** setting instead, with a **Selected Players** option that reveals the same kind of field. (**PlayStation Trophies** and **100% Completion** are always scoped to a single player, so they use a plain player dropdown instead.)
+The **List** and **Slideshow** cards feature a **Manual Entities** override in their Advanced section. The **Weekly Hours**, **Platforms**, **Leaderboard**, **Weekly Games**, **Recent Sessions**, **Recent Achievements**, and **Achievement Icons** cards use a **Player Filter** setting instead, with a **Selected Players** option that reveals the same kind of field. (**PlayStation Trophies**, **100% Completion**, **Near Completion**, **Stats**, and **Library** are always scoped to a single player, so they use a plain player dropdown instead.)
 
 In both cases, just enter a comma-separated list of **player names** — e.g. `adam, josh, liv` — no need to look up or type full entity IDs. Full entity IDs are still accepted too (handy for non-gamer entities like Plex sessions below, or in the rare case a name is ambiguous), and any entry that doesn't match a known player name or an existing entity is silently ignored rather than causing an error.
 
@@ -415,6 +463,8 @@ type: custom:gaming-status-playstation-trophies-card
 title: PlayStation Trophies
 single_entity: " " # A single player's master sensor ID
 background: none # Options: none (transparent), black, white
+show_labels: true # Set to false to hide the Bronze/Silver/Gold/Platinum tier labels
+show_total: true # Set to false to hide the "of Y" total-possible line
 ```
 
 **The 100% Completion Card:**
@@ -426,9 +476,58 @@ show_platform_steam: true # Uncheck any of these to exclude that platform's game
 show_platform_xbox: true
 show_platform_playstation: true
 max_games: 12 # Number of games to display (max 50)
+artwork_mode: cover # Options: cover, hero, logo, icon
 display_mode: grid # Options: grid, slideshow
 grid_columns: 3 # Options: 1, 2, 3, 4 (grid mode only)
 grid_max_rows: 3 # Rows before the grid scrolls (grid mode only)
 time_per_slide: 5 # Seconds per slide (slideshow mode only)
 transition_time: 1 # Crossfade duration in seconds (slideshow mode only)
+```
+
+**The Near Completion Card:**
+```yaml
+type: custom:gaming-status-near-completion-card
+title: Near Completion
+single_entity: " " # A single player's master sensor ID
+show_platform_steam: true # Uncheck any of these to exclude that platform's games
+show_platform_xbox: true
+show_platform_playstation: true
+max_games: 10 # Number of games to display (max 50)
+color_palette: platform # Options: platform (default, per-game platform color), vivid, material, muted, soft, custom
+custom_colors: "" # Comma-separated hex colors (used when color_palette is 'custom')
+```
+
+**The Stats Card:**
+```yaml
+type: custom:gaming-status-stats-card
+title: Stats
+single_entity: " " # A single player's master sensor ID
+show_platform_steam: true # Uncheck any of these to exclude that platform from every stat below
+show_platform_xbox: true
+show_platform_playstation: true
+show_stat_games_tracked: true # Uncheck any of these to hide that stat
+show_stat_avg_completion: true
+show_stat_total_gamerscore: true
+show_stat_total_trophies: true
+show_stat_platinum_trophies: true
+show_stat_gold_trophies: true
+show_stat_silver_trophies: true
+show_stat_bronze_trophies: true
+show_stat_steam_achievements: true
+show_stat_total_steam_hours: true
+```
+
+**The Library Card:**
+```yaml
+type: custom:gaming-status-library-card
+title: Library
+single_entity: " " # A single player's master sensor ID
+platform: steam # Options: steam, xbox, playstation (single platform at a time)
+exclude_zero_completion: false # Set to true to hide games with no progress at all
+artwork_mode: cover # Options: cover, hero, logo, icon
+scroll_after: 4 # Number of entries before the list scrolls
+show_total: true # Set to false to hide the "N games" count above the list
+show_field_title: true
+show_field_percent: true
+show_field_counts: true # Trophy Counts (PlayStation) or Achievement Count (Steam/Xbox), depending on `platform`
 ```
