@@ -5709,6 +5709,7 @@ class GamingStatusCompletionCard extends HTMLElement {
       show_platform_steam: true,
       show_platform_xbox: true,
       show_platform_playstation: true,
+      exclude_playstation_no_platinum: false,
       max_games: 12,
       display_mode: "grid",
       grid_columns: 3,
@@ -5738,6 +5739,7 @@ class GamingStatusCompletionCard extends HTMLElement {
       show_platform_steam: config.show_platform_steam !== false,
       show_platform_xbox: config.show_platform_xbox !== false,
       show_platform_playstation: config.show_platform_playstation !== false,
+      exclude_playstation_no_platinum: config.exclude_playstation_no_platinum === true,
       max_games: config.max_games !== undefined ? Math.min(50, Math.max(1, parseInt(config.max_games) || 12)) : 12,
       display_mode: displayMode,
       grid_columns: [1, 2, 3, 4].includes(parseInt(config.grid_columns)) ? parseInt(config.grid_columns) : 3,
@@ -5803,6 +5805,7 @@ class GamingStatusCompletionCard extends HTMLElement {
       this.config.transition_time,
       this.config.artwork_mode,
       [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation].join(","),
+      this.config.exclude_playstation_no_platinum,
     ].join("|");
 
     if (this._lastHash === hash) return;
@@ -5815,6 +5818,11 @@ class GamingStatusCompletionCard extends HTMLElement {
     return games
       .filter(g => (g.percent || 0) >= 100)
       .filter(g => this.config[`show_platform_${(g.platform || "").toLowerCase()}`] !== false)
+      .filter(g => {
+        if (!this.config.exclude_playstation_no_platinum) return true;
+        if ((g.platform || "").toLowerCase() !== "playstation") return true;
+        return ((g.trophies_total || {}).platinum || 0) > 0;
+      })
       .sort((a, b) => (a.title || "").localeCompare(b.title || ""))
       .slice(0, this.config.max_games)
       .map(g => ({
@@ -6044,6 +6052,15 @@ class GamingStatusCompletionEditor extends HTMLElement {
               .map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${GAMING_STATUS_PLATFORM_LABELS[key]}</label>`).join("")}
           </div>
         </div>
+        ${this._config.show_platform_playstation !== false ? `
+        <hr>
+        <div>
+          <div class="section-title">PlayStation Options</div>
+          <div class="checkbox-group">
+            <label><input type="checkbox" data-field="exclude_playstation_no_platinum" ${this._config.exclude_playstation_no_platinum === true ? "checked" : ""}> Exclude PlayStation games without platinum trophies</label>
+          </div>
+          <div class="helper-text">Some PlayStation titles (e.g. Journey) have no platinum trophy at all, so 100% completion is achievable without one. Check this to only show 100%-complete PlayStation games that actually have a platinum.</div>
+        </div>` : ""}
         <hr>
         <div>
           <div class="section-title">Max Games to Display</div>
@@ -6175,6 +6192,10 @@ class GamingStatusCompletionEditor extends HTMLElement {
         const field = ev.target.dataset.field;
         this._config = { ...this._config, [field]: ev.target.checked };
         fireChanged();
+        // The PlayStation-only section below depends on this checkbox's
+        // state -- re-render so it appears/disappears immediately rather
+        // than waiting for some unrelated later change.
+        if (field === "show_platform_playstation") this.render();
       });
     });
   }
