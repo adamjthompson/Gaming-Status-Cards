@@ -3664,6 +3664,7 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
           avatar,
           game: u.game || "Unknown",
           platform: u.platform || "",
+          console: u.console || "",
           name: u.name || "",
           unlocked_at: u.unlocked_at || "",
           hero_art_url: u.hero_art_url || "",
@@ -3811,7 +3812,10 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
         switch (c.key) {
           case "player": value = escapeHTML(row.player); cls += " primary"; break;
           case "game": value = escapeHTML(row.game); cls += " primary"; break;
-          case "platform": value = escapeHTML(row.platform); break;
+          // The specific console (e.g. "PS4") wins over the generic
+          // platform label when known -- more useful for telling apart
+          // same-titled console variants of a game.
+          case "platform": value = escapeHTML(row.console || row.platform); break;
           case "achievement":
             value = (row.icon_url ? `<img class="ra-achievement-icon" src="${escapeHTML(row.icon_url)}" alt="" loading="lazy">` : "") + escapeHTML(row.name);
             break;
@@ -5102,6 +5106,7 @@ class GamingStatusAchievementIconsCard extends HTMLElement {
           player: playerName,
           game: u.game || "Unknown",
           platform: u.platform || "",
+          console: u.console || "",
           name: u.name || "",
           unlocked_at: u.unlocked_at || "",
           icon_url: u.icon_url || "",
@@ -5187,14 +5192,16 @@ class GamingStatusAchievementIconsCard extends HTMLElement {
       const lines = [];
       if (this.config.show_hover_player && !isSinglePlayer) lines.push(escapeHTML(row.player));
       // Platform rides along on the game's line -- "Game Title (Platform)"
-      // -- rather than getting its own dedicated line.
+      // -- rather than getting its own dedicated line. The specific
+      // console (e.g. "PS4") always wins over the generic platform label
+      // when known -- more useful, and avoids ever showing both.
+      const platformLabel = row.console || GAMING_STATUS_PLATFORM_LABELS[row.platform] || row.platform;
       if (this.config.show_hover_game) {
-        const platformLabel = GAMING_STATUS_PLATFORM_LABELS[row.platform] || row.platform;
         lines.push(this.config.show_hover_platform
           ? `${escapeHTML(row.game)} (${escapeHTML(platformLabel)})`
           : escapeHTML(row.game));
       } else if (this.config.show_hover_platform) {
-        lines.push(escapeHTML(GAMING_STATUS_PLATFORM_LABELS[row.platform] || row.platform));
+        lines.push(escapeHTML(platformLabel));
       }
       if (this.config.show_hover_achievement) lines.push(escapeHTML(row.name));
       if (this.config.show_hover_datetime) lines.push(escapeHTML(this._formatDateTime(row.unlocked_at)));
@@ -5828,6 +5835,7 @@ class GamingStatusCompletionCard extends HTMLElement {
       .map(g => ({
         title: g.title || "Unknown",
         platform: g.platform || "",
+        console: g.console || "",
         art: this._artFor(g),
       }));
   }
@@ -5911,7 +5919,15 @@ class GamingStatusCompletionCard extends HTMLElement {
       const g = games[parseInt(el.getAttribute("data-idx"), 10)];
       if (!g) return "";
       // Platform rides along on the title's line -- "Game Title (Platform)"
-      // -- rather than getting its own dedicated line.
+      // -- rather than getting its own dedicated line. The specific
+      // console (e.g. "PS4") always wins over the generic platform label
+      // when known, and is shown regardless of how many platforms are
+      // checked -- unlike the generic label (which only helps once more
+      // than one platform is mixed together), a console variant needs
+      // disambiguating even within a single, PlayStation-only view.
+      if (g.console) {
+        return `${escapeHTML(g.title)} (${escapeHTML(g.console)})`;
+      }
       if (checkedPlatformCount > 1) {
         const platformLabel = GAMING_STATUS_PLATFORM_LABELS[g.platform] || g.platform;
         return `${escapeHTML(g.title)} (${escapeHTML(platformLabel)})`;
