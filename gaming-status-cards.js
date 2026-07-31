@@ -5131,7 +5131,7 @@ class GamingStatusAchievementIconsCard extends HTMLElement {
           #ai-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
           .ai-grid { display: grid; gap: 8px; }
           .ai-cell { position: relative; aspect-ratio: 1 / 1; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-          .ai-cell img { width: 100%; height: 100%; object-fit: contain; }
+          .ai-cell img { width: 100%; height: 100%; object-fit: cover; }
           .ai-empty { padding: 20px; color: var(--secondary-text-color); font-style: italic; }
         </style>
         <ha-card>
