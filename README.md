@@ -202,6 +202,7 @@ A compact grid of the most recently unlocked achievement/trophy icons across you
 * **Icons Per Row:** How many icons appear in each row (2–6).
 * **Rows:** How many rows to show. Total icons displayed = Icons Per Row × Rows.
 * **Icon Background:** A backdrop behind each icon — **None (Transparent)**, **Black**, or **White** — since some platforms' icons have transparent backgrounds that disappear against a similarly-colored card.
+* **Artwork Size:** **Crop to Square** (default — fills the entire cell, cropping any overflow) or **Show Full Image** (scales the whole image down to fit inside the cell without cropping, letterboxing if its proportions aren't already square).
 * **Hover Info:** Independently toggle which fields appear when hovering an icon — Player (hidden automatically in Single Player mode), Platform, Game, Achievement, and Date/Time. The tooltip matches the same style used by the Weekly Hours/Platforms/Weekly Games charts.
 
 An icon without its own captured artwork falls back to that unlock's game artwork, then a generic trophy glyph — recency order is always preserved regardless of which unlocks have art.

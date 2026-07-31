@@ -5008,6 +5008,7 @@ class GamingStatusAchievementIconsCard extends HTMLElement {
       icons_per_row: 4,
       rows: 1,
       icon_background: "none",
+      artwork_size: "crop",
       show_hover_player: true,
       show_hover_platform: true,
       show_hover_game: true,
@@ -5031,6 +5032,7 @@ class GamingStatusAchievementIconsCard extends HTMLElement {
       icons_per_row: allowedPerRow.includes(parseInt(config.icons_per_row)) ? parseInt(config.icons_per_row) : 4,
       rows: Math.min(5, Math.max(1, parseInt(config.rows) || 1)),
       icon_background: ["black", "white"].includes(config.icon_background) ? config.icon_background : "none",
+      artwork_size: config.artwork_size === "contain" ? "contain" : "crop",
       show_hover_player: config.show_hover_player !== false,
       show_hover_platform: config.show_hover_platform !== false,
       show_hover_game: config.show_hover_game !== false,
@@ -5070,6 +5072,7 @@ class GamingStatusAchievementIconsCard extends HTMLElement {
       + "|" + this.config.icons_per_row
       + "|" + this.config.rows
       + "|" + this.config.icon_background
+      + "|" + this.config.artwork_size
       + "|" + this.config.mode
       + "|" + [this.config.show_hover_player, this.config.show_hover_platform, this.config.show_hover_game, this.config.show_hover_achievement, this.config.show_hover_datetime].join(",")
       + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation].join(",");
@@ -5131,7 +5134,7 @@ class GamingStatusAchievementIconsCard extends HTMLElement {
           #ai-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
           .ai-grid { display: grid; gap: 8px; }
           .ai-cell { position: relative; aspect-ratio: 1 / 1; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-          .ai-cell img { width: 100%; height: 100%; object-fit: cover; }
+          .ai-cell img { width: 100%; height: 100%; }
           .ai-empty { padding: 20px; color: var(--secondary-text-color); font-style: italic; }
         </style>
         <ha-card>
@@ -5161,12 +5164,13 @@ class GamingStatusAchievementIconsCard extends HTMLElement {
 
     const bgByMode = { none: "transparent", black: "#000", white: "#fff" };
     const cellBg = bgByMode[this.config.icon_background] || "transparent";
+    const objectFit = this.config.artwork_size === "contain" ? "contain" : "cover";
 
     this._bodyEl.innerHTML = `<div class="ai-grid" style="grid-template-columns: repeat(${this.config.icons_per_row}, 1fr);">` +
       rows.map((row, i) => {
         const imgUrl = row.icon_url || row.hero_art_url || "";
         const inner = imgUrl
-          ? `<img src="${escapeHTML(imgUrl)}" alt="" loading="lazy">`
+          ? `<img src="${escapeHTML(imgUrl)}" alt="" loading="lazy" style="object-fit: ${objectFit};">`
           : `<ha-icon icon="mdi:trophy" style="width: 48px; height: 48px; --mdc-icon-size: 48px; color: var(--secondary-text-color); opacity: 0.6;"></ha-icon>`;
         return `<div class="ai-cell" data-idx="${i}" style="background: ${cellBg};">${inner}</div>`;
       }).join("") +
@@ -5307,6 +5311,15 @@ class GamingStatusAchievementIconsEditor extends HTMLElement {
         </div>
         <hr>
         <div>
+          <div class="section-title">Artwork Size</div>
+          <div class="helper-text">How each achievement's image fills its square cell.</div>
+          <div class="radio-group">
+            <label><input type="radio" name="artwork_size" data-field="artwork_size" value="crop" ${this._config.artwork_size !== "contain" ? "checked" : ""}> Crop to Square</label>
+            <label><input type="radio" name="artwork_size" data-field="artwork_size" value="contain" ${this._config.artwork_size === "contain" ? "checked" : ""}> Show Full Image</label>
+          </div>
+        </div>
+        <hr>
+        <div>
           <div class="section-title">Hover Info</div>
           <div class="helper-text">Choose what's shown when hovering over an icon.</div>
           <div class="checkbox-group">
@@ -5364,6 +5377,13 @@ class GamingStatusAchievementIconsEditor extends HTMLElement {
     this.shadowRoot.querySelectorAll('input[name="icon_background"]').forEach((radio) => {
       radio.addEventListener("change", (ev) => {
         this._config = { ...this._config, icon_background: ev.target.value };
+        fireChanged();
+      });
+    });
+
+    this.shadowRoot.querySelectorAll('input[name="artwork_size"]').forEach((radio) => {
+      radio.addEventListener("change", (ev) => {
+        this._config = { ...this._config, artwork_size: ev.target.value };
         fireChanged();
       });
     });
