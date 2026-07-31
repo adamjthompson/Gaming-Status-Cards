@@ -2458,7 +2458,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
         const pct = maxValue > 0 ? Math.max((item.value / maxValue) * 100, 2) : 0;
         html += `
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;">
-            <div style="width: 110px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 500; color: var(--primary-text-color);">
+            <div style="width: 140px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 500; color: var(--primary-text-color);">
               ${safeName}
             </div>
             <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
@@ -5182,8 +5182,16 @@ class GamingStatusAchievementIconsCard extends HTMLElement {
       if (!row) return "";
       const lines = [];
       if (this.config.show_hover_player && !isSinglePlayer) lines.push(escapeHTML(row.player));
-      if (this.config.show_hover_platform) lines.push(escapeHTML(row.platform));
-      if (this.config.show_hover_game) lines.push(escapeHTML(row.game));
+      // Platform rides along on the game's line -- "Game Title (Platform)"
+      // -- rather than getting its own dedicated line.
+      if (this.config.show_hover_game) {
+        const platformLabel = GAMING_STATUS_PLATFORM_LABELS[row.platform] || row.platform;
+        lines.push(this.config.show_hover_platform
+          ? `${escapeHTML(row.game)} (${escapeHTML(platformLabel)})`
+          : escapeHTML(row.game));
+      } else if (this.config.show_hover_platform) {
+        lines.push(escapeHTML(GAMING_STATUS_PLATFORM_LABELS[row.platform] || row.platform));
+      }
       if (this.config.show_hover_achievement) lines.push(escapeHTML(row.name));
       if (this.config.show_hover_datetime) lines.push(escapeHTML(this._formatDateTime(row.unlocked_at)));
       return lines.join("<br>");
@@ -5874,9 +5882,13 @@ class GamingStatusCompletionCard extends HTMLElement {
     gamingStatusWireHtmlTooltip(this._bodyEl, this._tooltipEl, ".cc-cell", (el) => {
       const g = games[parseInt(el.getAttribute("data-idx"), 10)];
       if (!g) return "";
-      const lines = [escapeHTML(g.title)];
-      if (checkedPlatformCount > 1) lines.push(escapeHTML(g.platform));
-      return lines.join("<br>");
+      // Platform rides along on the title's line -- "Game Title (Platform)"
+      // -- rather than getting its own dedicated line.
+      if (checkedPlatformCount > 1) {
+        const platformLabel = GAMING_STATUS_PLATFORM_LABELS[g.platform] || g.platform;
+        return `${escapeHTML(g.title)} (${escapeHTML(platformLabel)})`;
+      }
+      return escapeHTML(g.title);
     });
   }
 
@@ -6341,7 +6353,7 @@ class GamingStatusNearCompletionCard extends HTMLElement {
       const pct = Math.max(row.percent, 2);
       html += `
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;">
-          <div style="width: 110px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 500; color: var(--primary-text-color);">
+          <div style="width: 140px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 500; color: var(--primary-text-color);">
             ${escapeHTML(row.title)}
           </div>
           <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
@@ -6682,7 +6694,7 @@ class GamingStatusStatsCard extends HTMLElement {
           ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
           #st-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
           .st-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
-          .st-label { font-size: 13px; color: var(--secondary-text-color); }
+          .st-label { font-size: 14px; color: var(--primary-text-color); }
           .st-value { font-size: 15px; font-weight: 600; color: var(--primary-text-color); text-align: right; }
           .st-empty { padding: 20px; color: var(--secondary-text-color); font-style: italic; }
         </style>
@@ -6949,6 +6961,7 @@ class GamingStatusLibraryCard extends HTMLElement {
           .lb-row { display: flex; gap: 10px; border-radius: 8px; overflow: hidden; background: var(--secondary-background-color, rgba(120, 120, 120, 0.08)); padding: 8px; box-sizing: border-box; }
           .lb-row.hero-layout { flex-direction: column; }
           .lb-art { object-fit: contain; flex-shrink: 0; display: block; }
+          .lb-art-placeholder { border-radius: 4px; background: rgba(120, 120, 120, 0.12); }
           .lb-data { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
           .lb-title-text { font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .lb-line { font-size: 12px; color: var(--secondary-text-color); }
@@ -7010,7 +7023,14 @@ class GamingStatusLibraryCard extends HTMLElement {
         const imgStyle = isHero
           ? `width: 100%; height: auto;`
           : `width: ${thumb.width}px; height: ${thumb.height}px;`;
-        const imgHtml = art ? `<img class="lb-art" src="${escapeHTML(art)}" alt="" loading="lazy" style="${imgStyle}">` : "";
+        // A missing-art placeholder keeps the same box size art would have
+        // occupied, so rows without art don't shift their text left/up to
+        // fill the gap -- hero mode has no intrinsic image height to fall
+        // back on (height: auto depends on the image loading), so its
+        // placeholder pins to the thumb's nominal height instead.
+        const imgHtml = art
+          ? `<img class="lb-art" src="${escapeHTML(art)}" alt="" loading="lazy" style="${imgStyle}">`
+          : `<div class="lb-art lb-art-placeholder" style="${isHero ? `width: 100%; height: ${thumb.height}px;` : imgStyle}"></div>`;
 
         const lines = [];
         if (this.config.show_field_title) lines.push(`<div class="lb-title-text">${escapeHTML(g.title || "Unknown")}</div>`);
