@@ -6841,8 +6841,8 @@ class GamingStatusLibraryCard extends HTMLElement {
   // always spans the row's full width instead. rowHeight is a best-effort
   // fixed budget for the scroll-cap math (same "typical content" assumption
   // every other scrollable list in this bundle already makes) -- generous
-  // enough for title + percent + one counts line, or PS's 4 tier lines in
-  // the taller hero layout.
+  // enough for title + percent + one counts line (PS's counts line is the
+  // same single-line shape, just with all 4 tiers in it).
   static ARTWORK_THUMB = {
     cover: { width: 60, height: 90, rowHeight: 110 },
     hero: { width: null, height: 80, rowHeight: 190 },
@@ -7019,10 +7019,12 @@ class GamingStatusLibraryCard extends HTMLElement {
           if (this.config.platform === "playstation") {
             const earned = g.trophies_earned || {};
             const total = g.trophies_total || {};
-            ["bronze", "silver", "gold", "platinum"].forEach(tier => {
-              const label = tier.charAt(0).toUpperCase() + tier.slice(1);
-              lines.push(`<div class="lb-line">${label}: ${earned[tier] || 0} / ${total[tier] || 0}</div>`);
-            });
+            // All 4 tiers on one line -- unlike Steam/Xbox, which only ever
+            // have a single "Achievements: X / Y" line to show here.
+            const tierText = ["bronze", "silver", "gold", "platinum"]
+              .map(tier => `${tier.charAt(0).toUpperCase() + tier.slice(1)}: ${earned[tier] || 0}/${total[tier] || 0}`)
+              .join(" | ");
+            lines.push(`<div class="lb-line">${tierText}</div>`);
           } else {
             lines.push(`<div class="lb-line">Achievements: ${g.achievements_earned || 0} / ${g.achievements_total || 0}</div>`);
           }
