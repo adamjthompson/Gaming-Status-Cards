@@ -5463,12 +5463,14 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
           :host { display: block; }
           ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
           #pt-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
-          .pt-line { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; border-radius: 8px; padding: 14px 10px; box-sizing: border-box; font-size: 14px; color: var(--primary-text-color); }
-          .pt-seg { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-          .pt-icon-wrap { position: relative; width: 20px; height: 20px; flex-shrink: 0; }
+          .pt-row { display: flex; justify-content: space-around; gap: 8px; border-radius: 8px; padding: 14px 0; }
+          .pt-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
+          .pt-icon-wrap { position: relative; width: 56px; height: 56px; }
           .pt-icon-wrap ha-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
           .pt-icon-wrap img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; }
-          .pt-sep { color: var(--secondary-text-color); opacity: 0.5; }
+          .pt-tier-label { font-size: 12px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.03em; }
+          .pt-count { font-size: 20px; font-weight: 700; color: var(--primary-text-color); }
+          .pt-total { font-size: 11px; color: var(--secondary-text-color); }
           .pt-empty { padding: 20px; color: var(--secondary-text-color); font-style: italic; }
         </style>
         <ha-card>
@@ -5506,14 +5508,10 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
 
     const useIconsOnly = this.config.image_style === "icons";
 
-    this._bodyEl.innerHTML = `<div class="pt-line" style="background: ${cellBg};">` +
+    this._bodyEl.innerHTML = `<div class="pt-row" style="background: ${cellBg};">` +
       TIERS.map(t => {
         const earned = attrs[`trophies_${t.key}`];
         const total = attrs[`trophies_${t.key}_total`];
-        const labelPart = this.config.show_labels ? `${t.label}: ` : "";
-        const countPart = this.config.show_total
-          ? `${earned != null ? earned : 0} / ${total != null ? total : 0}`
-          : `${earned != null ? earned : 0}`;
         // Icons-only mode never attempts the official image at all -- the
         // "official" mode's fallback (icon shown underneath, image on top
         // hidden via onerror if it fails to load) is only relevant when an
@@ -5522,14 +5520,16 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
           ? ""
           : `<img src="${t.url}" alt="" loading="lazy" onerror="this.style.display='none';">`;
         return `
-          <span class="pt-seg">
-            <span class="pt-icon-wrap">
-              <ha-icon icon="mdi:trophy" style="width: 20px; height: 20px; --mdc-icon-size: 20px; color: rgb(${t.color});"></ha-icon>
+          <div class="pt-cell">
+            <div class="pt-icon-wrap">
+              <ha-icon icon="mdi:trophy" style="width: 40px; height: 40px; --mdc-icon-size: 40px; color: rgb(${t.color});"></ha-icon>
               ${imageHtml}
-            </span>
-            ${labelPart}${countPart}
-          </span>`;
-      }).join('<span class="pt-sep">|</span>') +
+            </div>
+            ${this.config.show_labels ? `<div class="pt-tier-label">${t.label}</div>` : ""}
+            <div class="pt-count">${earned != null ? earned : 0}</div>
+            ${this.config.show_total ? `<div class="pt-total">of ${total != null ? total : 0}</div>` : ""}
+          </div>`;
+      }).join("") +
       `</div>`;
   }
 }

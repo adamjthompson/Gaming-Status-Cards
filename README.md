@@ -210,14 +210,14 @@ An icon without its own captured artwork falls back to that unlock's game artwor
 
 ### 11. Gaming Status - PlayStation Trophies
 
-A single player's lifetime Bronze/Silver/Gold/Platinum trophy totals, shown as one compact line — e.g. `Bronze: 4/18 | Silver: 3/20 | Gold: 2/15 | Platinum: 1/6` — each tier prefixed with a small icon. *Requires **Full Game Library Scan** to be enabled for PlayStation — the card shows a friendly notice instead if that data source isn't available for the selected player.*
+A single player's lifetime Bronze/Silver/Gold/Platinum trophy totals, shown as four columns of large trophy icons with each tier's count below it. *Requires **Full Game Library Scan** to be enabled for PlayStation — the card shows a friendly notice instead if that data source isn't available for the selected player.*
 
 **UI Configuration Options:**
-* **Card Title:** Optional title displayed above the line.
+* **Card Title:** Optional title displayed above the row.
 * **Player:** A single player dropdown (this card always shows exactly one player at a time).
-* **Background:** A backdrop behind the line — **None (Transparent)**, **Black**, or **White**.
-* **Show Tier Labels:** Toggle the "Bronze:"/"Silver:"/"Gold:"/"Platinum:" prefixes.
-* **Show Total Available:** Toggle the "/Y" total-possible half of each count, leaving just the earned number.
+* **Background:** A backdrop behind the row of four columns — **None (Transparent)**, **Black**, or **White**.
+* **Show Tier Labels:** Toggle the "Bronze"/"Silver"/"Gold"/"Platinum" text under each icon.
+* **Show Total Available:** Toggle the "of Y" total-possible line under each earned count.
 * **Trophy Images:** **Official Trophy Images** (default — tries PSN's own official trophy image per tier, falling back to a `mdi:trophy` icon tinted to approximate that tier's real-world color if the image fails to load) or **Icons Only** (always use the tinted icon, never attempt to load an image).
 
 ---
