@@ -51,7 +51,7 @@ A clean, native-feeling list of your tracked gamers. It dynamically tints the ca
 A dynamic, CSS-animated slideshow that cycles through the high-resolution cover art of currently active games and media.
 
 **UI Configuration Options:**
-* **Artwork Type:** Choose which art style to display: Hero (wide landscape), Cover/Grid (portrait), Logo (transparent title art), or Icon (small square).
+* **Artwork Type:** Choose which art style to display: Hero (Horizontal Landscape) or Cover/Grid (Vertical Portrait). Logo and Icon aren't offered here — their transparent backgrounds can look broken crossfading over whatever's behind them.
 * **Aspect Ratio Override:** Manually define the card's dimensions (e.g., `3840/1240`, `16/9`, `1/1`). Leave blank to automatically use the default ratio for the selected artwork style.
 * **Timing Controls:** Set the exact number of seconds each slide displays, and how long the crossfade transition takes.
 * **Player Avatars:** Automatically superimposes the avatar of the person playing the game into the bottom right corner.
@@ -210,16 +210,15 @@ An icon without its own captured artwork falls back to that unlock's game artwor
 
 ### 11. Gaming Status - PlayStation Trophies
 
-A single player's lifetime Bronze/Silver/Gold/Platinum trophy totals, styled after PSN's own trophy case. *Requires **Full Game Library Scan** to be enabled for PlayStation — the card shows a friendly notice instead if that data source isn't available for the selected player.*
+A single player's lifetime Bronze/Silver/Gold/Platinum trophy totals, shown as one compact line — e.g. `Bronze: 4/18 | Silver: 3/20 | Gold: 2/15 | Platinum: 1/6` — each tier prefixed with a small icon. *Requires **Full Game Library Scan** to be enabled for PlayStation — the card shows a friendly notice instead if that data source isn't available for the selected player.*
 
 **UI Configuration Options:**
-* **Card Title:** Optional title displayed above the row.
+* **Card Title:** Optional title displayed above the line.
 * **Player:** A single player dropdown (this card always shows exactly one player at a time).
-* **Background:** A backdrop behind the row of four trophy icons — **None (Transparent)**, **Black**, or **White**.
-* **Show Tier Labels:** Toggle the "Bronze"/"Silver"/"Gold"/"Platinum" text under each icon.
-* **Show Total Available:** Toggle the "of Y" total-possible line under each earned count.
-
-Each tier tries to load PSN's own official trophy image first; if that fails to load, it falls back to a `mdi:trophy` icon tinted to approximate that tier's real-world color (bronze/silver/gold/a pale "platinum chrome" blue).
+* **Background:** A backdrop behind the line — **None (Transparent)**, **Black**, or **White**.
+* **Show Tier Labels:** Toggle the "Bronze:"/"Silver:"/"Gold:"/"Platinum:" prefixes.
+* **Show Total Available:** Toggle the "/Y" total-possible half of each count, leaving just the earned number.
+* **Trophy Images:** **Official Trophy Images** (default — tries PSN's own official trophy image per tier, falling back to a `mdi:trophy` icon tinted to approximate that tier's real-world color if the image fails to load) or **Icons Only** (always use the tinted icon, never attempt to load an image).
 
 ---
 
@@ -232,7 +231,7 @@ Cover art for a single player's fully-completed games (100% of achievements/trop
 * **Player:** A single player dropdown.
 * **Platforms:** Independently check/uncheck Steam, Xbox, and PlayStation to only include 100%-complete games from selected platforms.
 * **Max Games to Display:** How many completed games to show at most (1–50). Click **Apply** to confirm the value.
-* **Artwork:** Which image to show per game — **Cover** (default, portrait poster), **Hero** (wide banner), **Logo**, or **Icon**. Falls back to Cover, then Hero, if the selected type wasn't captured for a given game. The full image always displays letterboxed rather than cropped.
+* **Artwork:** Which image to show per game — **Cover/Grid (Vertical Portrait)** (default), **Hero (Horizontal Landscape)**, **Logo (Transparent Title)**, or **Icon (Small Square)**. Falls back to Cover, then Hero, if the selected type wasn't captured for a given game. Cover and Hero both scale to the card's full width at their own natural aspect ratio rather than being cropped or letterboxed; Logo and Icon are boxed to a fixed size instead. **Logo and Icon aren't offered when Display Mode is Slideshow** — their transparent backgrounds can look broken crossfading over whatever's behind them — the field resets to Cover if you switch a saved Logo/Icon config to Slideshow.
 * **Display Mode:** **Grid** (a responsive grid of artwork) or **Slideshow** (one game crossfading into the next, using the same CSS-animated crossfade as the Slideshow card).
 * **Grid Columns** *(Grid mode only):* 1–4 images per row.
 * **Rows Before Scrolling** *(Grid mode only):* How many rows show before the grid scrolls instead of growing taller (default: 3).
@@ -251,6 +250,8 @@ A leaderboard-style, ranked bar list of a single player's games closest to (but 
 * **Player:** A single player dropdown.
 * **Platforms:** Independently check/uncheck Steam, Xbox, and PlayStation.
 * **Max Games to Display:** How many games to show at most (1–50). Click **Apply** to confirm the value.
+* **Scroll After (Entries):** How many rows show before the list scrolls instead of growing taller (default: 10).
+* **Exclude Games Not Played In:** **Never (Show All)** (default) or 1–12 months. Based on each game's last recorded activity — Xbox's last-played timestamp, or PlayStation's last-trophy-earned timestamp. Steam games have no equivalent data available and are never excluded by this option, regardless of how it's set. *(Note: for PlayStation specifically, this is "last trophy earned," not "last played" — a game you're actively stuck on without earning anything new could still get excluded.)*
 * **Bar Color:** **Platform Colors** (default — each bar tinted by that game's own platform: Steam blue, Xbox green, PlayStation blue), or the same named palettes (Vivid, Material, Muted, Soft) and Custom Colors option available on the Leaderboard/Weekly Games/Platforms cards.
 
 Games already at 100% are intentionally excluded — those are the dedicated 100% Completion card's job.
@@ -278,7 +279,7 @@ A scrollable, artwork-and-stats browser of a single player's full game library f
 * **Player:** A single player dropdown.
 * **Platform:** Steam, Xbox, or PlayStation — a single platform at a time (radio buttons, not checkboxes, since each game row's available stat fields depend on which platform is selected).
 * **Exclude Games With Zero Completion:** Hide games with no progress at all (unchecked by default — shows everything).
-* **Artwork:** Same **Cover** (default) / **Hero** / **Logo** / **Icon** options as the 100% Completion card. Cover/Logo/Icon display to the left of each game's data; Hero displays above it instead, since a wide banner doesn't suit a narrow side thumbnail.
+* **Artwork:** Same **Cover/Grid (Vertical Portrait)** (default) / **Hero (Horizontal Landscape)** / **Logo (Transparent Title)** / **Icon (Small Square)** options as the 100% Completion card (Logo/Icon remain available here, since this card is a static list, not a crossfading slideshow). Cover/Logo/Icon display to the left of each game's data, boxed to a fixed size with square corners; Hero displays above it instead, scaled to the row's full width at its own natural aspect ratio, since a wide banner doesn't suit a narrow side thumbnail.
 * **Scroll After (Entries):** How many games show before the list scrolls instead of growing taller (default: 4).
 * **Show Total:** Toggle a "`N` games" count above the list.
 * **Fields to Display:** Title, Completion Percentage, and either **Trophy Counts** (PlayStation — four lines, one per tier: "Bronze: X / Y", etc.) or **Achievement Count** (Steam/Xbox — one "X / Y" line), whichever applies to the selected platform.
@@ -319,7 +320,7 @@ manual_entities: " " # Whitelist of comma-separated player names or entity IDs
 **The Slideshow Card:**
 ```yaml
 type: custom:gaming-slideshow-card
-artwork_type: hero # Options: hero, cover, logo, icon
+artwork_type: hero # Options: hero, cover (logo/icon removed -- transparency issues when crossfading)
 aspect_ratio: " " # Leave blank to use the default for your artwork type
 time_per_slide: 5 # Display time for each slide (seconds)
 transition_time: 1 # Transition time (seconds)
@@ -463,8 +464,9 @@ type: custom:gaming-status-playstation-trophies-card
 title: PlayStation Trophies
 single_entity: " " # A single player's master sensor ID
 background: none # Options: none (transparent), black, white
-show_labels: true # Set to false to hide the Bronze/Silver/Gold/Platinum tier labels
-show_total: true # Set to false to hide the "of Y" total-possible line
+show_labels: true # Set to false to hide the Bronze/Silver/Gold/Platinum tier prefixes
+show_total: true # Set to false to hide the "/Y" half of each count, leaving just the earned number
+image_style: official # Options: official (try PSN's own image, fall back to a tinted icon), icons (icon only, never attempt an image)
 ```
 
 **The 100% Completion Card:**
@@ -476,7 +478,7 @@ show_platform_steam: true # Uncheck any of these to exclude that platform's game
 show_platform_xbox: true
 show_platform_playstation: true
 max_games: 12 # Number of games to display (max 50)
-artwork_mode: cover # Options: cover, hero, logo, icon
+artwork_mode: cover # Options: cover, hero, logo, icon (logo/icon are only valid when display_mode is 'grid')
 display_mode: grid # Options: grid, slideshow
 grid_columns: 3 # Options: 1, 2, 3, 4 (grid mode only)
 grid_max_rows: 3 # Rows before the grid scrolls (grid mode only)
@@ -493,6 +495,8 @@ show_platform_steam: true # Uncheck any of these to exclude that platform's game
 show_platform_xbox: true
 show_platform_playstation: true
 max_games: 10 # Number of games to display (max 50)
+scroll_after: 10 # Number of rows before the list scrolls
+exclude_inactive_months: 0 # Options: 0 (never exclude, default), 1-12 -- Steam games are never excluded (no last-activity data available)
 color_palette: platform # Options: platform (default, per-game platform color), vivid, material, muted, soft, custom
 custom_colors: "" # Comma-separated hex colors (used when color_palette is 'custom')
 ```
@@ -524,7 +528,7 @@ title: Library
 single_entity: " " # A single player's master sensor ID
 platform: steam # Options: steam, xbox, playstation (single platform at a time)
 exclude_zero_completion: false # Set to true to hide games with no progress at all
-artwork_mode: cover # Options: cover, hero, logo, icon
+artwork_mode: cover # Options: cover, hero, logo, icon (all four remain available -- this card is a static list, not a slideshow)
 scroll_after: 4 # Number of entries before the list scrolls
 show_total: true # Set to false to hide the "N games" count above the list
 show_field_title: true

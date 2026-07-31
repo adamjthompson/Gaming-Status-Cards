@@ -166,6 +166,25 @@ function gamingStatusDefaultSingleEntity(config, entities, field) {
   return false;
 }
 
+// For always-single-player cards/editors (Game Management, PlayStation
+// Trophies, 100% Completion, Near Completion, Stats, Library): there's a
+// window where gamingStatusDefaultSingleEntity's mutation hasn't actually
+// been persisted back through Home Assistant's own editor lifecycle yet
+// (e.g. the very first render, before `hass` -- and therefore the real
+// player list -- is available at all), during which the CARD itself
+// already falls back to the first available player for actually fetching
+// data (see each card's own _resolveTarget*/_resolveTargetEntityId), but
+// the EDITOR's dropdown would still show the dead-end "Select a player…"
+// placeholder since config[key] is still genuinely empty. This computes
+// the same effective fallback purely for display, independent of whether
+// persistence has caught up yet, so the dropdown never contradicts what
+// the card is actually showing.
+function gamingStatusEffectiveSingleEntity(config, entities, field) {
+  const key = field || "single_entity";
+  if (config[key] && entities.some(e => e.id === config[key])) return config[key];
+  return entities.length ? entities[0].id : "";
+}
+
 // ====================================================================
 // SHARED: SVG CHART RENDERING (Weekly Hours / Platforms / Weekly Games)
 // ====================================================================
@@ -980,6 +999,13 @@ class GamingSlideshowCard extends HTMLElement {
       manual_entities: config.manual_entities || "",
       entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       ...config,
+      // Logo/Icon are no longer offered as options on this card -- their
+      // transparent backgrounds can look broken crossfading over whatever
+      // the previous/next slide's own background is. Re-clamped here
+      // (after the ...config spread above, which would otherwise let a
+      // previously-saved logo/icon value silently keep being used) rather
+      // than removed from the option list alone.
+      artwork_type: ["logo", "icon"].includes(config.artwork_type) ? "hero" : (config.artwork_type || "hero"),
     };
   }
 
@@ -1307,9 +1333,8 @@ class GamingSlideshowCardEditor extends HTMLElement {
           <select id="artwork-type-input" .configValue="artwork_type">
             <option value="hero" ${this._config.artwork_type === "hero" || !this._config.artwork_type ? "selected" : ""}>Hero (Horizontal Landscape)</option>
             <option value="cover" ${this._config.artwork_type === "cover" ? "selected" : ""}>Cover/Grid (Vertical Portrait)</option>
-            <option value="logo" ${this._config.artwork_type === "logo" ? "selected" : ""}>Logo (Transparent Title)</option>
-            <option value="icon" ${this._config.artwork_type === "icon" ? "selected" : ""}>Icon (Small Square)</option>
           </select>
+          <div class="helper-text">Logo and Icon aren't offered here -- their transparent backgrounds can look broken crossfading over whatever's behind them.</div>
         </div>
 
         <div>
@@ -4891,7 +4916,8 @@ class GamingStatusGameManagementEditor extends HTMLElement {
     if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
-    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
+    const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, effectiveSingleEntity, (s) => this._esc(s));
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -4920,7 +4946,7 @@ class GamingStatusGameManagementEditor extends HTMLElement {
         <div>
           <div class="section-title">Select Player</div>
           <select id="single_entity">
-            <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player…</option>
+            <option value="" disabled ${!effectiveSingleEntity ? "selected" : ""}>Select a player…</option>
             ${entityOptions}
           </select>
         </div>` : ""}
@@ -5369,6 +5395,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       background: "none",
       show_total: true,
       show_labels: true,
+      image_style: "official",
     };
   }
 
@@ -5385,6 +5412,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       background: ["black", "white"].includes(config.background) ? config.background : "none",
       show_total: config.show_total !== false,
       show_labels: config.show_labels !== false,
+      image_style: config.image_style === "icons" ? "icons" : "official",
     };
     this._lastHash = "";
   }
@@ -5419,6 +5447,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       this.config.title,
       this.config.show_total,
       this.config.show_labels,
+      this.config.image_style,
     ].join("|");
 
     if (this._lastHash === hash) return;
@@ -5434,14 +5463,12 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
           :host { display: block; }
           ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
           #pt-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
-          .pt-row { display: flex; justify-content: space-around; gap: 8px; border-radius: 8px; padding: 14px 0; }
-          .pt-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
-          .pt-icon-wrap { position: relative; width: 56px; height: 56px; }
+          .pt-line { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; border-radius: 8px; padding: 14px 10px; box-sizing: border-box; font-size: 14px; color: var(--primary-text-color); }
+          .pt-seg { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+          .pt-icon-wrap { position: relative; width: 20px; height: 20px; flex-shrink: 0; }
           .pt-icon-wrap ha-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
           .pt-icon-wrap img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; }
-          .pt-tier-label { font-size: 12px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.03em; }
-          .pt-count { font-size: 20px; font-weight: 700; color: var(--primary-text-color); }
-          .pt-total { font-size: 11px; color: var(--secondary-text-color); }
+          .pt-sep { color: var(--secondary-text-color); opacity: 0.5; }
           .pt-empty { padding: 20px; color: var(--secondary-text-color); font-style: italic; }
         </style>
         <ha-card>
@@ -5477,21 +5504,32 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       { key: "platinum", label: "Platinum", color: "159, 216, 232", url: "https://static.wikia.nocookie.net/playstation/images/2/2d/Platinum_trophy.png" },
     ];
 
-    this._bodyEl.innerHTML = `<div class="pt-row" style="background: ${cellBg};">` +
+    const useIconsOnly = this.config.image_style === "icons";
+
+    this._bodyEl.innerHTML = `<div class="pt-line" style="background: ${cellBg};">` +
       TIERS.map(t => {
         const earned = attrs[`trophies_${t.key}`];
         const total = attrs[`trophies_${t.key}_total`];
+        const labelPart = this.config.show_labels ? `${t.label}: ` : "";
+        const countPart = this.config.show_total
+          ? `${earned != null ? earned : 0} / ${total != null ? total : 0}`
+          : `${earned != null ? earned : 0}`;
+        // Icons-only mode never attempts the official image at all -- the
+        // "official" mode's fallback (icon shown underneath, image on top
+        // hidden via onerror if it fails to load) is only relevant when an
+        // image is actually being tried.
+        const imageHtml = useIconsOnly
+          ? ""
+          : `<img src="${t.url}" alt="" loading="lazy" onerror="this.style.display='none';">`;
         return `
-          <div class="pt-cell">
-            <div class="pt-icon-wrap">
-              <ha-icon icon="mdi:trophy" style="width: 40px; height: 40px; --mdc-icon-size: 40px; color: rgb(${t.color});"></ha-icon>
-              <img src="${t.url}" alt="" loading="lazy" onerror="this.style.display='none';">
-            </div>
-            ${this.config.show_labels ? `<div class="pt-tier-label">${t.label}</div>` : ""}
-            <div class="pt-count">${earned != null ? earned : 0}</div>
-            ${this.config.show_total ? `<div class="pt-total">of ${total != null ? total : 0}</div>` : ""}
-          </div>`;
-      }).join("") +
+          <span class="pt-seg">
+            <span class="pt-icon-wrap">
+              <ha-icon icon="mdi:trophy" style="width: 20px; height: 20px; --mdc-icon-size: 20px; color: rgb(${t.color});"></ha-icon>
+              ${imageHtml}
+            </span>
+            ${labelPart}${countPart}
+          </span>`;
+      }).join('<span class="pt-sep">|</span>') +
       `</div>`;
   }
 }
@@ -5523,7 +5561,8 @@ class GamingStatusPlaystationTrophiesEditor extends HTMLElement {
     if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
-    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
+    const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, effectiveSingleEntity, (s) => this._esc(s));
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -5544,7 +5583,7 @@ class GamingStatusPlaystationTrophiesEditor extends HTMLElement {
         <div>
           <div class="section-title">Player</div>
           <select id="single_entity">
-            <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player…</option>
+            <option value="" disabled ${!effectiveSingleEntity ? "selected" : ""}>Select a player…</option>
             ${entityOptions}
           </select>
         </div>
@@ -5563,6 +5602,14 @@ class GamingStatusPlaystationTrophiesEditor extends HTMLElement {
           <div class="checkbox-group">
             <label><input type="checkbox" data-field="show_labels" ${this._config.show_labels !== false ? "checked" : ""}> Show Tier Labels</label>
             <label><input type="checkbox" data-field="show_total" ${this._config.show_total !== false ? "checked" : ""}> Show Total Available</label>
+          </div>
+        </div>
+        <hr>
+        <div>
+          <div class="section-title">Trophy Images</div>
+          <div class="radio-group">
+            <label><input type="radio" name="image_style" data-field="image_style" value="official" ${this._config.image_style !== "icons" ? "checked" : ""}> Official Trophy Images</label>
+            <label><input type="radio" name="image_style" data-field="image_style" value="icons" ${this._config.image_style === "icons" ? "checked" : ""}> Icons Only</label>
           </div>
         </div>
       </div>
@@ -5585,6 +5632,13 @@ class GamingStatusPlaystationTrophiesEditor extends HTMLElement {
     this.shadowRoot.querySelectorAll('input[name="background"]').forEach((radio) => {
       radio.addEventListener("change", (ev) => {
         this._config = { ...this._config, background: ev.target.value };
+        fireChanged();
+      });
+    });
+
+    this.shadowRoot.querySelectorAll('input[name="image_style"]').forEach((radio) => {
+      radio.addEventListener("change", (ev) => {
+        this._config = { ...this._config, image_style: ev.target.value };
         fireChanged();
       });
     });
@@ -5635,6 +5689,16 @@ class GamingStatusCompletionCard extends HTMLElement {
   }
 
   setConfig(config) {
+    const displayMode = config.display_mode === "slideshow" ? "slideshow" : "grid";
+    let artworkMode = ["cover", "hero", "logo", "icon"].includes(config.artwork_mode) ? config.artwork_mode : "cover";
+    // Logo/Icon are excluded from Slideshow -- their transparent backgrounds
+    // can look broken crossfading over whatever the card's own background
+    // is, in a way that's less noticeable in a static grid cell. Reset to
+    // Cover if a saved config had one of these selected under Grid and the
+    // user then switches to Slideshow.
+    if (displayMode === "slideshow" && (artworkMode === "logo" || artworkMode === "icon")) {
+      artworkMode = "cover";
+    }
     this.config = {
       ...config,
       mode: "single", // see GamingStatusPlaystationTrophiesCard.setConfig for why
@@ -5644,23 +5708,31 @@ class GamingStatusCompletionCard extends HTMLElement {
       show_platform_xbox: config.show_platform_xbox !== false,
       show_platform_playstation: config.show_platform_playstation !== false,
       max_games: config.max_games !== undefined ? Math.min(50, Math.max(1, parseInt(config.max_games) || 12)) : 12,
-      display_mode: config.display_mode === "slideshow" ? "slideshow" : "grid",
+      display_mode: displayMode,
       grid_columns: [1, 2, 3, 4].includes(parseInt(config.grid_columns)) ? parseInt(config.grid_columns) : 3,
       grid_max_rows: config.grid_max_rows !== undefined ? Math.max(1, parseInt(config.grid_max_rows) || 3) : 3,
       time_per_slide: config.time_per_slide !== undefined ? parseFloat(config.time_per_slide) || 5 : 5,
       transition_time: config.transition_time !== undefined ? parseFloat(config.transition_time) || 1 : 1,
-      artwork_mode: ["cover", "hero", "logo", "icon"].includes(config.artwork_mode) ? config.artwork_mode : "cover",
+      artwork_mode: artworkMode,
     };
     this._lastHash = "";
   }
 
   // Per-artwork-mode fixed box heights so `object-fit: contain` never has to
-  // clip -- covers are portrait, hero/logo/icon are landscape/square/
-  // irregular, so a shorter box suits them better than the tall portrait
-  // default. Grid uses these directly; slideshow scales them up since it's
-  // the card's sole content there, not one cell among several.
-  static ARTWORK_HEIGHTS = { cover: 180, hero: 120, logo: 100, icon: 120 };
-  static ARTWORK_HEIGHTS_SLIDESHOW = { cover: 320, hero: 200, logo: 160, icon: 200 };
+  // clip -- hero/logo/icon are landscape/square/irregular, so a shorter box
+  // suits them better than a tall portrait default. Grid uses these
+  // directly; slideshow scales them up since it's the card's sole content
+  // there, not one cell among several. Cover is deliberately absent from
+  // both maps: it uses an aspect-ratio-preserving box instead of a fixed
+  // height (see _renderGrid/_renderSlideshow), so its art always spans the
+  // full available width without letterboxing, the same as Hero already
+  // does at these fixed sizes.
+  static ARTWORK_HEIGHTS = { hero: 120, logo: 100, icon: 120 };
+  static ARTWORK_HEIGHTS_SLIDESHOW = { hero: 200, logo: 160, icon: 200 };
+  // 2:3 portrait, the common aspect for cover/poster art -- used as a
+  // padding-top percentage so cover's box height is always exactly 150% of
+  // its own width, regardless of the card's actual rendered width.
+  static COVER_ASPECT_PERCENT = 150;
 
   _artFor(g) {
     const fieldByMode = { cover: "game_cover_art", hero: "game_hero_art", logo: "game_logo_art", icon: "game_icon_art" };
@@ -5770,7 +5842,13 @@ class GamingStatusCompletionCard extends HTMLElement {
   _renderGrid(games) {
     const escapeHTML = gamingStatusEscapeHTML;
     const cols = this.config.grid_columns;
-    const rowHeight = GamingStatusCompletionCard.ARTWORK_HEIGHTS[this.config.artwork_mode];
+    const isCover = this.config.artwork_mode === "cover";
+    // Cover's real per-row height varies with the grid's actual column
+    // width (full width, auto height, true aspect preserved) -- this is a
+    // best-effort estimate for the scroll-cap budget only, the same
+    // "typical content" assumption every other scroll-capped list in this
+    // bundle already makes, not a value enforced on the rendered image.
+    const rowHeight = isCover ? 180 : GamingStatusCompletionCard.ARTWORK_HEIGHTS[this.config.artwork_mode];
     const gap = 8;
     const maxRows = this.config.grid_max_rows;
     const totalRows = Math.ceil(games.length / cols);
@@ -5780,10 +5858,12 @@ class GamingStatusCompletionCard extends HTMLElement {
       gridStyle += ` max-height: ${(rowHeight * maxRows) + (gap * (maxRows - 1))}px;`;
     }
 
+    const imgStyle = isCover ? `width: 100%; height: auto;` : `height: ${rowHeight}px;`;
+
     this._bodyEl.innerHTML = `<div class="cc-grid${totalRows > maxRows ? " scrollable" : ""}" style="${gridStyle}">` +
       games.map((g, i) => `
         <div class="cc-cell" data-idx="${i}">
-          <img src="${escapeHTML(g.art)}" alt="" loading="lazy" style="height: ${rowHeight}px;">
+          <img src="${escapeHTML(g.art)}" alt="" loading="lazy" style="${imgStyle}">
         </div>`).join("") +
       `</div>`;
 
@@ -5805,11 +5885,22 @@ class GamingStatusCompletionCard extends HTMLElement {
   // pure-CSS-animation layout; artwork only.
   _renderSlideshow(games) {
     const escapeHTML = gamingStatusEscapeHTML;
-    const slideHeight = GamingStatusCompletionCard.ARTWORK_HEIGHTS_SLIDESHOW[this.config.artwork_mode];
+    const isCover = this.config.artwork_mode === "cover";
+    // Cover uses a padding-top aspect-ratio box (a real, explicit height
+    // the absolutely-positioned .cc-slide children's height:100% can still
+    // correctly resolve against -- percentage heights on an absolutely
+    // positioned element resolve against its containing block's PADDING
+    // box, which padding-top establishes here even though content height
+    // is 0) instead of a fixed pixel height, so it always spans the full
+    // card width with no letterboxing, same as Hero's fixed size already
+    // achieves in practice for a typically-wide hero image.
+    const containerStyle = isCover
+      ? `padding-top: ${GamingStatusCompletionCard.COVER_ASPECT_PERCENT}%; height: 0;`
+      : `height: ${GamingStatusCompletionCard.ARTWORK_HEIGHTS_SLIDESHOW[this.config.artwork_mode]}px;`;
 
     if (games.length === 1) {
       this._bodyEl.innerHTML = `
-        <div class="cc-slideshow" style="height: ${slideHeight}px; background-image: url('${escapeHTML(games[0].art)}');"></div>`;
+        <div class="cc-slideshow" style="${containerStyle} background-image: url('${escapeHTML(games[0].art)}');"></div>`;
       return;
     }
 
@@ -5834,7 +5925,7 @@ class GamingStatusCompletionCard extends HTMLElement {
         100% { opacity: 0; z-index: 1; }
       }
     </style>
-    <div class="cc-slideshow" style="height: ${slideHeight}px; background-image: url('${escapeHTML(games[0].art)}');">`;
+    <div class="cc-slideshow" style="${containerStyle} background-image: url('${escapeHTML(games[0].art)}');">`;
 
     games.forEach((g, index) => {
       const delay = index * t_slide;
@@ -5874,7 +5965,8 @@ class GamingStatusCompletionEditor extends HTMLElement {
     if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
-    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
+    const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, effectiveSingleEntity, (s) => this._esc(s));
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
     const completionPlatforms = ["steam", "xbox", "playstation"];
     const isGrid = this._config.display_mode !== "slideshow";
@@ -5903,7 +5995,7 @@ class GamingStatusCompletionEditor extends HTMLElement {
         <div>
           <div class="section-title">Player</div>
           <select id="single_entity">
-            <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player…</option>
+            <option value="" disabled ${!effectiveSingleEntity ? "selected" : ""}>Select a player…</option>
             ${entityOptions}
           </select>
         </div>
@@ -5929,11 +6021,13 @@ class GamingStatusCompletionEditor extends HTMLElement {
         <div>
           <div class="section-title">Artwork</div>
           <select id="artwork_mode">
-            <option value="cover" ${this._config.artwork_mode === "cover" ? "selected" : ""}>Cover</option>
-            <option value="hero" ${this._config.artwork_mode === "hero" ? "selected" : ""}>Hero</option>
-            <option value="logo" ${this._config.artwork_mode === "logo" ? "selected" : ""}>Logo</option>
-            <option value="icon" ${this._config.artwork_mode === "icon" ? "selected" : ""}>Icon</option>
+            <option value="cover" ${this._config.artwork_mode === "cover" ? "selected" : ""}>Cover/Grid (Vertical Portrait)</option>
+            <option value="hero" ${this._config.artwork_mode === "hero" ? "selected" : ""}>Hero (Horizontal Landscape)</option>
+            ${isGrid ? `
+            <option value="logo" ${this._config.artwork_mode === "logo" ? "selected" : ""}>Logo (Transparent Title)</option>
+            <option value="icon" ${this._config.artwork_mode === "icon" ? "selected" : ""}>Icon (Small Square)</option>` : ""}
           </select>
+          ${!isGrid ? `<div class="helper-text">Logo and Icon aren't offered in Slideshow mode -- their transparent backgrounds can look broken crossfading over the card's own background.</div>` : ""}
         </div>
         <hr>
         <div>
@@ -5994,7 +6088,16 @@ class GamingStatusCompletionEditor extends HTMLElement {
 
     this.shadowRoot.querySelectorAll('input[name="display_mode"]').forEach((radio) => {
       radio.addEventListener("change", (ev) => {
-        this._config = { ...this._config, display_mode: ev.target.value };
+        const newMode = ev.target.value;
+        // Logo/Icon aren't valid under Slideshow -- reset immediately so
+        // the editor's own visible state doesn't lag behind what setConfig
+        // would enforce anyway on the next round-trip.
+        const needsArtworkReset = newMode === "slideshow" && ["logo", "icon"].includes(this._config.artwork_mode);
+        this._config = {
+          ...this._config,
+          display_mode: newMode,
+          artwork_mode: needsArtworkReset ? "cover" : this._config.artwork_mode,
+        };
         fireChanged();
         this.render();
       });
@@ -6068,6 +6171,8 @@ class GamingStatusNearCompletionCard extends HTMLElement {
       show_platform_xbox: true,
       show_platform_playstation: true,
       max_games: 10,
+      scroll_after: 10,
+      exclude_inactive_months: 0,
       color_palette: "platform",
       custom_colors: "",
     };
@@ -6083,6 +6188,12 @@ class GamingStatusNearCompletionCard extends HTMLElement {
       show_platform_xbox: config.show_platform_xbox !== false,
       show_platform_playstation: config.show_platform_playstation !== false,
       max_games: config.max_games !== undefined ? Math.min(50, Math.max(1, parseInt(config.max_games) || 10)) : 10,
+      scroll_after: config.scroll_after !== undefined ? Math.max(1, parseInt(config.scroll_after) || 10) : 10,
+      // 0 = off (default -- no existing config should suddenly start hiding
+      // games). 1-12 = exclude anything with no recorded activity in that
+      // many months.
+      exclude_inactive_months: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(parseInt(config.exclude_inactive_months))
+        ? parseInt(config.exclude_inactive_months) : 0,
       // "platform" (per-game platform tint, not an index-cycled array) is
       // this card's own default -- deliberately NOT routed through
       // gamingStatusNormalizePalette, which would default to "vivid"
@@ -6117,8 +6228,10 @@ class GamingStatusNearCompletionCard extends HTMLElement {
 
     const hash = [
       targetEntityId,
-      games ? games.filter(g => (g.percent || 0) < 100).map(g => `${g.title}:${g.platform}:${g.percent}`).join(",") : "none",
+      games ? games.filter(g => (g.percent || 0) < 100).map(g => `${g.title}:${g.platform}:${g.percent}:${g._activity_ts || ""}`).join(",") : "none",
       this.config.max_games,
+      this.config.scroll_after,
+      this.config.exclude_inactive_months,
       this.config.color_palette,
       this.config.custom_colors,
       [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation].join(","),
@@ -6134,9 +6247,28 @@ class GamingStatusNearCompletionCard extends HTMLElement {
   // Completion card's job; showing them here too would defeat the point of
   // a "how close am I" list (they'd just permanently occupy the top spot).
   processData(games) {
-    return games
+    let filtered = games
       .filter(g => (g.percent || 0) < 100)
-      .filter(g => this.config[`show_platform_${(g.platform || "").toLowerCase()}`] !== false)
+      .filter(g => this.config[`show_platform_${(g.platform || "").toLowerCase()}`] !== false);
+
+    if (this.config.exclude_inactive_months > 0) {
+      // _activity_ts is Xbox's last-played timestamp or PSN's last-trophy-
+      // earned timestamp (see library_scan.py) -- Steam games have no
+      // equivalent field at all, so a game with no _activity_ts is left in
+      // rather than excluded, since there's no data to judge staleness
+      // from. For PSN specifically this is "last trophy earned," not "last
+      // played," so a game someone is actively stuck on without progress
+      // could still get excluded here -- a known, accepted tradeoff of
+      // using the only recency signal actually available.
+      const cutoff = Date.now() - this.config.exclude_inactive_months * 30 * 24 * 60 * 60 * 1000;
+      filtered = filtered.filter(g => {
+        if (!g._activity_ts) return true;
+        const ts = Date.parse(g._activity_ts);
+        return isNaN(ts) || ts >= cutoff;
+      });
+    }
+
+    return filtered
       .sort((a, b) => (b.percent || 0) - (a.percent || 0))
       .slice(0, this.config.max_games)
       .map(g => ({
@@ -6154,6 +6286,8 @@ class GamingStatusNearCompletionCard extends HTMLElement {
           ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
           #nc-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
           .nc-empty { padding: 20px; color: var(--secondary-text-color); font-style: italic; }
+          .nc-list { display: flex; flex-direction: column; gap: 14px; margin-top: 8px; }
+          .nc-list.scrollable { overflow-y: auto; }
         </style>
         <ha-card>
           <div id="nc-title"></div>
@@ -6183,7 +6317,15 @@ class GamingStatusNearCompletionCard extends HTMLElement {
     const usePlatformColors = this.config.color_palette === "platform";
     const palette = usePlatformColors ? null : gamingStatusResolvePalette(this.config);
 
-    let html = `<div style="display: flex; flex-direction: column; gap: 14px; margin-top: 8px;">`;
+    const rowHeight = 24; // bar height; gap below matches the flex container's own 14px gap
+    const gap = 14;
+    const maxEntries = this.config.scroll_after;
+    const needsScroll = rows.length > maxEntries;
+    const listStyle = needsScroll
+      ? ` style="max-height: ${(rowHeight * maxEntries) + (gap * (maxEntries - 1))}px;"`
+      : "";
+
+    let html = `<div class="nc-list${needsScroll ? " scrollable" : ""}"${listStyle}>`;
     rows.forEach((row, index) => {
       let color;
       if (usePlatformColors) {
@@ -6242,7 +6384,8 @@ class GamingStatusNearCompletionEditor extends HTMLElement {
     if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
-    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
+    const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, effectiveSingleEntity, (s) => this._esc(s));
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
     const completionPlatforms = ["steam", "xbox", "playstation"];
     const isCustom = this._config.color_palette === "custom";
@@ -6271,7 +6414,7 @@ class GamingStatusNearCompletionEditor extends HTMLElement {
         <div>
           <div class="section-title">Player</div>
           <select id="single_entity">
-            <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player…</option>
+            <option value="" disabled ${!effectiveSingleEntity ? "selected" : ""}>Select a player…</option>
             ${entityOptions}
           </select>
         </div>
@@ -6292,6 +6435,20 @@ class GamingStatusNearCompletionEditor extends HTMLElement {
             <input type="number" id="max_games" value="${parseInt(this._config.max_games) || 10}" min="1" max="50">
             <button type="button" id="max_games_apply">Apply</button>
           </div>
+        </div>
+        <hr>
+        <div>
+          <div class="section-title">Scroll After (Entries)</div>
+          <input type="number" id="scroll_after" value="${parseInt(this._config.scroll_after) || 10}" min="1" max="50">
+        </div>
+        <hr>
+        <div>
+          <div class="section-title">Exclude Games Not Played In</div>
+          <div class="helper-text">Based on each game's last recorded activity (Xbox: last played; PlayStation: last trophy earned) -- Steam games have no such data available, so they're never excluded by this option.</div>
+          <select id="exclude_inactive_months">
+            <option value="0" ${parseInt(this._config.exclude_inactive_months) === 0 ? "selected" : ""}>Never (Show All)</option>
+            ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m => `<option value="${m}" ${parseInt(this._config.exclude_inactive_months) === m ? "selected" : ""}>${m} Month${m === 1 ? "" : "s"}</option>`).join("")}
+          </select>
         </div>
         <hr>
         <div>
@@ -6329,6 +6486,16 @@ class GamingStatusNearCompletionEditor extends HTMLElement {
       const clamped = Math.min(50, Math.max(1, parseInt(input.value) || 10));
       input.value = clamped;
       this._config = { ...this._config, max_games: clamped };
+      fireChanged();
+    });
+
+    this.shadowRoot.getElementById("scroll_after").addEventListener("change", (ev) => {
+      this._config = { ...this._config, scroll_after: Math.max(1, parseInt(ev.target.value) || 10) };
+      fireChanged();
+    });
+
+    this.shadowRoot.getElementById("exclude_inactive_months").addEventListener("change", (ev) => {
+      this._config = { ...this._config, exclude_inactive_months: parseInt(ev.target.value) || 0 };
       fireChanged();
     });
 
@@ -6576,7 +6743,8 @@ class GamingStatusStatsEditor extends HTMLElement {
     if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
-    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
+    const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, effectiveSingleEntity, (s) => this._esc(s));
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
     const statsPlatforms = ["steam", "xbox", "playstation"];
 
@@ -6600,7 +6768,7 @@ class GamingStatusStatsEditor extends HTMLElement {
         <div>
           <div class="section-title">Player</div>
           <select id="single_entity">
-            <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player…</option>
+            <option value="" disabled ${!effectiveSingleEntity ? "selected" : ""}>Select a player…</option>
             ${entityOptions}
           </select>
         </div>
@@ -6777,7 +6945,7 @@ class GamingStatusLibraryCard extends HTMLElement {
           .lb-list.scrollable { overflow-y: auto; }
           .lb-row { display: flex; gap: 10px; border-radius: 8px; overflow: hidden; background: var(--secondary-background-color, rgba(120, 120, 120, 0.08)); padding: 8px; box-sizing: border-box; }
           .lb-row.hero-layout { flex-direction: column; }
-          .lb-art { object-fit: contain; border-radius: 6px; flex-shrink: 0; display: block; }
+          .lb-art { object-fit: contain; flex-shrink: 0; display: block; }
           .lb-data { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
           .lb-title-text { font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .lb-line { font-size: 12px; color: var(--secondary-text-color); }
@@ -6832,8 +7000,12 @@ class GamingStatusLibraryCard extends HTMLElement {
     this._bodyEl.innerHTML = `<div class="lb-list${needsScroll ? " scrollable" : ""}"${listStyle}>` +
       games.map(g => {
         const art = this._artFor(g);
+        // Hero art scales to the row's full width at its own natural aspect
+        // ratio (no fixed height/object-fit) rather than being boxed into a
+        // fixed-height crop -- unlike the left-aligned thumbnail modes,
+        // where a fixed box keeps every row the same height.
         const imgStyle = isHero
-          ? `width: 100%; height: ${thumb.height}px;`
+          ? `width: 100%; height: auto;`
           : `width: ${thumb.width}px; height: ${thumb.height}px;`;
         const imgHtml = art ? `<img class="lb-art" src="${escapeHTML(art)}" alt="" loading="lazy" style="${imgStyle}">` : "";
 
@@ -6890,7 +7062,8 @@ class GamingStatusLibraryEditor extends HTMLElement {
     if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
-    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
+    const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, effectiveSingleEntity, (s) => this._esc(s));
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
     const libraryPlatforms = ["steam", "xbox", "playstation"];
     const isPS = this._config.platform === "playstation";
@@ -6915,7 +7088,7 @@ class GamingStatusLibraryEditor extends HTMLElement {
         <div>
           <div class="section-title">Player</div>
           <select id="single_entity">
-            <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player…</option>
+            <option value="" disabled ${!effectiveSingleEntity ? "selected" : ""}>Select a player…</option>
             ${entityOptions}
           </select>
         </div>
@@ -6936,10 +7109,10 @@ class GamingStatusLibraryEditor extends HTMLElement {
         <div>
           <div class="section-title">Artwork</div>
           <select id="artwork_mode">
-            <option value="cover" ${this._config.artwork_mode === "cover" ? "selected" : ""}>Cover</option>
-            <option value="hero" ${this._config.artwork_mode === "hero" ? "selected" : ""}>Hero</option>
-            <option value="logo" ${this._config.artwork_mode === "logo" ? "selected" : ""}>Logo</option>
-            <option value="icon" ${this._config.artwork_mode === "icon" ? "selected" : ""}>Icon</option>
+            <option value="cover" ${this._config.artwork_mode === "cover" ? "selected" : ""}>Cover/Grid (Vertical Portrait)</option>
+            <option value="hero" ${this._config.artwork_mode === "hero" ? "selected" : ""}>Hero (Horizontal Landscape)</option>
+            <option value="logo" ${this._config.artwork_mode === "logo" ? "selected" : ""}>Logo (Transparent Title)</option>
+            <option value="icon" ${this._config.artwork_mode === "icon" ? "selected" : ""}>Icon (Small Square)</option>
           </select>
           <div class="helper-text">Hero artwork displays above each game's data instead of to the left, since it doesn't suit a narrow thumbnail.</div>
         </div>
