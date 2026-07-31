@@ -5512,17 +5512,20 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       TIERS.map(t => {
         const earned = attrs[`trophies_${t.key}`];
         const total = attrs[`trophies_${t.key}_total`];
-        // Icons-only mode never attempts the official image at all -- the
-        // "official" mode's fallback (icon shown underneath, image on top
-        // hidden via onerror if it fails to load) is only relevant when an
-        // image is actually being tried.
+        // Icons-only mode never attempts the official image at all. In
+        // "official" mode, the icon starts hidden (display:none) rather
+        // than sitting visibly behind the image -- these Wikia PNGs have
+        // transparent backgrounds, so a same-size icon behind an
+        // always-visible one would peek through the transparent parts.
+        // The image's onerror handler reveals the icon (and hides itself)
+        // only if the image actually fails to load.
         const imageHtml = useIconsOnly
           ? ""
-          : `<img src="${t.url}" alt="" loading="lazy" onerror="this.style.display='none';">`;
+          : `<img src="${t.url}" alt="" loading="lazy" onerror="this.style.display='none'; this.previousElementSibling.style.removeProperty('display');">`;
         return `
           <div class="pt-cell">
             <div class="pt-icon-wrap">
-              <ha-icon icon="mdi:trophy" style="width: 40px; height: 40px; --mdc-icon-size: 40px; color: rgb(${t.color});"></ha-icon>
+              <ha-icon icon="mdi:trophy" style="width: 50px; height: 50px; --mdc-icon-size: 50px; color: rgb(${t.color}); ${imageHtml ? "display: none;" : ""}"></ha-icon>
               ${imageHtml}
             </div>
             ${this.config.show_labels ? `<div class="pt-tier-label">${t.label}</div>` : ""}
