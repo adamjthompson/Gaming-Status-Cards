@@ -251,7 +251,7 @@ A leaderboard-style, ranked bar list of a single player's games closest to (but 
 * **Platforms:** Independently check/uncheck Steam, Xbox, and PlayStation.
 * **Max Games to Display:** How many games to show at most (1–50). Click **Apply** to confirm the value.
 * **Scroll After (Entries):** How many rows show before the list scrolls instead of growing taller (default: 10).
-* **Exclude Games Not Played In:** **Never (Show All)** (default) or 1–12 months. Based on each game's last recorded activity — Xbox's last-played timestamp, or PlayStation's last-trophy-earned timestamp. Steam games have no equivalent data available and are never excluded by this option, regardless of how it's set. *(Note: for PlayStation specifically, this is "last trophy earned," not "last played" — a game you're actively stuck on without earning anything new could still get excluded.)*
+* **Exclude Games Inactive For:** **Never (Show All)** (default) or 1–12 months. Based on each game's last recorded activity: Xbox uses its last-played timestamp, while PlayStation and Steam use their last-achievement/trophy-earned timestamp instead (neither API exposes a separate "last played" signal). *(Note: for PlayStation and Steam specifically, this means a game you're actively stuck on without earning anything new could still get excluded.)* A game with no recorded activity at all is never excluded.
 * **Bar Color:** **Platform Colors** (default — each bar tinted by that game's own platform: Steam blue, Xbox green, PlayStation blue), or the same named palettes (Vivid, Material, Muted, Soft) and Custom Colors option available on the Leaderboard/Weekly Games/Platforms cards.
 
 Games already at 100% are intentionally excluded — those are the dedicated 100% Completion card's job.

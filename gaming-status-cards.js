@@ -6267,14 +6267,16 @@ class GamingStatusNearCompletionCard extends HTMLElement {
       .filter(g => this.config[`show_platform_${(g.platform || "").toLowerCase()}`] !== false);
 
     if (this.config.exclude_inactive_months > 0) {
-      // _activity_ts is Xbox's last-played timestamp or PSN's last-trophy-
-      // earned timestamp (see library_scan.py) -- Steam games have no
-      // equivalent field at all, so a game with no _activity_ts is left in
-      // rather than excluded, since there's no data to judge staleness
-      // from. For PSN specifically this is "last trophy earned," not "last
-      // played," so a game someone is actively stuck on without progress
-      // could still get excluded here -- a known, accepted tradeoff of
-      // using the only recency signal actually available.
+      // _activity_ts is Xbox's last-played timestamp, PSN's last-trophy-
+      // earned timestamp, or Steam's last-achievement-earned timestamp (see
+      // library_scan.py) -- for PSN/Steam specifically this is "last
+      // achievement/trophy earned," not "last played," so a game someone is
+      // actively stuck on without progress could still get excluded here --
+      // a known, accepted tradeoff of using the only recency signal
+      // actually available. A game with no _activity_ts at all (never
+      // resolved yet, or genuinely zero achievements ever earned) is left
+      // in rather than excluded, since there's no data to judge staleness
+      // from.
       const cutoff = Date.now() - this.config.exclude_inactive_months * 30 * 24 * 60 * 60 * 1000;
       filtered = filtered.filter(g => {
         if (!g._activity_ts) return true;
@@ -6458,8 +6460,8 @@ class GamingStatusNearCompletionEditor extends HTMLElement {
         </div>
         <hr>
         <div>
-          <div class="section-title">Exclude Games Not Played In</div>
-          <div class="helper-text">Based on each game's last recorded activity (Xbox: last played; PlayStation: last trophy earned) -- Steam games have no such data available, so they're never excluded by this option.</div>
+          <div class="section-title">Exclude Games Inactive For</div>
+          <div class="helper-text">Based on each game's last recorded activity: Xbox uses last time played, while PlayStation and Steam use last achievement/trophy earned instead (neither API exposes a separate "last played" signal) -- so a game you're actively playing without making progress can still get excluded on those two platforms. A game with no recorded activity at all is never excluded.</div>
           <select id="exclude_inactive_months">
             <option value="0" ${parseInt(this._config.exclude_inactive_months) === 0 ? "selected" : ""}>Never (Show All)</option>
             ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m => `<option value="${m}" ${parseInt(this._config.exclude_inactive_months) === m ? "selected" : ""}>${m} Month${m === 1 ? "" : "s"}</option>`).join("")}
