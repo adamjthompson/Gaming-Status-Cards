@@ -771,22 +771,22 @@ class GamingStatusCard extends HTMLElement {
         const safeState = escapeHTML(player.state);
         const safeSecondary = escapeHTML(player.secondary);
         
-        const bgLayer1 = player.cover ? `url('${player.cover}')` : 'none';
-        const bgLayer2 = player.picture && player.picture !== player.cover ? `, url('${player.picture}')` : '';
+        const bgLayer1 = player.cover ? `url('${escapeHTML(player.cover)}')` : 'none';
+        const bgLayer2 = player.picture && player.picture !== player.cover ? `, url('${escapeHTML(player.picture)}')` : '';
         
         return `
         <div class="player-card ${statusClass}" style="--bg-url: ${bgLayer1}${bgLayer2}; --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
           <div class="content-wrapper">
             <div class="avatar-container">
-              ${player.picture 
-                ? `<img class="avatar ${player.picture.includes('playnite.link') ? 'playnite' : ''}" src="${player.picture}" />` 
+              ${player.picture
+                ? `<img class="avatar ${player.picture.includes('playnite.link') ? 'playnite' : ''}" src="${escapeHTML(player.picture)}" />`
                 : `<div class="placeholder-avatar"><ha-icon icon="mdi:controller" style="color: #888; --mdc-icon-size: 24px;"></ha-icon></div>`
               }
               ${this.config.show_badges ? `
               <div class="badge">
-                ${player.badgeIcon.startsWith('mdi:') 
-                  ? `<ha-icon icon="${player.badgeIcon}"></ha-icon>` 
-                  : `<img class="custom-badge" src="${player.badgeIcon}" />`
+                ${player.badgeIcon.startsWith('mdi:')
+                  ? `<ha-icon icon="${escapeHTML(player.badgeIcon)}"></ha-icon>`
+                  : `<img class="custom-badge" src="${escapeHTML(player.badgeIcon)}" />`
                 }
               </div>` : ""}
             </div>
@@ -1234,7 +1234,7 @@ class GamingSlideshowCard extends HTMLElement {
       let html = `<div style="position: absolute; bottom: 10px; right: 10px; display: flex; z-index: 2;">`;
       players.forEach((badge) => {
         if (badge && badge.isImage && badge.content) {
-          html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-image: url('${badge.content}'); background-size: cover; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;"></div>`;
+          html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-image: url('${gamingStatusEscapeHTML(badge.content)}'); background-size: cover; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;"></div>`;
         } else if (badge && !badge.isImage && badge.content) {
           html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-color: rgba(30, 30, 30, 0.8); color: white; font-family: sans-serif; font-size: 22px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;">${badge.content}</div>`;
         }
@@ -1245,7 +1245,7 @@ class GamingSlideshowCard extends HTMLElement {
 
     if (data.length === 1) {
       this.content.innerHTML = `
-        <div style="width: 100%; height: 100%; background-image: url('${data[0].art}'); background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
+        <div style="width: 100%; height: 100%; background-image: url('${gamingStatusEscapeHTML(data[0].art)}'); background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
         ${getAvatarHtml(data[0].players)}
       `;
       return;
@@ -1289,7 +1289,7 @@ class GamingSlideshowCard extends HTMLElement {
       const delay = index * t_slide;
       html += `
         <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; z-index: 1; animation: ${anim_name} ${loop_duration}s infinite; animation-delay: ${delay}s;">
-          <div style="width: 100%; height: 100%; background-image: url('${g.art}'); background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
+          <div style="width: 100%; height: 100%; background-image: url('${gamingStatusEscapeHTML(g.art)}'); background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
           ${getAvatarHtml(g.players)}
         </div>`;
     });
@@ -3395,7 +3395,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
         return `<div class="${cls}" style="flex: ${c.flex};">${value}</div>`;
       }).join("");
 
-      return `<div class="rs-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--rs-bg-url: url('${bgUrl}');${tintStyle}` : ""}">${cellsHTML}</div>`;
+      return `<div class="rs-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--rs-bg-url: url('${escapeHTML(bgUrl)}');${tintStyle}` : ""}">${cellsHTML}</div>`;
     }).join("");
   }
 
@@ -3917,7 +3917,7 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
         return `<div class="${cls}" style="flex: ${c.flex};">${value}</div>`;
       }).join("");
 
-      return `<div class="ra-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--ra-bg-url: url('${bgUrl}');${tintStyle}` : ""}">${cellsHTML}</div>`;
+      return `<div class="ra-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--ra-bg-url: url('${escapeHTML(bgUrl)}');${tintStyle}` : ""}">${cellsHTML}</div>`;
     }).join("");
   }
 
