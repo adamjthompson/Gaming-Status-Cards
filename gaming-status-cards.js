@@ -7092,7 +7092,14 @@ class GamingStatusLibraryCard extends HTMLElement {
           : `<div class="lb-art lb-art-placeholder" style="${isHero ? `width: 100%; height: ${thumb.height}px;` : imgStyle}"></div>`;
 
         const lines = [];
-        if (this.config.show_field_title) lines.push(`<div class="lb-title-text">${escapeHTML(g.title || "Unknown")}</div>`);
+        if (this.config.show_field_title) {
+          // Console (e.g. "PS4") rides along on the title, same as the
+          // tooltip/column treatment elsewhere -- only ever set for a
+          // genuinely single-console PSN title, never a cross-buy release
+          // spanning multiple platforms (see library_scan.py's _scan_psn).
+          const titleText = g.console ? `${g.title || "Unknown"} (${g.console})` : (g.title || "Unknown");
+          lines.push(`<div class="lb-title-text">${escapeHTML(titleText)}</div>`);
+        }
         if (this.config.show_field_percent) lines.push(`<div class="lb-line">${Math.round((g.percent || 0) * 10) / 10}%</div>`);
         if (this.config.show_field_counts) {
           if (this.config.platform === "playstation") {
