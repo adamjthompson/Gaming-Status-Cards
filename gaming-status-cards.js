@@ -2265,14 +2265,15 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       currentHash += hass.states[id].state + hass.states[id].last_updated;
     }
     if (this.config.metric === "steam_total_playtime") {
-      // This metric's actual data lives on a DIFFERENT entity
-      // (sensor..._library_steam) than whatever entityIdsToProcess
-      // resolved above (the player's real-time _master sensor) -- fold
-      // its own last_updated in too, or a Full Game Library Scan rescan
-      // wouldn't otherwise trigger a re-render.
-      const libraryEntityId = this._resolveSteamLibraryEntityId();
-      const libState = libraryEntityId ? hass.states[libraryEntityId] : null;
-      currentHash += "|steam_lib:" + (libState ? libState.last_updated : "none");
+      // This metric's actual data lives on DIFFERENT entities
+      // (sensor..._library_steam per resolved player) than whatever
+      // entityIdsToProcess resolved above (each player's real-time
+      // _master sensor) -- fold each one's last_updated in too, or a
+      // Full Game Library Scan rescan for any resolved player wouldn't
+      // otherwise trigger a re-render.
+      for (const libId of this._steamLibraryEntityIdsFor(entityIdsToProcess)) {
+        currentHash += "|steam_lib:" + hass.states[libId].last_updated;
+      }
     }
 
     if (this._lastHash === currentHash) return;
@@ -2339,46 +2340,51 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     return `${m}m`;
   }
 
-  // Resolves sensor.gaming_status_<owner>_library_steam for whichever
-  // single player this metric should use -- same suffix-replace technique
-  // GamingStatusStatsCard._resolveTargetEntityId already uses, since this
-  // metric's data (Full Game Library Scan's per-game playtime_hours)
-  // doesn't come from whatever entityIdsToProcess/gamingStatusLeaderboard
-  // EntityIds would resolve to for every other metric on this card.
-  _resolveSteamLibraryEntityId() {
-    const players = gamingStatusGetPlayerEntities(this._hass, this.config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    let playerId = this.config.single_entity;
-    if (!playerId || !this._hass.states[playerId]) {
-      playerId = players.length ? players[0].id : "";
-    }
-    if (!playerId) return "";
-    const libraryEntityId = playerId.replace(/_master$/, "_library_steam");
-    return this._hass.states[libraryEntityId] ? libraryEntityId : "";
+  // Maps a list of resolved player _master entity ids (whatever mode --
+  // all/single/selected -- gamingStatusLeaderboardEntityIds already
+  // produced) to their sensor.gaming_status_<owner>_library_steam
+  // counterparts, same suffix-replace technique GamingStatusStatsCard.
+  // _resolveTargetEntityId uses. A player without Full Game Library Scan
+  // enabled for Steam simply has no such entity and is filtered out here
+  // -- not an error, just no contribution from that player.
+  _steamLibraryEntityIdsFor(masterEntityIds) {
+    return masterEntityIds
+      .map(id => id.replace(/_master$/, "_library_steam"))
+      .filter(id => this._hass.states[id]);
   }
 
-  // "Total Playtime: Steam Games" -- a per-game breakdown of ONE player's
-  // lifetime Steam playtime (Steam's own playtime_forever, captured as
-  // playtime_hours per game by the Full Game Library Scan), unlike every
-  // other metric on this card, which reads real-time PersistentStatus/
-  // MasterGamingSensor attributes across potentially multiple players.
-  // Kept as its own method (not threaded through updateLeaderboard's
-  // shared entityIdsToProcess loop) since the data source, resolution,
-  // and empty-state messaging are all genuinely different here.
-  _renderSteamTotalPlaytime() {
+  // "Steam Games: Total Playtime" -- a per-game breakdown of lifetime
+  // Steam playtime (Steam's own playtime_forever, captured as
+  // playtime_hours per game by the Full Game Library Scan), summed across
+  // every resolved player the same way game_hours/all_time_top_games
+  // already aggregate their own per-game data -- a game more than one
+  // selected player has played combines into one total bar. Kept as its
+  // own method (not threaded through updateLeaderboard's shared
+  // entityIdsToProcess loop body) since the data source and per-entity
+  // resolution are genuinely different here.
+  _renderSteamTotalPlaytime(masterEntityIds) {
     const escapeHTML = gamingStatusEscapeHTML;
-    const libraryEntityId = this._resolveSteamLibraryEntityId();
-    const stateObj = libraryEntityId ? this._hass.states[libraryEntityId] : null;
-    const games = stateObj ? (stateObj.attributes.games || []) : [];
+    const libraryEntityIds = this._steamLibraryEntityIdsFor(masterEntityIds);
+
+    let gamesMap = {};
+    for (const libId of libraryEntityIds) {
+      const games = this._hass.states[libId].attributes.games || [];
+      for (const g of games) {
+        if ((g.platform || "").toLowerCase() !== "steam") continue;
+        const hours = g.playtime_hours || 0;
+        const title = g.title || "Unknown";
+        if (hours > 0) gamesMap[title] = (gamesMap[title] || 0) + hours;
+      }
+    }
 
     const limit = parseInt(this.config.max_players) || 3;
-    const finalData = games
-      .filter(g => (g.platform || "").toLowerCase() === "steam")
-      .map(g => ({ name: g.title || "Unknown", value: g.playtime_hours || 0, displayValue: `${g.playtime_hours || 0}h` }))
+    const finalData = Object.entries(gamesMap)
+      .map(([name, value]) => ({ name, value, displayValue: `${Math.round(value * 10) / 10}h` }))
       .sort((a, b) => b.value - a.value)
       .slice(0, limit);
 
-    if (!finalData.length || finalData.every(d => d.value === 0)) {
-      this.content.innerHTML = `<div style="padding: 10px; color: var(--secondary-text-color); font-style: italic;">No playtime totals available for this player.</div>`;
+    if (!finalData.length) {
+      this.content.innerHTML = `<div style="padding: 10px; color: var(--secondary-text-color); font-style: italic;">No playtime totals available.</div>`;
       return;
     }
 
@@ -2413,12 +2419,12 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     if (!this._hass || !this.content) return;
     const escapeHTML = gamingStatusEscapeHTML;
 
+    let entityIdsToProcess = gamingStatusLeaderboardEntityIds(this._hass, this.config);
+
     if (this.config.metric === "steam_total_playtime") {
-      this._renderSteamTotalPlaytime();
+      this._renderSteamTotalPlaytime(entityIdsToProcess);
       return;
     }
-
-    let entityIdsToProcess = gamingStatusLeaderboardEntityIds(this._hass, this.config);
 
     let finalData = [];
 
@@ -2590,10 +2596,6 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
     const colorPalette = gamingStatusNormalizePalette(this._config);
     const isAllTimeMetric = ['all_time_hours', 'all_time_sessions', 'all_time_top_games', 'steam_total_playtime'].includes(this._config.metric);
-    // Full Game Library Scan's per-game data is fetched per-player, not
-    // merged across players the way every other metric on this card is --
-    // Single Player is the only mode that makes sense for it.
-    const isSteamPlaytimeMetric = this._config.metric === 'steam_total_playtime';
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -2619,7 +2621,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
             <option value="all_time_hours" ${this._config.metric === 'all_time_hours' ? 'selected' : ''}>Top Players: All-Time Total Hours</option>
             <option value="all_time_sessions" ${this._config.metric === 'all_time_sessions' ? 'selected' : ''}>Top Players: All-Time Session Count</option>
             <option value="all_time_top_games" ${this._config.metric === 'all_time_top_games' ? 'selected' : ''}>Top Games: All-Time Hours Per Game (Aggregate)</option>
-            <option value="steam_total_playtime" ${this._config.metric === 'steam_total_playtime' ? 'selected' : ''}>Total Playtime: Steam Games</option>
+            <option value="steam_total_playtime" ${this._config.metric === 'steam_total_playtime' ? 'selected' : ''}>Steam Games: Total Playtime</option>
           </select>
         </label>
 
@@ -2633,17 +2635,14 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         </div>
 
         <label>Player Filter
-          <select id="mode" .configValue="mode" ${isSteamPlaytimeMetric ? 'disabled' : ''}>
-            ${isSteamPlaytimeMetric ? `
-            <option value="single" selected>Single Player</option>` : `
+          <select id="mode" .configValue="mode">
             <option value="all" ${this._config.mode === 'all' || !this._config.mode ? 'selected' : ''}>All Tracked Players</option>
             <option value="single" ${this._config.mode === 'single' ? 'selected' : ''}>Single Player</option>
-            <option value="selected" ${this._config.mode === 'selected' ? 'selected' : ''}>Selected Players</option>`}
+            <option value="selected" ${this._config.mode === 'selected' ? 'selected' : ''}>Selected Players</option>
           </select>
-          ${isSteamPlaytimeMetric ? `<span class="helper-text">This metric only supports one player's own Steam library data at a time.</span>` : ''}
         </label>
 
-        <div id="single-selector" style="display: ${(this._config.mode === 'single' || isSteamPlaytimeMetric) ? 'block' : 'none'}">
+        <div id="single-selector" style="display: ${this._config.mode === 'single' ? 'block' : 'none'}">
           <label>Select Player 
             <select id="single_entity" .configValue="single_entity">
               <option value="" disabled ${!this._config.single_entity ? 'selected' : ''}>Select a player...</option>
@@ -2703,14 +2702,6 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         if (field === 'metric') {
             const isAllTime = ['all_time_hours', 'all_time_sessions', 'all_time_top_games', 'steam_total_playtime'].includes(value);
             windowSelector.style.display = isAllTime ? 'none' : 'block';
-            if (value === 'steam_total_playtime') {
-                this._config = { ...this._config, mode: 'single' };
-            }
-            // The mode selector's own available options (and whether it's
-            // disabled) depend on which metric is now selected -- a full
-            // re-render is needed rather than just toggling display, since
-            // those options are template-generated, not just hidden/shown.
-            this.render();
         }
 
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
@@ -4703,7 +4694,14 @@ class GamingStatusGameManagementCard extends HTMLElement {
       </div>`;
 
     const newNameTrimmed = (this._newName || "").trim();
-    const renameEnabled = !!(this._selectedGame && newNameTrimmed && newNameTrimmed.toLowerCase() !== this._selectedGame.toLowerCase());
+    // Exact (case-sensitive) comparison, not case-insensitive -- the whole
+    // point of this field is sometimes a pure capitalization fix (e.g.
+    // "Skull And Bones" -> "Skull and Bones"), which the backend's
+    // rename_game/_merge_rename already handles correctly (merges into
+    // whatever casing already exists, or renames cleanly if not). Blocking
+    // on case-insensitive equality would reject exactly that legitimate use
+    // case, only a truly identical no-op rename should be disabled.
+    const renameEnabled = !!(this._selectedGame && newNameTrimmed && newNameTrimmed !== this._selectedGame);
     const deleteEnabled = !!this._selectedGame;
 
     // Only sessions still present in recent_sessions are individually
