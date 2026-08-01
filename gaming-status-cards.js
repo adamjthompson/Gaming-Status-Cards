@@ -5533,6 +5533,8 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       background: "none",
       show_total: true,
       show_labels: true,
+      show_active_game: false,
+      show_game_title: true,
       image_style: "official",
     };
   }
@@ -5550,9 +5552,20 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       background: ["black", "white"].includes(config.background) ? config.background : "none",
       show_total: config.show_total !== false,
       show_labels: config.show_labels !== false,
+      show_active_game: config.show_active_game === true,
+      show_game_title: config.show_game_title !== false,
       image_style: config.image_style === "icons" ? "icons" : "official",
     };
     this._lastHash = "";
+  }
+
+  _resolvePlayerId(hass) {
+    const players = gamingStatusGetPlayerEntities(hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
+    let playerId = this.config.single_entity;
+    if (!playerId || !hass.states[playerId]) {
+      playerId = players.length ? players[0].id : "";
+    }
+    return playerId;
   }
 
   // Derives sensor.gaming_status_<owner>_library_playstation from the
@@ -5560,23 +5573,53 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
   // technique GamingStatusGameManagementCard._resolveTarget already uses.
   // Returns "" if that library sensor doesn't exist (Full Game Library Scan
   // not enabled for PlayStation on this player).
-  _resolveTargetEntityId(hass) {
-    const players = gamingStatusGetPlayerEntities(hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    let playerId = this.config.single_entity;
-    if (!playerId || !hass.states[playerId]) {
-      playerId = players.length ? players[0].id : "";
-    }
+  _resolveTargetEntityId(hass, playerId) {
     if (!playerId) return "";
     const libraryEntityId = playerId.replace(/_master$/, "_library_playstation");
     return hass.states[libraryEntityId] ? libraryEntityId : "";
+  }
+
+  // Resolves the title of whatever PlayStation game this player is
+  // CURRENTLY playing, via the real-time sensor.gaming_status_<owner>_
+  // playstation entity -- its state IS the current game name when active
+  // (same offline/unavailable/unknown/idle check the List card already
+  // uses elsewhere in this bundle). Distinct from the library-scanned
+  // lifetime totals _resolveTargetEntityId reads. Returns "" if this
+  // player isn't currently playing anything on PlayStation.
+  _resolveActiveGameTitle(hass, playerId) {
+    if (!playerId) return "";
+    const psState = hass.states[playerId.replace(/_master$/, "_playstation")];
+    if (!psState) return "";
+    const state = String(psState.state || "");
+    return ["offline", "unavailable", "unknown", "idle"].includes(state.toLowerCase()) ? "" : state;
   }
 
   set hass(hass) {
     this._hass = hass;
     if (!this.config) return;
 
-    const targetEntityId = this._resolveTargetEntityId(hass);
+    const playerId = this._resolvePlayerId(hass);
+    const targetEntityId = this._resolveTargetEntityId(hass, playerId);
     const stateObj = targetEntityId ? hass.states[targetEntityId] : null;
+
+    // "Show Active Game Trophies" swaps the displayed tier counts to just
+    // the currently-played game's own trophies_earned/trophies_total
+    // (from this same library sensor's `games` list) -- falls back to the
+    // full-library aggregate below (activeGame left null) whenever no
+    // PlayStation game is currently active, or the active game isn't in
+    // the scanned list yet (e.g. a brand new title not yet resolved by a
+    // library scan).
+    let activeGame = null;
+    if (this.config.show_active_game && stateObj) {
+      const activeTitle = this._resolveActiveGameTitle(hass, playerId);
+      if (activeTitle) {
+        const normalized = activeTitle.trim().toLowerCase();
+        const games = stateObj.attributes.games || [];
+        activeGame = games.find(g =>
+          (g.platform || "").toLowerCase() === "playstation" && (g.title || "").trim().toLowerCase() === normalized
+        ) || null;
+      }
+    }
 
     const hash = [
       targetEntityId,
@@ -5585,22 +5628,28 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       this.config.title,
       this.config.show_total,
       this.config.show_labels,
+      this.config.show_active_game,
+      this.config.show_game_title,
+      activeGame ? activeGame.title : "",
+      activeGame ? activeGame.console : "",
+      activeGame ? JSON.stringify(activeGame.trophies_earned) : "",
       this.config.image_style,
     ].join("|");
 
     if (this._lastHash === hash) return;
     this._lastHash = hash;
 
-    this.render(stateObj);
+    this.render(stateObj, activeGame);
   }
 
-  render(stateObj) {
+  render(stateObj, activeGame) {
     if (!this.content) {
       this.shadowRoot.innerHTML = `
         <style>
           :host { display: block; }
           ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
           #pt-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
+          #pt-subtitle { font-size: 13px; color: var(--secondary-text-color); padding-top: 12px; text-align: center; display: none; }
           .pt-row { display: flex; justify-content: space-around; gap: 8px; border-radius: 8px; padding: 14px 0; }
           .pt-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
           .pt-icon-wrap { position: relative; width: 56px; height: 56px; }
@@ -5614,9 +5663,11 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
         <ha-card>
           <div id="pt-title"></div>
           <div id="pt-body"></div>
+          <div id="pt-subtitle"></div>
         </ha-card>
       `;
       this._titleEl = this.shadowRoot.getElementById("pt-title");
+      this._subtitleEl = this.shadowRoot.getElementById("pt-subtitle");
       this._bodyEl = this.shadowRoot.getElementById("pt-body");
       this.content = this._bodyEl;
     }
@@ -5625,11 +5676,37 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
     this._titleEl.style.display = this.config.title ? "block" : "none";
 
     if (!stateObj) {
+      this._subtitleEl.style.display = "none";
       this._bodyEl.innerHTML = `<div class="pt-empty">PlayStation Trophy totals require Full Game Library Scan to be enabled for PlayStation.</div>`;
       return;
     }
 
-    const attrs = stateObj.attributes;
+    // Active-game mode reads its four tier counts from the matched game's
+    // own trophies_earned/trophies_total (per-tier objects) instead of
+    // this sensor's own aggregate trophies_<tier>/trophies_<tier>_total
+    // attributes (lifetime totals across the whole library) -- see
+    // set hass() for how/when activeGame gets resolved (and falls back to
+    // null, i.e. the full-library aggregate, whenever it shouldn't apply).
+    const attrs = activeGame
+      ? {
+          trophies_bronze: (activeGame.trophies_earned || {}).bronze,
+          trophies_bronze_total: (activeGame.trophies_total || {}).bronze,
+          trophies_silver: (activeGame.trophies_earned || {}).silver,
+          trophies_silver_total: (activeGame.trophies_total || {}).silver,
+          trophies_gold: (activeGame.trophies_earned || {}).gold,
+          trophies_gold_total: (activeGame.trophies_total || {}).gold,
+          trophies_platinum: (activeGame.trophies_earned || {}).platinum,
+          trophies_platinum_total: (activeGame.trophies_total || {}).platinum,
+        }
+      : stateObj.attributes;
+
+    if (activeGame && this.config.show_game_title) {
+      this._subtitleEl.textContent = activeGame.console ? `${activeGame.title} (${activeGame.console})` : activeGame.title;
+      this._subtitleEl.style.display = "block";
+    } else {
+      this._subtitleEl.style.display = "none";
+    }
+
     const bgByMode = { none: "transparent", black: "#000", white: "#fff" };
     const cellBg = bgByMode[this.config.background] || "transparent";
 
@@ -5714,6 +5791,7 @@ class GamingStatusPlaystationTrophiesEditor extends HTMLElement {
         .radio-group, .checkbox-group { display: flex; flex-direction: column; gap: 10px; }
         label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
         hr { border: 0; border-top: 1px solid var(--divider-color); margin: 0; }
+        .helper-text { font-size: 12px; color: var(--secondary-text-color); margin-top: 8px; line-height: 1.4; }
       </style>
       <div class="editor-container">
         <div>
@@ -5743,7 +5821,11 @@ class GamingStatusPlaystationTrophiesEditor extends HTMLElement {
           <div class="checkbox-group">
             <label><input type="checkbox" data-field="show_labels" ${this._config.show_labels !== false ? "checked" : ""}> Show Tier Labels</label>
             <label><input type="checkbox" data-field="show_total" ${this._config.show_total !== false ? "checked" : ""}> Show Total Available</label>
+            <label><input type="checkbox" data-field="show_active_game" ${this._config.show_active_game === true ? "checked" : ""}> Show Active Game Trophies</label>
+            ${this._config.show_active_game === true ? `
+            <label><input type="checkbox" data-field="show_game_title" ${this._config.show_game_title !== false ? "checked" : ""}> Show Game Title</label>` : ""}
           </div>
+          <div class="helper-text">When checked, shows trophies for the PlayStation game this player is currently playing instead of their full library totals -- falls back to the full library whenever no PlayStation game is currently active.</div>
         </div>
         <hr>
         <div>
@@ -5789,6 +5871,10 @@ class GamingStatusPlaystationTrophiesEditor extends HTMLElement {
         const field = ev.target.dataset.field;
         this._config = { ...this._config, [field]: ev.target.checked };
         fireChanged();
+        // "Show Game Title" only applies (and is only shown) when Show
+        // Active Game Trophies is on -- re-render so it appears/
+        // disappears immediately rather than on some unrelated change.
+        if (field === "show_active_game") this.render();
       });
     });
   }
