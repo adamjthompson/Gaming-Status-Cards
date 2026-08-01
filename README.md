@@ -222,6 +222,7 @@ A single player's lifetime Bronze/Silver/Gold/Platinum trophy totals, shown as f
 * **Show Total Available:** Toggle the "of Y" total-possible line under each earned count.
 * **Show Active Game Trophies:** When checked, shows trophy counts for whatever PlayStation game this player is *currently* playing instead of their full library totals. Falls back to the full-library totals whenever no PlayStation game is currently active, or the active game hasn't been resolved by a library scan yet. Unchecked by default.
 * **Show Game Title** *(only shown when Show Active Game Trophies is checked)*: Adds a centered line below the trophies naming the active game — its specific console too, if known (e.g. "Ratchet & Clank (PS3)"). Checked by default.
+* **Show Active Game Artwork** *(only shown when Show Active Game Trophies is checked)*: Displays the active game's hero art as a blurred, slightly darkened background behind the whole card. Unchecked by default.
 * **Trophy Images:** **Official Trophy Images** (default — tries PSN's own official trophy image per tier, falling back to a `mdi:trophy` icon tinted to approximate that tier's real-world color if the image fails to load) or **Icons Only** (always use the tinted icon, never attempt to load an image).
 
 ---

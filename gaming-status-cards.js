@@ -5535,6 +5535,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       show_labels: true,
       show_active_game: false,
       show_game_title: true,
+      show_active_artwork: false,
       image_style: "official",
     };
   }
@@ -5554,6 +5555,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       show_labels: config.show_labels !== false,
       show_active_game: config.show_active_game === true,
       show_game_title: config.show_game_title !== false,
+      show_active_artwork: config.show_active_artwork === true,
       image_style: config.image_style === "icons" ? "icons" : "official",
     };
     this._lastHash = "";
@@ -5630,8 +5632,10 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       this.config.show_labels,
       this.config.show_active_game,
       this.config.show_game_title,
+      this.config.show_active_artwork,
       activeGame ? activeGame.title : "",
       activeGame ? activeGame.console : "",
+      activeGame ? activeGame.game_hero_art : "",
       activeGame ? JSON.stringify(activeGame.trophies_earned) : "",
       this.config.image_style,
     ].join("|");
@@ -5647,7 +5651,9 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       this.shadowRoot.innerHTML = `
         <style>
           :host { display: block; }
-          ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
+          ha-card { position: relative; overflow: hidden; padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
+          #pt-bg { position: absolute; inset: 0; background-size: cover; background-position: center; filter: blur(12px) brightness(0.5); transform: scale(1.1); z-index: 0; display: none; }
+          #pt-content { position: relative; z-index: 1; }
           #pt-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
           #pt-subtitle { font-size: 13px; color: var(--secondary-text-color); padding-top: 12px; text-align: center; display: none; }
           .pt-row { display: flex; justify-content: space-around; gap: 8px; border-radius: 8px; padding: 14px 0; }
@@ -5661,11 +5667,15 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
           .pt-empty { padding: 20px; color: var(--secondary-text-color); font-style: italic; }
         </style>
         <ha-card>
-          <div id="pt-title"></div>
-          <div id="pt-body"></div>
-          <div id="pt-subtitle"></div>
+          <div id="pt-bg"></div>
+          <div id="pt-content">
+            <div id="pt-title"></div>
+            <div id="pt-body"></div>
+            <div id="pt-subtitle"></div>
+          </div>
         </ha-card>
       `;
+      this._bgEl = this.shadowRoot.getElementById("pt-bg");
       this._titleEl = this.shadowRoot.getElementById("pt-title");
       this._subtitleEl = this.shadowRoot.getElementById("pt-subtitle");
       this._bodyEl = this.shadowRoot.getElementById("pt-body");
@@ -5676,6 +5686,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
     this._titleEl.style.display = this.config.title ? "block" : "none";
 
     if (!stateObj) {
+      this._bgEl.style.display = "none";
       this._subtitleEl.style.display = "none";
       this._bodyEl.innerHTML = `<div class="pt-empty">PlayStation Trophy totals require Full Game Library Scan to be enabled for PlayStation.</div>`;
       return;
@@ -5705,6 +5716,18 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       this._subtitleEl.style.display = "block";
     } else {
       this._subtitleEl.style.display = "none";
+    }
+
+    // Blurred, darkened hero art behind the card's whole content -- only
+    // while showing a specific active game's trophies (see #pt-bg's own
+    // blur/brightness filter + scale-up above, which sits behind
+    // #pt-content in a separate absolutely-positioned layer so the filter
+    // never blurs the actual trophy icons/text on top of it).
+    if (activeGame && this.config.show_active_artwork && activeGame.game_hero_art) {
+      this._bgEl.style.backgroundImage = `url("${activeGame.game_hero_art}")`;
+      this._bgEl.style.display = "block";
+    } else {
+      this._bgEl.style.display = "none";
     }
 
     const bgByMode = { none: "transparent", black: "#000", white: "#fff" };
@@ -5823,7 +5846,8 @@ class GamingStatusPlaystationTrophiesEditor extends HTMLElement {
             <label><input type="checkbox" data-field="show_total" ${this._config.show_total !== false ? "checked" : ""}> Show Total Available</label>
             <label><input type="checkbox" data-field="show_active_game" ${this._config.show_active_game === true ? "checked" : ""}> Show Active Game Trophies</label>
             ${this._config.show_active_game === true ? `
-            <label><input type="checkbox" data-field="show_game_title" ${this._config.show_game_title !== false ? "checked" : ""}> Show Game Title</label>` : ""}
+            <label><input type="checkbox" data-field="show_game_title" ${this._config.show_game_title !== false ? "checked" : ""}> Show Game Title</label>
+            <label><input type="checkbox" data-field="show_active_artwork" ${this._config.show_active_artwork === true ? "checked" : ""}> Show Active Game Artwork</label>` : ""}
           </div>
           <div class="helper-text">When checked, shows trophies for the PlayStation game this player is currently playing instead of their full library totals -- falls back to the full library whenever no PlayStation game is currently active.</div>
         </div>
