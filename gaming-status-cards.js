@@ -5652,7 +5652,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
         <style>
           :host { display: block; }
           ha-card { position: relative; overflow: hidden; padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
-          #pt-bg { position: absolute; inset: 0; background-size: cover; background-position: center; filter: blur(12px) brightness(0.5); transform: scale(1.1); z-index: 0; display: none; }
+          #pt-bg { position: absolute; inset: 0; background-size: cover; background-position: center; filter: blur(6px) brightness(0.5); transform: scale(1.1); z-index: 0; display: none; }
           #pt-content { position: relative; z-index: 1; }
           #pt-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
           #pt-subtitle { font-size: 13px; color: var(--secondary-text-color); padding-top: 12px; text-align: center; display: none; }
