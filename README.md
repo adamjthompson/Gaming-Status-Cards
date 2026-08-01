@@ -107,8 +107,9 @@ A dependency-free native CSS bar chart that ranks your squad across a variety of
   * **All-Time Total Hours** — ranks players by their entire lifetime tracked playtime, not just the current window.
   * **All-Time Session Count** - ranks players by how many completed sessions they've logged, ever.
   * **Top Games: All-Time Hours Per Game (Aggregate)** - like the weekly version, but ranks games by lifetime hours across your whole squad.
-* **Time Window:** Choose the time period to display: **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**. Automatically hidden when an All-Time metric is selected, since those aren't scoped to a window.
-* **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players.
+  * **Total Playtime: Steam Games** - a per-game breakdown of one player's lifetime Steam playtime, sourced from Steam's own official playtime data (requires **Full Game Library Scan** to be enabled for Steam on that player). Unlike every other metric above, this one is inherently single-player data, not something meaningful to merge across a squad.
+* **Time Window:** Choose the time period to display: **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**. Automatically hidden when an All-Time metric or **Total Playtime: Steam Games** is selected, since neither is scoped to a window.
+* **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players. Locked to **Single Player** when **Total Playtime: Steam Games** is selected, since that metric only ever shows one player's own data — picking a player without Full Game Library Scan enabled for Steam shows "No playtime totals available for this player" instead of a chart.
 * **Items to Display (Rows):** Set how many ranked entries are shown (default: 3, max: 20).
 * **Custom Colors:** Override the default vibrant palette with a comma-separated list of CSS colors.
 
