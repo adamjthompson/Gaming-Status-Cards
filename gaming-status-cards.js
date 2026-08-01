@@ -4905,7 +4905,11 @@ class GamingStatusGameManagementCard extends HTMLElement {
       newNameInput.addEventListener("input", (ev) => {
         this._newName = ev.target.value;
         const trimmed = this._newName.trim();
-        const enabled = !!(this._selectedGame && trimmed && trimmed.toLowerCase() !== this._selectedGame.toLowerCase());
+        // Exact (case-sensitive) comparison -- see the matching renameEnabled
+        // computation in render() for why a case-only fix (e.g. "Skull And
+        // Bones" -> "Skull and Bones") must be allowed through, not just an
+        // identical no-op rename.
+        const enabled = !!(this._selectedGame && trimmed && trimmed !== this._selectedGame);
         this.shadowRoot.getElementById("gm-rename-btn").disabled = !enabled;
       });
     }
