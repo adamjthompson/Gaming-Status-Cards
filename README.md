@@ -166,7 +166,7 @@ A configurable table of recently unlocked achievements/trophies (one row per unl
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players. In **Single Player** mode, the Player column is automatically hidden since it would be redundant.
 * **Number of Achievements to Display:** How many recent unlocks to show (default: 10, max: 20). If more than 10 would be shown, the list scrolls instead of growing taller. Type a value and click **Apply** to confirm it.
 * **Background:** Choose what renders (blurred) behind each row — **Game Artwork**, **Achievement Icon** (the unlock's own icon/trophy image, when the platform provided one — falls back to the game's artwork, then the player's avatar, for an unlock that doesn't have one captured), **Player Avatar**, or **None**.
-* **Color Mode:** Choose how each row's blurred background is tinted (hidden when Background is set to None) — **Platform Native** uses a fixed color per platform (Steam blue, Xbox green, etc.), same color set as the List/Recent Sessions cards' Platform Native color mode, or **None** leaves the background untinted. (Unlike Recent Sessions, there's no dynamic per-game color option here — most unlocks in this card come from games discovered by the library scan rather than played live, so no per-game color is ever available to use.)
+* **Color Mode:** Choose how each row's blurred background is tinted (hidden when Background is set to None) — **Platform Native** uses a fixed color per platform (Steam blue, Xbox green, etc.), same color set as the List/Recent Sessions cards' Platform Native color mode; **None** leaves the background untinted; **Game Artwork (Dynamic)** — only offered when **Game Color Extraction** is enabled integration-wide — tints each row with that specific unlock's own extracted game color. This is reliably available for genuinely recent unlocks (the real-time tracker was almost certainly already running for that same session) but absent for older achievements backfilled from a title never played live through this integration — those rows just keep the plain default look instead of falling back to a platform tint. If Game Color Extraction is later disabled while this option is already selected, the whole card falls back to Platform Native tinting instead of rendering untinted.
 * **Show Header Row:** Toggle the column header row on or off.
 * **Visible Columns:** Independently toggle the Player, Game, Platform, Achievement, Date, and Time columns on or off.
 
@@ -426,7 +426,7 @@ single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated player names or entity IDs (used when mode is 'selected')
 max_achievements: 10 # Number of achievements to display (max 20); scrolls once more than 10 are shown
 background: art # Options: art (game artwork), icon (the unlock's own achievement/trophy icon), avatar (player avatar), none
-color_mode: platform # Options: platform (fixed per-platform brand color), none
+color_mode: platform # Options: game (dynamic, colored from that unlock's own extracted game color -- only offered when Game Color Extraction is enabled; falls back to platform tinting if that setting is later disabled), platform (fixed per-platform brand color), none
 show_header: true # Set to false to hide the column header row
 show_column_player: true # Automatically hidden when mode is 'single', regardless of this setting
 show_column_game: true

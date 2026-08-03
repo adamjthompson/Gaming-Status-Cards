@@ -369,6 +369,28 @@ function gamingStatusIsColorExtractionEnabled(hass) {
   return true;
 }
 
+// Same hex/rgb parsing the List card's "Game Artwork" color mode uses,
+// shared by every card with a "game" (dynamic) color_mode option --
+// Recent Sessions and Recent Achievements both tint a row from a
+// game_dominant_color value using this.
+function gamingStatusParseGameColor(rawColor) {
+  if (!rawColor || String(rawColor).toLowerCase() === "null" || String(rawColor).toLowerCase() === "none") return null;
+  const str = String(rawColor).trim().toLowerCase();
+  if (str.startsWith('#')) {
+    let h = str.replace('#', '');
+    if (h.length === 3) h = [...h].map(x => x + x).join('');
+    if (h.length === 6) {
+      const r = parseInt(h.substring(0, 2), 16);
+      const g = parseInt(h.substring(2, 4), 16);
+      const b = parseInt(h.substring(4, 6), 16);
+      if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return `rgb(${r}, ${g}, ${b})`;
+    }
+    return null;
+  }
+  if (str.startsWith('rgb')) return str;
+  return null;
+}
+
 // Same pattern as gamingStatusIsColorExtractionEnabled, for the global
 // "Enable Achievement/Trophy Tracking" setting -- used by the Recent
 // Achievements card to show a friendly "not enabled" empty state instead
@@ -3246,23 +3268,11 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
     return `${m}m`;
   }
 
-  // Same hex/rgb parsing the List card uses for its "Game Artwork" color mode.
+  // Parsing moved to the shared gamingStatusParseGameColor (also used by
+  // GamingStatusRecentAchievementsCard) -- kept as a thin wrapper so the
+  // existing this._parseGameColor(...) call site below didn't need to change.
   _parseGameColor(rawColor) {
-    if (!rawColor || String(rawColor).toLowerCase() === "null" || String(rawColor).toLowerCase() === "none") return null;
-    const str = String(rawColor).trim().toLowerCase();
-    if (str.startsWith('#')) {
-      let h = str.replace('#', '');
-      if (h.length === 3) h = [...h].map(x => x + x).join('');
-      if (h.length === 6) {
-        const r = parseInt(h.substring(0, 2), 16);
-        const g = parseInt(h.substring(2, 4), 16);
-        const b = parseInt(h.substring(4, 6), 16);
-        if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return `rgb(${r}, ${g}, ${b})`;
-      }
-      return null;
-    }
-    if (str.startsWith('rgb')) return str;
-    return null;
+    return gamingStatusParseGameColor(rawColor);
   }
 
   _formatDate(dateStr) {
@@ -3669,16 +3679,15 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
       selected_entities: config.selected_entities || "",
       max_achievements: config.max_achievements !== undefined ? Math.min(20, Math.max(1, parseInt(config.max_achievements) || 10)) : 10,
       background: config.background || "art",
-      // Unlike Recent Sessions, this card has no working "dynamic game
-      // color" mode -- game_dominant_color is only ever populated for a
-      // title tracked live through real-time play, and most achievement
-      // entries here come from the library scan instead (a game not
-      // currently/recently being played is the whole point of that
-      // feature), so it's essentially always empty. Only "platform" and
-      // "none" are real options; any other stored value (including a
-      // pre-existing "game" from before this was simplified) normalizes
-      // to "platform".
-      color_mode: config.color_mode === "none" ? "none" : "platform",
+      // "game" (dynamic) mode tints a row from that specific unlock's own
+      // recorded game_dominant_color -- reliably present for genuinely
+      // recent unlocks (the real-time tracker was almost certainly already
+      // running for that same session), but absent for older entries
+      // backfilled from a title never played live through this integration.
+      // A row with no color just keeps the plain default overlay (see
+      // render()); the whole card falls back to "platform" tinting
+      // instead if color extraction is disabled integration-wide.
+      color_mode: ["none", "game"].includes(config.color_mode) ? config.color_mode : "platform",
       show_platform_steam: config.show_platform_steam !== false,
       show_platform_xbox: config.show_platform_xbox !== false,
       show_platform_playstation: config.show_platform_playstation !== false,
@@ -3761,6 +3770,7 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
           unlocked_at: u.unlocked_at || "",
           hero_art_url: u.hero_art_url || "",
           icon_url: u.icon_url || "",
+          game_dominant_color: u.game_dominant_color || "",
         });
       }
     }
@@ -3803,6 +3813,7 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
 
   render(rows, trackingEnabled) {
     const escapeHTML = gamingStatusEscapeHTML;
+    const colorExtractionEnabled = gamingStatusIsColorExtractionEnabled(this._hass);
 
     if (!this.content) {
       this.shadowRoot.innerHTML = `
@@ -3889,12 +3900,21 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
       const hasBg = !!bgUrl;
 
       let tintStyle = "";
-      if (hasBg && this.config.color_mode !== "none") {
+      if (hasBg && (this.config.color_mode === "platform" || (this.config.color_mode === "game" && !colorExtractionEnabled))) {
         const platformLower = (row.platform || "").toLowerCase();
         const tintKey = Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => platformLower.includes(k));
         if (tintKey) {
           const rgb = GAMING_STATUS_PLATFORM_TINTS[tintKey];
           tintStyle = ` --ra-tint-start: rgb(${rgb}); --ra-tint-end: rgba(0, 0, 0, 0.5);`;
+        }
+      } else if (hasBg && this.config.color_mode === "game") {
+        // "game" (dynamic) mode -- color this row from that specific
+        // unlock's own recorded dominant color. Entries with none (e.g.
+        // backfilled from a title never played live) just keep the plain
+        // default overlay below rather than falling back to a platform tint.
+        const parsedGameColor = gamingStatusParseGameColor(row.game_dominant_color);
+        if (parsedGameColor) {
+          tintStyle = ` --ra-tint-start: ${parsedGameColor}; --ra-tint-end: rgba(0, 0, 0, 0.5);`;
         }
       }
 
@@ -3961,6 +3981,7 @@ class GamingStatusRecentAchievementsEditor extends HTMLElement {
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
     const achievementPlatforms = ["steam", "xbox", "playstation"];
+    const colorExtractionEnabled = gamingStatusIsColorExtractionEnabled(this._hass);
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -4040,9 +4061,11 @@ class GamingStatusRecentAchievementsEditor extends HTMLElement {
           <div class="section-title">Color Mode</div>
           <div class="radio-group">
             <label><input type="radio" name="color_mode" data-field="color_mode" value="none" ${this._config.color_mode === "none" ? "checked" : ""}> None</label>
-            <label><input type="radio" name="color_mode" data-field="color_mode" value="platform" ${this._config.color_mode !== "none" ? "checked" : ""}> Platform Native</label>
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="platform" ${this._config.color_mode === "platform" ? "checked" : ""}> Platform Native</label>
+            ${colorExtractionEnabled ? `
+            <label><input type="radio" name="color_mode" data-field="color_mode" value="game" ${this._config.color_mode === "game" ? "checked" : ""}> Game Artwork (Dynamic)</label>` : ""}
           </div>
-          <div class="helper-text">Tint each row's blurred background with a fixed color per platform (Steam blue, Xbox green, etc), or leave it untinted.</div>
+          <div class="helper-text">Tint each row's blurred background with a fixed color per platform (Steam blue, Xbox green, etc), that unlock's own extracted game color (only reliably available for recently-played titles -- older backfilled entries fall back to the plain default look), or leave it untinted.</div>
         </div>` : ""}
         <hr>
         <div>
