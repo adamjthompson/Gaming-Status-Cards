@@ -307,7 +307,7 @@ An Exophase-style summary card for a single player on a single platform: avatar,
 * **Player:** A single player dropdown.
 * **Platform:** Steam, Xbox, or PlayStation — a single platform at a time, same as the Library card.
 * **Recent Games to Show:** How many of the player's most-recently-played games get their own row (1–10).
-* **Stats to Display:** Total Games in Library and Total Completion Percentage (both always offered), plus whichever of these apply to the selected platform — **Total Gamerscore** (Xbox), **Total Trophies**/**Total Achievements** (PlayStation/Steam), **Total Playtime** (Steam — automatically hidden whenever it's 0, even if checked), and **Trophy Breakdown** (PlayStation — a compact Bronze/Silver/Gold/Platinum count row).
+* **Stats to Display:** Total Games in Library, Total Completion Percentage, and Game Completion Percentage (all three always offered — the last one shows each game row's own completion % next to its icons, distinct from the library-wide average above), plus whichever of these apply to the selected platform — **Total Gamerscore** (Xbox), **Total Trophies**/**Total Achievements** (PlayStation/Steam), **Total Playtime** (Steam — automatically hidden whenever it's 0, even if checked), and **Trophy Breakdown** (PlayStation — a compact Bronze/Silver/Gold/Platinum count row).
 * **Trophy Images** *(PlayStation only, shown when Trophy Breakdown is checked)*: **Official Trophy Images** or **Icons Only**, same option as the PlayStation Trophies card.
 
 Hovering an achievement/trophy icon shows a tooltip with its name and the date/time it was earned. A game row with no captured logo/icon/cover art falls back to its plain title text instead; a game with fewer than four recorded recent unlocks (or none at all) just shows fewer icons rather than a placeholder.
@@ -573,6 +573,7 @@ platform: playstation # Options: steam, xbox, playstation (single platform at a 
 recent_games_count: 2 # Number of most-recently-played games to show as rows (1-10)
 show_game_count: true # Total games in library -- always offered
 show_completion_percent: true # Average completion % across the whole library -- always offered
+show_game_completion: true # Each game row's own completion % next to its icons -- always offered
 show_gamerscore: true # Xbox only
 show_total_trophies: true # PlayStation/Steam only (Total Trophies / Total Achievements)
 show_total_playtime: true # Steam only -- hidden automatically when playtime is 0, even if true

@@ -7532,6 +7532,7 @@ class GamingStatusGamercardCard extends HTMLElement {
       recent_games_count: 2,
       show_game_count: true,
       show_completion_percent: true,
+      show_game_completion: true,
       show_gamerscore: true,
       show_total_trophies: true,
       show_total_playtime: true,
@@ -7550,6 +7551,7 @@ class GamingStatusGamercardCard extends HTMLElement {
       recent_games_count: Math.min(10, Math.max(1, parseInt(config.recent_games_count) || 2)),
       show_game_count: config.show_game_count !== false,
       show_completion_percent: config.show_completion_percent !== false,
+      show_game_completion: config.show_game_completion !== false,
       show_gamerscore: config.show_gamerscore !== false,
       show_total_trophies: config.show_total_trophies !== false,
       show_total_playtime: config.show_total_playtime !== false,
@@ -7611,6 +7613,7 @@ class GamingStatusGamercardCard extends HTMLElement {
       this.config.recent_games_count,
       this.config.show_game_count,
       this.config.show_completion_percent,
+      this.config.show_game_completion,
       this.config.show_gamerscore,
       this.config.show_total_trophies,
       this.config.show_total_playtime,
@@ -7674,8 +7677,10 @@ class GamingStatusGamercardCard extends HTMLElement {
           .gc-game-art { width: 96px; height: 40px; object-fit: contain; flex-shrink: 0; border-radius: 4px; }
           .gc-game-art-placeholder { display: flex; align-items: center; justify-content: center; background: rgba(120, 120, 120, 0.12); text-align: center; padding: 2px; box-sizing: border-box; }
           .gc-game-fallback-title { font-size: 11px; font-weight: 600; color: var(--primary-text-color); line-height: 1.2; }
-          .gc-icon-row { display: flex; gap: 4px; flex-shrink: 0; margin-left: auto; }
+          .gc-game-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
+          .gc-icon-row { display: flex; gap: 4px; flex-shrink: 0; }
           .gc-icon { width: 28px; height: 28px; border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: rgba(120, 120, 120, 0.12); flex-shrink: 0; }
+          .gc-game-percent { font-size: 14px; font-weight: 700; color: var(--primary-text-color); white-space: nowrap; }
           .gc-icon img { width: 100%; height: 100%; object-fit: cover; }
           .gc-bottom-bar { display: flex; justify-content: center; gap: 18px; padding-top: 14px; }
           .gc-bottom-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -7804,10 +7809,17 @@ class GamingStatusGamercardCard extends HTMLElement {
         return `<div class="gc-icon" data-game="${gi}" data-idx="${ii}">${inner}</div>`;
       }).join("");
 
+      const percentHTML = this.config.show_game_completion
+        ? `<span class="gc-game-percent">${escapeHTML(Math.round((g.percent || 0) * 10) / 10)}%</span>`
+        : "";
+
       return `
         <div class="gc-game-row">
           ${artHTML}
-          <div class="gc-icon-row">${iconsHTML}</div>
+          <div class="gc-game-right">
+            <div class="gc-icon-row">${iconsHTML}</div>
+            ${percentHTML}
+          </div>
         </div>`;
     }).join("");
 
@@ -7944,11 +7956,13 @@ class GamingStatusGamercardEditor extends HTMLElement {
           <div class="checkbox-group">
             <label><input type="checkbox" data-field="show_game_count" ${this._config.show_game_count !== false ? "checked" : ""}> Total Games in Library</label>
             <label><input type="checkbox" data-field="show_completion_percent" ${this._config.show_completion_percent !== false ? "checked" : ""}> Total Completion Percentage</label>
+            <label><input type="checkbox" data-field="show_game_completion" ${this._config.show_game_completion !== false ? "checked" : ""}> Game Completion Percentage</label>
             ${platform === "xbox" ? `<label><input type="checkbox" data-field="show_gamerscore" ${this._config.show_gamerscore !== false ? "checked" : ""}> Total Gamerscore</label>` : ""}
             ${platform === "steam" || platform === "playstation" ? `<label><input type="checkbox" data-field="show_total_trophies" ${this._config.show_total_trophies !== false ? "checked" : ""}> Total ${platform === "steam" ? "Achievements" : "Trophies"}</label>` : ""}
             ${platform === "steam" ? `<label><input type="checkbox" data-field="show_total_playtime" ${this._config.show_total_playtime !== false ? "checked" : ""}> Total Playtime</label>` : ""}
             ${platform === "playstation" ? `<label><input type="checkbox" data-field="show_trophy_breakdown" ${showTrophyBreakdown ? "checked" : ""}> Trophy Breakdown</label>` : ""}
           </div>
+          <div class="helper-text">Game Completion Percentage shows next to each game row's icons, individually -- unlike Total Completion Percentage above, which averages the whole library.</div>
           ${platform === "steam" ? `<div class="helper-text">Playtime is hidden automatically when it's 0, even if this is checked.</div>` : ""}
         </div>
         ${platform === "playstation" && showTrophyBreakdown ? `
