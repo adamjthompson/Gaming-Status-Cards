@@ -7673,7 +7673,7 @@ class GamingStatusGamercardCard extends HTMLElement {
           .gc-stat-value { font-size: 16px; font-weight: 700; color: var(--primary-text-color); }
           .gc-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--secondary-text-color); white-space: nowrap; }
           .gc-rows { display: flex; flex-direction: column; gap: 8px; }
-          .gc-game-row { display: flex; align-items: center; gap: 10px; background: rgba(120, 120, 120, 0.25); border-radius: 8px; padding: 8px; box-sizing: border-box; }
+          .gc-game-row { display: flex; align-items: center; gap: 10px; background: rgba(120, 120, 120, 0.5); border-radius: 8px; padding: 8px; box-sizing: border-box; }
           .gc-game-art { width: 96px; height: 40px; object-fit: contain; flex-shrink: 0; border-radius: 4px; }
           .gc-game-art-placeholder { display: flex; align-items: center; justify-content: center; background: rgba(120, 120, 120, 0.12); text-align: center; padding: 2px; box-sizing: border-box; }
           .gc-game-fallback-title { font-size: 11px; font-weight: 600; color: var(--primary-text-color); line-height: 1.2; }
