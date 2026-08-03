@@ -10,8 +10,14 @@ This plugin includes fifteen unique cards to visualize (and manage) your squad's
 
 ## Installation
 
-This card is designed to be installed via [HACS](https://hacs.xyz/).
+**Method 1: HACS (Recommended)**
+Installation is easiest via the [Home Assistant Community Store (HACS)](https://hacs.xyz/). Gaming Status Cards is a default repository in HACS, so you do not need to add any custom links! 
 
+Simply click the button below (requires My Home Assistant configured) to open the download page directly, or search for "Gaming Status Cards" in HACS.
+
+[![Open HACS Repository](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=adamjthompson&repository=Gaming-Status-Cards&category=dashboard)
+
+**Method 2: Manual**
 1. Open HACS in your Home Assistant instance.
 2. Click the three dots in the top right corner and select **Custom repositories**.
 3. Paste the URL of this repository.
