@@ -7680,7 +7680,7 @@ class GamingStatusGamercardCard extends HTMLElement {
           .gc-game-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
           .gc-icon-row { display: flex; gap: 4px; flex-shrink: 0; }
           .gc-icon { width: 28px; height: 28px; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: rgba(120, 120, 120, 0.12); flex-shrink: 0; }
-          .gc-game-percent { font-size: 14px; font-weight: 700; color: var(--primary-text-color); white-space: nowrap; }
+          .gc-game-percent { font-size: 14px; font-weight: 700; color: var(--primary-text-color); white-space: nowrap; min-width: 42px; text-align: right; flex-shrink: 0; }
           .gc-icon img { width: 100%; height: 100%; object-fit: cover; }
           .gc-bottom-bar { display: flex; justify-content: center; gap: 18px; padding-top: 14px; }
           .gc-bottom-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -7817,8 +7817,8 @@ class GamingStatusGamercardCard extends HTMLElement {
         <div class="gc-game-row">
           ${artHTML}
           <div class="gc-game-right">
-            ${percentHTML}
             <div class="gc-icon-row">${iconsHTML}</div>
+            ${percentHTML}
           </div>
         </div>`;
     }).join("");
