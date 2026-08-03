@@ -7817,8 +7817,8 @@ class GamingStatusGamercardCard extends HTMLElement {
         <div class="gc-game-row">
           ${artHTML}
           <div class="gc-game-right">
-            <div class="gc-icon-row">${iconsHTML}</div>
             ${percentHTML}
+            <div class="gc-icon-row">${iconsHTML}</div>
           </div>
         </div>`;
     }).join("");
