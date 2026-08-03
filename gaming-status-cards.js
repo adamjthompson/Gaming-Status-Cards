@@ -716,7 +716,7 @@ class GamingStatusCard extends HTMLElement {
           
           .card-stack::-webkit-scrollbar { width: 6px; }
           .card-stack::-webkit-scrollbar-track { background: transparent; }
-          .card-stack::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, 0.4); border-radius: 3px; }
+          .card-stack::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, 0.4); border-radius: 4px; }
           .card-stack::-webkit-scrollbar-thumb:hover { background: rgba(120, 120, 120, 0.8); }
 
           .player-card {
@@ -1587,7 +1587,7 @@ class GamingStatusChartCard extends HTMLElement {
           <div id="chart-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none;"></div>
           <div id="chart-content"></div>
         </ha-card>
-        <div id="chart-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:5px 9px;border-radius:5px;font-size:12px;white-space:nowrap;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`;
+        <div id="chart-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:5px 9px;border-radius:4px;font-size:12px;white-space:nowrap;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`;
       this._titleEl = this.shadowRoot.getElementById("chart-title");
       this._contentEl = this.shadowRoot.getElementById("chart-content");
       this._tooltipEl = this.shadowRoot.getElementById("chart-tooltip");
@@ -1976,7 +1976,7 @@ class GamingStatusDonutCard extends HTMLElement {
           <div id="d-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none;"></div>
           <div id="d-content"></div>
         </ha-card>
-        <div id="d-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:5px 9px;border-radius:5px;font-size:12px;white-space:nowrap;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`;
+        <div id="d-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:5px 9px;border-radius:4px;font-size:12px;white-space:nowrap;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`;
       this._titleEl = this.shadowRoot.getElementById("d-title");
       this._contentEl = this.shadowRoot.getElementById("d-content");
       this._tooltipEl = this.shadowRoot.getElementById("d-tooltip");
@@ -2804,7 +2804,7 @@ class GamingStatusGameChartCard extends HTMLElement {
           <div id="gc-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none;"></div>
           <div id="gc-content"></div>
         </ha-card>
-        <div id="gc-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:5px 9px;border-radius:5px;font-size:12px;white-space:nowrap;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`;
+        <div id="gc-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:5px 9px;border-radius:4px;font-size:12px;white-space:nowrap;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`;
       this._titleEl = this.shadowRoot.getElementById("gc-title");
       this._contentEl = this.shadowRoot.getElementById("gc-content");
       this._tooltipEl = this.shadowRoot.getElementById("gc-tooltip");
@@ -3307,7 +3307,7 @@ class GamingStatusRecentSessionsCard extends HTMLElement {
           .rs-body.scrollable { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
           .rs-body::-webkit-scrollbar { width: 6px; }
           .rs-body::-webkit-scrollbar-track { background: transparent; }
-          .rs-body::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, 0.4); border-radius: 3px; }
+          .rs-body::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, 0.4); border-radius: 4px; }
           .rs-body::-webkit-scrollbar-thumb:hover { background: rgba(120, 120, 120, 0.8); }
 
           .rs-row {
@@ -3829,7 +3829,7 @@ class GamingStatusRecentAchievementsCard extends HTMLElement {
           .ra-body.scrollable { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
           .ra-body::-webkit-scrollbar { width: 6px; }
           .ra-body::-webkit-scrollbar-track { background: transparent; }
-          .ra-body::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, 0.4); border-radius: 3px; }
+          .ra-body::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, 0.4); border-radius: 4px; }
           .ra-body::-webkit-scrollbar-thumb:hover { background: rgba(120, 120, 120, 0.8); }
 
           .ra-row {
@@ -4639,7 +4639,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
           .gm-status.success { background: rgba(76, 175, 80, 0.15); color: var(--success-color, #4caf50); }
           .gm-status.error { background: rgba(219, 68, 55, 0.15); color: var(--error-color, #db4437); }
           .gm-confirm-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-          .gm-confirm-box { background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); border-radius: 8px; padding: 20px; max-width: 320px; width: calc(100% - 40px); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); box-sizing: border-box; }
+          .gm-confirm-box { background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); border-radius: 4px; padding: 20px; max-width: 320px; width: calc(100% - 40px); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); box-sizing: border-box; }
           .gm-confirm-title { font-size: 15px; font-weight: 600; color: var(--primary-text-color); margin-bottom: 12px; }
           .gm-confirm-line { font-size: 13px; color: var(--primary-text-color); margin-bottom: 4px; }
           .gm-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
@@ -5264,7 +5264,7 @@ class GamingStatusAchievementIconsCard extends HTMLElement {
           ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
           #ai-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
           .ai-grid { display: grid; gap: 8px; }
-          .ai-cell { position: relative; aspect-ratio: 1 / 1; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+          .ai-cell { position: relative; aspect-ratio: 1 / 1; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
           .ai-cell img { width: 100%; height: 100%; }
           .ai-empty { padding: 20px; color: var(--secondary-text-color); font-style: italic; }
         </style>
@@ -5272,7 +5272,7 @@ class GamingStatusAchievementIconsCard extends HTMLElement {
           <div id="ai-title"></div>
           <div id="ai-body"></div>
         </ha-card>
-        <div id="ai-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:6px 10px;border-radius:5px;font-size:12px;line-height:1.5;white-space:normal;max-width:220px;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>
+        <div id="ai-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:6px 10px;border-radius:4px;font-size:12px;line-height:1.5;white-space:normal;max-width:220px;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>
       `;
       this._titleEl = this.shadowRoot.getElementById("ai-title");
       this._bodyEl = this.shadowRoot.getElementById("ai-body");
@@ -5679,7 +5679,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
           #pt-content { position: relative; z-index: 1; }
           #pt-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
           #pt-subtitle { font-size: 13px; color: var(--secondary-text-color); padding-top: 12px; text-align: center; display: none; }
-          .pt-row { display: flex; justify-content: space-around; gap: 8px; border-radius: 8px; padding: 14px 0; }
+          .pt-row { display: flex; justify-content: space-around; gap: 8px; border-radius: 4px; padding: 14px 0; }
           .pt-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
           .pt-icon-wrap { position: relative; width: 56px; height: 56px; }
           .pt-icon-wrap ha-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
@@ -6086,16 +6086,16 @@ class GamingStatusCompletionCard extends HTMLElement {
           .cc-empty { padding: 20px; color: var(--secondary-text-color); font-style: italic; }
           .cc-grid { display: grid; gap: 8px; }
           .cc-grid.scrollable { overflow-y: auto; }
-          .cc-cell { display: flex; border-radius: 8px; overflow: hidden; background: var(--secondary-background-color, rgba(120, 120, 120, 0.08)); }
+          .cc-cell { display: flex; border-radius: 4px; overflow: hidden; background: var(--secondary-background-color, rgba(120, 120, 120, 0.08)); }
           .cc-cell img { width: 100%; object-fit: contain; display: block; }
-          .cc-slideshow { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background-size: contain; background-repeat: no-repeat; background-position: center; }
+          .cc-slideshow { position: relative; width: 100%; border-radius: 4px; overflow: hidden; background-size: contain; background-repeat: no-repeat; background-position: center; }
           .cc-slide { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; z-index: 1; background-size: contain; background-repeat: no-repeat; background-position: center; }
         </style>
         <ha-card>
           <div id="cc-title"></div>
           <div id="cc-body"></div>
         </ha-card>
-        <div id="cc-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:6px 10px;border-radius:5px;font-size:12px;line-height:1.5;white-space:normal;max-width:220px;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>
+        <div id="cc-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:6px 10px;border-radius:4px;font-size:12px;line-height:1.5;white-space:normal;max-width:220px;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>
       `;
       this._titleEl = this.shadowRoot.getElementById("cc-title");
       this._bodyEl = this.shadowRoot.getElementById("cc-body");
@@ -7253,7 +7253,7 @@ class GamingStatusLibraryCard extends HTMLElement {
           #lb-total { font-size: 13px; color: var(--secondary-text-color); padding-bottom: 8px; }
           .lb-list { display: flex; flex-direction: column; gap: 8px; }
           .lb-list.scrollable { overflow-y: auto; }
-          .lb-row { display: flex; gap: 10px; border-radius: 8px; overflow: hidden; background: var(--secondary-background-color, rgba(120, 120, 120, 0.08)); padding: 8px; box-sizing: border-box; }
+          .lb-row { display: flex; gap: 10px; border-radius: 4px; overflow: hidden; background: var(--secondary-background-color, rgba(120, 120, 120, 0.08)); padding: 8px; box-sizing: border-box; }
           .lb-row.hero-layout { flex-direction: column; }
           .lb-art { object-fit: contain; flex-shrink: 0; display: block; }
           .lb-art-placeholder { border-radius: 4px; background: rgba(120, 120, 120, 0.12); }
@@ -7673,13 +7673,13 @@ class GamingStatusGamercardCard extends HTMLElement {
           .gc-stat-value { font-size: 16px; font-weight: 700; color: var(--primary-text-color); }
           .gc-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--secondary-text-color); white-space: nowrap; }
           .gc-rows { display: flex; flex-direction: column; gap: 8px; }
-          .gc-game-row { display: flex; align-items: center; gap: 10px; background: rgba(120, 120, 120, 0.5); border-radius: 8px; padding: 8px; box-sizing: border-box; }
+          .gc-game-row { display: flex; align-items: center; gap: 10px; background: rgba(120, 120, 120, 0.5); border-radius: 4px; padding: 8px; box-sizing: border-box; }
           .gc-game-art { width: 96px; height: 40px; object-fit: contain; flex-shrink: 0; border-radius: 4px; }
           .gc-game-art-placeholder { display: flex; align-items: center; justify-content: center; background: rgba(120, 120, 120, 0.12); text-align: center; padding: 2px; box-sizing: border-box; }
           .gc-game-fallback-title { font-size: 11px; font-weight: 600; color: var(--primary-text-color); line-height: 1.2; }
           .gc-game-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
           .gc-icon-row { display: flex; gap: 4px; flex-shrink: 0; }
-          .gc-icon { width: 28px; height: 28px; border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: rgba(120, 120, 120, 0.12); flex-shrink: 0; }
+          .gc-icon { width: 28px; height: 28px; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: rgba(120, 120, 120, 0.12); flex-shrink: 0; }
           .gc-game-percent { font-size: 14px; font-weight: 700; color: var(--primary-text-color); white-space: nowrap; }
           .gc-icon img { width: 100%; height: 100%; object-fit: cover; }
           .gc-bottom-bar { display: flex; justify-content: center; gap: 18px; padding-top: 14px; }
@@ -7705,7 +7705,7 @@ class GamingStatusGamercardCard extends HTMLElement {
             <div id="gc-body"></div>
           </div>
         </ha-card>
-        <div id="gc-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:6px 10px;border-radius:5px;font-size:12px;line-height:1.5;white-space:normal;max-width:220px;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>
+        <div id="gc-tooltip" style="position:fixed;pointer-events:none;background:rgba(20,20,20,0.92);color:#fff;padding:6px 10px;border-radius:4px;font-size:12px;line-height:1.5;white-space:normal;max-width:220px;display:none;z-index:9999;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>
       `;
       this._bgEl = this.shadowRoot.getElementById("gc-bg");
       this._contentEl = this.shadowRoot.getElementById("gc-content");
