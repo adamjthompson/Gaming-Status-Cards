@@ -5253,7 +5253,13 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
   }
 
   setConfig(config) {
-    const displayMode = ["slideshow", "list"].includes(config.display_mode) ? config.display_mode : "grid";
+    const filter = config.filter === "near" ? "near" : "complete";
+    // Ranked List isn't offered for 100% Complete -- reset to Grid if a
+    // saved config had it selected and the user then switches filters.
+    let displayMode = ["slideshow", "list"].includes(config.display_mode) ? config.display_mode : "grid";
+    if (filter === "complete" && displayMode === "list") {
+      displayMode = "grid";
+    }
     let artworkMode = ["cover", "hero", "logo", "icon"].includes(config.artwork_mode) ? config.artwork_mode : "cover";
     // Logo/Icon are excluded from Slideshow -- their transparent backgrounds
     // can look broken crossfading over whatever the card's own background
@@ -5271,7 +5277,7 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
       show_platform_steam: config.show_platform_steam !== false,
       show_platform_xbox: config.show_platform_xbox !== false,
       show_platform_playstation: config.show_platform_playstation !== false,
-      filter: config.filter === "near" ? "near" : "complete",
+      filter,
       exclude_playstation_no_platinum: config.exclude_playstation_no_platinum === true,
       // 0 = off (default -- no existing config should suddenly start hiding
       // games). 1-12 = exclude anything with no recorded activity in that
@@ -5656,7 +5662,14 @@ class GamingStatusCompletionTrackerEditor extends HTMLElement {
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
     const completionPlatforms = ["steam", "xbox", "playstation"];
     const filter = this._config.filter === "near" ? "near" : "complete";
-    const displayMode = ["slideshow", "list"].includes(this._config.display_mode) ? this._config.display_mode : "grid";
+    // Ranked List isn't offered for 100% Complete -- fall back to Grid for
+    // display purposes if a saved config had it selected under Near
+    // Completion and the user then switches filters (setConfig applies the
+    // same reset on the next save).
+    let displayMode = ["slideshow", "list"].includes(this._config.display_mode) ? this._config.display_mode : "grid";
+    if (filter === "complete" && displayMode === "list") {
+      displayMode = "grid";
+    }
     const showArtwork = displayMode !== "list";
     const isGridArtwork = displayMode === "grid";
     const isCustomPalette = this._config.color_palette === "custom";
@@ -5740,7 +5753,7 @@ class GamingStatusCompletionTrackerEditor extends HTMLElement {
           <div class="radio-group">
             <label><input type="radio" name="display_mode" data-field="display_mode" value="grid" ${displayMode === "grid" ? "checked" : ""}> Grid</label>
             <label><input type="radio" name="display_mode" data-field="display_mode" value="slideshow" ${displayMode === "slideshow" ? "checked" : ""}> Slideshow</label>
-            <label><input type="radio" name="display_mode" data-field="display_mode" value="list" ${displayMode === "list" ? "checked" : ""}> Ranked List</label>
+            ${filter === "near" ? `<label><input type="radio" name="display_mode" data-field="display_mode" value="list" ${displayMode === "list" ? "checked" : ""}> Ranked List</label>` : ""}
           </div>
         </div>
         ${showArtwork ? `
@@ -5817,7 +5830,16 @@ class GamingStatusCompletionTrackerEditor extends HTMLElement {
 
     this.shadowRoot.querySelectorAll('input[name="filter"]').forEach((radio) => {
       radio.addEventListener("change", (ev) => {
-        this._config = { ...this._config, filter: ev.target.value };
+        const newFilter = ev.target.value;
+        // Ranked List isn't offered for 100% Complete -- reset immediately
+        // so the saved config doesn't end up with a Display Mode that's no
+        // longer selectable through the UI.
+        const needsDisplayModeReset = newFilter === "complete" && this._config.display_mode === "list";
+        this._config = {
+          ...this._config,
+          filter: newFilter,
+          display_mode: needsDisplayModeReset ? "grid" : this._config.display_mode,
+        };
         fireChanged();
         this.render();
       });
