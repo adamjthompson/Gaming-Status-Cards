@@ -6432,7 +6432,7 @@ class GamingStatusLibraryCard extends HTMLElement {
           #lb-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
           #lb-tabs { display: flex; gap: 8px; padding-bottom: 12px; }
           .lb-tab { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.2s ease; }
-          .lb-tab ha-icon { color: #ffffff; --mdc-icon-size: 20px; position: relative; top: -2px; }
+          .lb-tab ha-icon { color: #ffffff; --mdc-icon-size: 20px; position: relative; top: -1px; }
           #lb-total { font-size: 13px; color: var(--secondary-text-color); padding-bottom: 8px; }
           .lb-list { display: flex; flex-direction: column; gap: 8px; }
           .lb-list.scrollable { overflow-y: auto; }
