@@ -6539,21 +6539,14 @@ class GamingStatusLibraryCard extends HTMLElement {
     const mode = this.config.artwork_mode;
     const thumb = GamingStatusLibraryCard.ARTWORK_THUMB[mode];
     const isHero = mode === "hero";
-    const gap = 8;
     const maxEntries = this.config.scroll_after;
-    const needsScroll = games.length > maxEntries;
-
-    let listStyle = "";
-    if (needsScroll) {
-      listStyle = ` style="max-height: ${(thumb.rowHeight * maxEntries) + (gap * (maxEntries - 1))}px;"`;
-    }
 
     // Trophy-tier breakdown vs. a single achievement-count line is now
     // keyed off the ACTIVE TAB, not a config value -- a single card can
     // show either shape depending on which platform you're viewing.
     const isPS = this._activePlatform === "playstation";
 
-    this._bodyEl.innerHTML = `<div class="lb-list${needsScroll ? " scrollable" : ""}"${listStyle}>` +
+    this._bodyEl.innerHTML = `<div class="lb-list">` +
       games.map(g => {
         const art = this._artFor(g);
         // Hero art scales to the row's full width at its own natural aspect
@@ -6604,6 +6597,20 @@ class GamingStatusLibraryCard extends HTMLElement {
           </div>`;
       }).join("") +
       `</div>`;
+
+    // Cap the list to exactly `scroll_after` full rows before scrolling,
+    // measured from the ACTUAL rendered row heights rather than a
+    // per-artwork-mode estimate -- real rows can end up taller than the
+    // estimate (e.g. a wrapped/longer counts line), which previously cut
+    // the last visible row off mid-image instead of showing it in full.
+    if (games.length > maxEntries) {
+      const listEl = this._bodyEl.querySelector(".lb-list");
+      const rows = listEl.querySelectorAll(".lb-row");
+      const firstTop = rows[0].getBoundingClientRect().top;
+      const lastBottom = rows[maxEntries - 1].getBoundingClientRect().bottom;
+      listEl.style.maxHeight = `${lastBottom - firstTop}px`;
+      listEl.classList.add("scrollable");
+    }
   }
 }
 
