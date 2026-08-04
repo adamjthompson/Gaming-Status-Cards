@@ -6607,29 +6607,40 @@ class GamingStatusLibraryCard extends HTMLElement {
     // estimate (e.g. a wrapped/longer counts line), which previously cut
     // the last visible row off mid-image instead of showing it in full.
     if (games.length > maxEntries) {
-      this._capListHeight(this._bodyEl.querySelector(".lb-list"), maxEntries);
+      this._capListHeight(this._bodyEl.querySelector(".lb-list"), maxEntries, 0, 0);
     }
   }
 
   // Measures from the top of the first row to the bottom of the
-  // `maxEntries`-th, and caps the list to exactly that. If this card's
-  // hass/config were set before it was actually connected/laid out on the
-  // page (e.g. Home Assistant hydrating cards in a not-yet-visible view),
-  // the rows report a zero-height rect -- same "not laid out yet" retry
-  // idiom gamingStatusChartWidth already uses for the chart cards, rather
-  // than committing to a bogus near-zero cap.
-  _capListHeight(listEl, maxEntries) {
+  // `maxEntries`-th, and caps the list to exactly that -- then keeps
+  // re-checking for a few more frames rather than trusting one snapshot.
+  // Two distinct settling problems both show up as a "single measurement
+  // taken too early": (1) if this card's hass/config were set before it
+  // was actually connected/laid out on the page (e.g. Home Assistant
+  // hydrating cards in a not-yet-visible view), rows report a zero-height
+  // rect at first -- same "not laid out yet" retry idiom
+  // gamingStatusChartWidth already uses for the chart cards; (2) applying
+  // the max-height/overflow itself can shift layout again afterward (a
+  // scrollbar narrowing the row and wrapping a text line, a web font
+  // swapping in with a different line-height, etc.), so even a first
+  // *valid* measurement isn't final until it's stopped changing between
+  // frames. Bounded to a handful of attempts so a pathologically unstable
+  // layout can't retry forever.
+  _capListHeight(listEl, maxEntries, lastApplied, attempt) {
     const rows = listEl.querySelectorAll(".lb-row");
     if (rows.length < maxEntries) return;
     const firstTop = rows[0].getBoundingClientRect().top;
     const lastBottom = rows[maxEntries - 1].getBoundingClientRect().bottom;
     const measured = lastBottom - firstTop;
-    if (measured <= 0) {
-      requestAnimationFrame(() => this._capListHeight(listEl, maxEntries));
-      return;
+
+    if (measured > 0) {
+      listEl.style.maxHeight = `${measured}px`;
+      listEl.classList.add("scrollable");
     }
-    listEl.style.maxHeight = `${measured}px`;
-    listEl.classList.add("scrollable");
+
+    if ((measured <= 0 || measured !== lastApplied) && attempt < 8) {
+      requestAnimationFrame(() => this._capListHeight(listEl, maxEntries, measured, attempt + 1));
+    }
   }
 }
 
