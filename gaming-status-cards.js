@@ -6315,11 +6315,16 @@ class GamingStatusLibraryCard extends HTMLElement {
     icon: { width: 60, height: 60, rowHeight: 100 },
   };
 
+  // Same brand icons already used for platform badges in the List card.
+  static PLATFORM_ICONS = { steam: "mdi:steam", xbox: "mdi:microsoft-xbox", playstation: "mdi:sony-playstation" };
+
   static getStubConfig() {
     return {
       title: "",
       single_entity: "",
-      platform: "steam",
+      show_platform_steam: true,
+      show_platform_xbox: true,
+      show_platform_playstation: true,
       exclude_zero_completion: false,
       artwork_mode: "cover",
       scroll_after: 4,
@@ -6331,12 +6336,21 @@ class GamingStatusLibraryCard extends HTMLElement {
   }
 
   setConfig(config) {
+    const hasNewPlatformFields = config.show_platform_steam !== undefined || config.show_platform_xbox !== undefined || config.show_platform_playstation !== undefined;
+    const legacyPlatform = ["steam", "xbox", "playstation"].includes(config.platform) ? config.platform : null;
     this.config = {
       ...config,
       mode: "single", // see GamingStatusPlaystationTrophiesCard.setConfig for why
       title: config.title || "",
       single_entity: config.single_entity || "",
-      platform: ["steam", "xbox", "playstation"].includes(config.platform) ? config.platform : "steam",
+      // Backward compat: a config saved before Platforms became checkboxes
+      // had exactly one `platform` string -- migrate it to that one
+      // platform enabled and the other two off, so an existing
+      // single-platform card doesn't silently grow tabs for platforms the
+      // user never selected.
+      show_platform_steam: hasNewPlatformFields ? config.show_platform_steam !== false : (legacyPlatform ? legacyPlatform === "steam" : true),
+      show_platform_xbox: hasNewPlatformFields ? config.show_platform_xbox !== false : (legacyPlatform ? legacyPlatform === "xbox" : true),
+      show_platform_playstation: hasNewPlatformFields ? config.show_platform_playstation !== false : (legacyPlatform ? legacyPlatform === "playstation" : true),
       exclude_zero_completion: config.exclude_zero_completion === true,
       artwork_mode: ["cover", "hero", "logo", "icon"].includes(config.artwork_mode) ? config.artwork_mode : "cover",
       scroll_after: config.scroll_after !== undefined ? Math.max(1, parseInt(config.scroll_after) || 4) : 4,
@@ -6371,8 +6385,8 @@ class GamingStatusLibraryCard extends HTMLElement {
 
     const hash = [
       targetEntityId,
-      games ? games.filter(g => g.platform === this.config.platform).map(g => `${g.title}:${g.percent}`).join(",") : "none",
-      this.config.platform,
+      games ? games.filter(g => this.config[`show_platform_${g.platform}`] !== false).map(g => `${g.title}:${g.platform}:${g.percent}`).join(",") : "none",
+      [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation].join(","),
       this.config.exclude_zero_completion,
       this.config.artwork_mode,
       this.config.scroll_after,
@@ -6388,11 +6402,19 @@ class GamingStatusLibraryCard extends HTMLElement {
     this.render(games === null ? null : this.processData(games));
   }
 
+  // Returns {platformKey: games[]}, one entry per enabled platform, each
+  // already filtered/sorted -- built once per real data/config change so
+  // tab clicks can switch instantly without touching hass or recomputing.
   processData(games) {
-    return games
-      .filter(g => g.platform === this.config.platform)
-      .filter(g => !this.config.exclude_zero_completion || (g.percent || 0) > 0)
-      .sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    const byPlatform = {};
+    for (const p of ["steam", "xbox", "playstation"]) {
+      if (this.config[`show_platform_${p}`] === false) continue;
+      byPlatform[p] = games
+        .filter(g => g.platform === p)
+        .filter(g => !this.config.exclude_zero_completion || (g.percent || 0) > 0)
+        .sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    }
+    return byPlatform;
   }
 
   _artFor(g) {
@@ -6401,13 +6423,16 @@ class GamingStatusLibraryCard extends HTMLElement {
     return primary || g.game_cover_art || g.game_hero_art || "";
   }
 
-  render(games) {
+  render(byPlatform) {
     if (!this.content) {
       this.shadowRoot.innerHTML = `
         <style>
           :host { display: block; }
           ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
           #lb-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
+          #lb-tabs { display: flex; gap: 8px; padding-bottom: 12px; }
+          .lb-tab { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.2s ease; }
+          .lb-tab ha-icon { color: #ffffff; --mdc-icon-size: 20px; }
           #lb-total { font-size: 13px; color: var(--secondary-text-color); padding-bottom: 8px; }
           .lb-list { display: flex; flex-direction: column; gap: 8px; }
           .lb-list.scrollable { overflow-y: auto; }
@@ -6422,11 +6447,13 @@ class GamingStatusLibraryCard extends HTMLElement {
         </style>
         <ha-card>
           <div id="lb-title"></div>
+          <div id="lb-tabs"></div>
           <div id="lb-total"></div>
           <div id="lb-body"></div>
         </ha-card>
       `;
       this._titleEl = this.shadowRoot.getElementById("lb-title");
+      this._tabsEl = this.shadowRoot.getElementById("lb-tabs");
       this._totalEl = this.shadowRoot.getElementById("lb-total");
       this._bodyEl = this.shadowRoot.getElementById("lb-body");
       this.content = this._bodyEl;
@@ -6435,12 +6462,67 @@ class GamingStatusLibraryCard extends HTMLElement {
     this._titleEl.textContent = this.config.title || "";
     this._titleEl.style.display = this.config.title ? "block" : "none";
 
-    if (games === null) {
+    if (byPlatform === null) {
+      this._tabsEl.style.display = "none";
       this._totalEl.style.display = "none";
-      this._bodyEl.innerHTML = `<div class="lb-empty">Library requires Full Game Library Scan to be enabled for this platform.</div>`;
+      this._bodyEl.innerHTML = `<div class="lb-empty">Library requires Full Game Library Scan to be enabled for at least one platform.</div>`;
       return;
     }
 
+    this._byPlatform = byPlatform;
+    const enabledPlatforms = ["steam", "xbox", "playstation"].filter(p => byPlatform[p] !== undefined);
+
+    if (!enabledPlatforms.length) {
+      this._tabsEl.style.display = "none";
+      this._totalEl.style.display = "none";
+      this._bodyEl.innerHTML = `<div class="lb-empty">No platforms selected.</div>`;
+      return;
+    }
+
+    // Persist the active tab across renders (data refreshes, config
+    // tweaks) -- only fall back to the first enabled platform if there's
+    // no active tab yet, or the one that was active just got unchecked.
+    if (!this._activePlatform || !enabledPlatforms.includes(this._activePlatform)) {
+      this._activePlatform = enabledPlatforms[0];
+    }
+
+    this._renderTabs(enabledPlatforms);
+    this._renderList(byPlatform[this._activePlatform]);
+  }
+
+  // Icon-only tab buttons (per the user's explicit direction, not text
+  // labels) -- white brand icon on every button regardless of state; the
+  // active tab gets a filled platform-color background for contrast,
+  // inactive tabs a muted neutral one. Hidden entirely when there's only
+  // one enabled platform, since there's nothing to switch between.
+  _renderTabs(enabledPlatforms) {
+    if (enabledPlatforms.length < 2) {
+      this._tabsEl.style.display = "none";
+      this._tabsEl.innerHTML = "";
+      return;
+    }
+    this._tabsEl.style.display = "flex";
+    this._tabsEl.innerHTML = enabledPlatforms.map(p => {
+      const isActive = p === this._activePlatform;
+      const bg = isActive ? `rgb(${GAMING_STATUS_PLATFORM_TINTS[p]})` : "rgba(120, 120, 120, 0.15)";
+      return `<div class="lb-tab" data-platform="${p}" style="background: ${bg};"><ha-icon icon="${GamingStatusLibraryCard.PLATFORM_ICONS[p]}"></ha-icon></div>`;
+    }).join("");
+
+    this._tabsEl.querySelectorAll(".lb-tab").forEach((el) => {
+      el.addEventListener("click", () => {
+        const p = el.getAttribute("data-platform");
+        if (p === this._activePlatform) return;
+        this._activePlatform = p;
+        this._renderTabs(enabledPlatforms);
+        this._renderList(this._byPlatform[p]);
+      });
+    });
+  }
+
+  // Renders the currently active tab's game list -- called on initial
+  // render and again (with no new data) on every tab click, so switching
+  // tabs is instant and never touches hass.
+  _renderList(games) {
     if (this.config.show_total) {
       this._totalEl.style.display = "block";
       this._totalEl.textContent = `${games.length} game${games.length === 1 ? "" : "s"}`;
@@ -6465,6 +6547,11 @@ class GamingStatusLibraryCard extends HTMLElement {
     if (needsScroll) {
       listStyle = ` style="max-height: ${(thumb.rowHeight * maxEntries) + (gap * (maxEntries - 1))}px;"`;
     }
+
+    // Trophy-tier breakdown vs. a single achievement-count line is now
+    // keyed off the ACTIVE TAB, not a config value -- a single card can
+    // show either shape depending on which platform you're viewing.
+    const isPS = this._activePlatform === "playstation";
 
     this._bodyEl.innerHTML = `<div class="lb-list${needsScroll ? " scrollable" : ""}"${listStyle}>` +
       games.map(g => {
@@ -6496,7 +6583,7 @@ class GamingStatusLibraryCard extends HTMLElement {
         }
         if (this.config.show_field_percent) lines.push(`<div class="lb-line">${Math.round((g.percent || 0) * 10) / 10}%</div>`);
         if (this.config.show_field_counts) {
-          if (this.config.platform === "playstation") {
+          if (isPS) {
             const earned = g.trophies_earned || {};
             const total = g.trophies_total || {};
             // All 4 tiers on one line -- unlike Steam/Xbox, which only ever
@@ -6551,7 +6638,6 @@ class GamingStatusLibraryEditor extends HTMLElement {
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, effectiveSingleEntity, (s) => this._esc(s));
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
     const libraryPlatforms = ["steam", "xbox", "playstation"];
-    const isPS = this._config.platform === "playstation";
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -6579,11 +6665,12 @@ class GamingStatusLibraryEditor extends HTMLElement {
         </div>
         <hr>
         <div>
-          <div class="section-title">Platform</div>
-          <div class="radio-group">
+          <div class="section-title">Platforms</div>
+          <div class="helper-text">Enabled platforms appear as tabs across the top of the card.</div>
+          <div class="checkbox-group">
             ${libraryPlatforms
               .filter(key => !availablePlatforms || availablePlatforms.has(key))
-              .map(key => `<label><input type="radio" name="platform" data-field="platform" value="${key}" ${this._config.platform === key ? "checked" : ""}> ${GAMING_STATUS_PLATFORM_LABELS[key]}</label>`).join("")}
+              .map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${GAMING_STATUS_PLATFORM_LABELS[key]}</label>`).join("")}
           </div>
         </div>
         <hr>
@@ -6616,7 +6703,7 @@ class GamingStatusLibraryEditor extends HTMLElement {
           <div class="checkbox-group">
             <label><input type="checkbox" data-field="show_field_title" ${this._config.show_field_title !== false ? "checked" : ""}> Title</label>
             <label><input type="checkbox" data-field="show_field_percent" ${this._config.show_field_percent !== false ? "checked" : ""}> Completion Percentage</label>
-            <label><input type="checkbox" data-field="show_field_counts" ${this._config.show_field_counts !== false ? "checked" : ""}> ${isPS ? "Trophy Counts" : "Achievement Count"}</label>
+            <label><input type="checkbox" data-field="show_field_counts" ${this._config.show_field_counts !== false ? "checked" : ""}> Achievement/Trophy Counts</label>
           </div>
         </div>
       </div>
@@ -6634,14 +6721,6 @@ class GamingStatusLibraryEditor extends HTMLElement {
     this.shadowRoot.getElementById("single_entity").addEventListener("change", (ev) => {
       this._config = { ...this._config, single_entity: ev.target.value };
       fireChanged();
-    });
-
-    this.shadowRoot.querySelectorAll('input[name="platform"]').forEach((radio) => {
-      radio.addEventListener("change", (ev) => {
-        this._config = { ...this._config, platform: ev.target.value };
-        fireChanged();
-        this.render();
-      });
     });
 
     this.shadowRoot.getElementById("artwork_mode").addEventListener("change", (ev) => {
