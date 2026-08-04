@@ -6511,7 +6511,10 @@ class GamingStatusLibraryCard extends HTMLElement {
     this._tabsEl.querySelectorAll(".lb-tab").forEach((el) => {
       el.addEventListener("click", () => {
         const p = el.getAttribute("data-platform");
-        if (p === this._activePlatform) return;
+        // Always re-render, even for the already-active tab -- clicking
+        // doubles as a manual recovery if the initial page-load render
+        // measured the list before the card was actually laid out (see
+        // _capListHeight's own retry for the automatic case).
         this._activePlatform = p;
         this._renderTabs(enabledPlatforms);
         this._renderList(this._byPlatform[p]);
@@ -6604,13 +6607,29 @@ class GamingStatusLibraryCard extends HTMLElement {
     // estimate (e.g. a wrapped/longer counts line), which previously cut
     // the last visible row off mid-image instead of showing it in full.
     if (games.length > maxEntries) {
-      const listEl = this._bodyEl.querySelector(".lb-list");
-      const rows = listEl.querySelectorAll(".lb-row");
-      const firstTop = rows[0].getBoundingClientRect().top;
-      const lastBottom = rows[maxEntries - 1].getBoundingClientRect().bottom;
-      listEl.style.maxHeight = `${lastBottom - firstTop}px`;
-      listEl.classList.add("scrollable");
+      this._capListHeight(this._bodyEl.querySelector(".lb-list"), maxEntries);
     }
+  }
+
+  // Measures from the top of the first row to the bottom of the
+  // `maxEntries`-th, and caps the list to exactly that. If this card's
+  // hass/config were set before it was actually connected/laid out on the
+  // page (e.g. Home Assistant hydrating cards in a not-yet-visible view),
+  // the rows report a zero-height rect -- same "not laid out yet" retry
+  // idiom gamingStatusChartWidth already uses for the chart cards, rather
+  // than committing to a bogus near-zero cap.
+  _capListHeight(listEl, maxEntries) {
+    const rows = listEl.querySelectorAll(".lb-row");
+    if (rows.length < maxEntries) return;
+    const firstTop = rows[0].getBoundingClientRect().top;
+    const lastBottom = rows[maxEntries - 1].getBoundingClientRect().bottom;
+    const measured = lastBottom - firstTop;
+    if (measured <= 0) {
+      requestAnimationFrame(() => this._capListHeight(listEl, maxEntries));
+      return;
+    }
+    listEl.style.maxHeight = `${measured}px`;
+    listEl.classList.add("scrollable");
   }
 }
 
