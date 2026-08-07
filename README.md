@@ -63,6 +63,7 @@ A dynamic, CSS-animated slideshow that cycles through the high-resolution cover 
 * **Player Avatars:** Automatically superimposes the avatar of the person playing the game into the bottom right corner.
 * **Auto-Hide:** Automatically hides the entire card from your dashboard if no one is currently playing a game, saving valuable screen real estate.
 * **Plex Integration:** Optionally pull in active media sessions from your Plex server. Choose **None**, **Plex (media_player)** for the [native Plex integration](https://www.home-assistant.io/integrations/plex/), or **Tautulli (sensor)** for Tautulli session sensors. *(The Tautulli option requires the [Tautulli Active Streams integration](https://github.com/Richardvaio/Tautulli_Active_Streams) to be installed and configured).*
+* **Avatar Name Map:** *(Only shown when Plex Integration is set to Plex or Tautulli.)* Override the letter shown on a Plex account's avatar badge — useful when a Plex username doesn't start with a letter that identifies who it belongs to. Comma-separated `username = letter` pairs, e.g. `someusername = M, anotherusername = J`, the same format as Gaming Status's own Title/Rating Overrides. Leave blank to keep showing each account's first letter.
 
 **Slideshow with Player Avatars**
 ![Large Slideshow Card Screenshot](images/wide.png)
@@ -305,6 +306,7 @@ show_avatars: true
 auto_hide: true
 plex_source: none # Options: none, plex, tautulli
 manual_entities: " " # Whitelist of comma-separated player names or entity IDs
+avatar_name_map: " " # Only used when plex_source is plex/tautulli. "username = letter" pairs, e.g. "someusername = M, anotherusername = J"
 ```
 
 **The Weekly Activity Card:**

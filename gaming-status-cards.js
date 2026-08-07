@@ -1421,14 +1421,20 @@ class GamingSlideshowCardEditor extends HTMLElement {
           <input type="text" id="manual-entities-input-slide" .configValue="manual_entities" value="${
             this._config.manual_entities || ""
           }" placeholder="adam, josh, liv">
-        </div><hr>
+        </div>
+        ${
+          this._config.plex_source === "plex" ||
+          this._config.plex_source === "tautulli"
+            ? `<hr>
         <div>
           <div class="section-title">Avatar Name Map (Advanced)</div>
           <div class="helper-text">Override the letter shown for a Plex account's avatar badge. Comma-separated "username = letter" pairs, same format as Gaming Status's own Title/Rating Overrides. Leave blank to keep showing each account's first letter.</div>
           <input type="text" id="avatar-name-map-input" .configValue="avatar_name_map" value="${
             this._config.avatar_name_map || ""
           }" placeholder="someusername = M, anotherusername = J">
-        </div>
+        </div>`
+            : ""
+        }
       </div>
     `;
 
@@ -1503,16 +1509,20 @@ class GamingSlideshowCardEditor extends HTMLElement {
     const avatarNameMapInput = this.shadowRoot.getElementById(
       "avatar-name-map-input"
     );
-    avatarNameMapInput.addEventListener("change", (ev) => {
-      this._config = { ...this._config, avatar_name_map: ev.target.value };
-      this.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    });
+    // Only rendered when Plex Integration is "Plex" or "Tautulli" -- absent
+    // (null) when set to "None", since the map only affects Plex badges.
+    if (avatarNameMapInput) {
+      avatarNameMapInput.addEventListener("change", (ev) => {
+        this._config = { ...this._config, avatar_name_map: ev.target.value };
+        this.dispatchEvent(
+          new CustomEvent("config-changed", {
+            detail: { config: this._config },
+            bubbles: true,
+            composed: true,
+          })
+        );
+      });
+    }
 
     this.shadowRoot
       .querySelectorAll('input[type="checkbox"]')
