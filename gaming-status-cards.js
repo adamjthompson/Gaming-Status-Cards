@@ -125,6 +125,25 @@ function gamingStatusResolveSelectedEntities(hass, rawText, targetSuffix) {
   return result;
 }
 
+// Parses an "avatar_name_map" config string into a raw-username -> display
+// label lookup. Same "key = value, key = value" shape as Gaming Status's
+// own Title Overrides / Rating Overrides fields on the backend, so it reads
+// the same way. Keys are matched case-insensitively (Plex usernames are
+// easy to mistype the casing of); values are used verbatim. A malformed
+// entry (no "=") is silently skipped rather than breaking the whole map.
+function gamingStatusParseNameMap(rawText) {
+  const map = new Map();
+  if (!rawText) return map;
+  for (const pair of rawText.split(",")) {
+    const idx = pair.indexOf("=");
+    if (idx === -1) continue;
+    const key = pair.slice(0, idx).trim().toLowerCase();
+    const value = pair.slice(idx + 1).trim();
+    if (key && value) map.set(key, value);
+  }
+  return map;
+}
+
 // Resolves the exact entity IDs a single/all/selected mode config should
 // process. Single source of truth for GamingStatusLeaderboardCard, which
 // previously had this "all" mode filter implemented twice (once in set
@@ -1020,6 +1039,7 @@ class GamingSlideshowCard extends HTMLElement {
       plex_source: config.plex_source || (config.include_plex ? "tautulli" : "none"),
       manual_entities: config.manual_entities || "",
       entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
+      avatar_name_map: config.avatar_name_map || "",
       ...config,
       // Logo/Icon are no longer offered as options on this card -- their
       // transparent backgrounds can look broken crossfading over whatever
@@ -1108,6 +1128,7 @@ class GamingSlideshowCard extends HTMLElement {
 
   processData(entities) {
     let active_items = [];
+    const nameMap = gamingStatusParseNameMap(this.config.avatar_name_map);
     entities.forEach((entity) => {
       const state = entity.state.toLowerCase();
       const isPlexNative = entity.entity_id.startsWith("media_player.plex_");
@@ -1121,7 +1142,8 @@ class GamingSlideshowCard extends HTMLElement {
           const gameName = attrs.media_series_title || attrs.media_title;
           const gameArt = attrs.entity_picture;
           const username = attrs.username || "Plex";
-          const initial = username.charAt(0).toUpperCase();
+          const initial =
+            nameMap.get(username.toLowerCase()) || username.charAt(0).toUpperCase();
           const badge = { isImage: false, content: initial };
 
           if (gameName && gameArt) {
@@ -1143,7 +1165,8 @@ class GamingSlideshowCard extends HTMLElement {
             entity.attributes.art_url || entity.attributes.image_url;
           const username =
             entity.attributes.username || entity.attributes.user || "Plex";
-          const initial = username.charAt(0).toUpperCase();
+          const initial =
+            nameMap.get(username.toLowerCase()) || username.charAt(0).toUpperCase();
           const badge = { isImage: false, content: initial };
 
           if (gameName && gameArt) {
@@ -1258,7 +1281,7 @@ class GamingSlideshowCard extends HTMLElement {
         if (badge && badge.isImage && badge.content) {
           html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-image: url('${gamingStatusEscapeHTML(badge.content)}'); background-size: cover; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;"></div>`;
         } else if (badge && !badge.isImage && badge.content) {
-          html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-color: rgba(30, 30, 30, 0.8); color: white; font-family: sans-serif; font-size: 22px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;">${badge.content}</div>`;
+          html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-color: rgba(30, 30, 30, 0.8); color: white; font-family: sans-serif; font-size: 22px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;">${gamingStatusEscapeHTML(badge.content)}</div>`;
         }
       });
       html += `</div>`;
@@ -1398,6 +1421,13 @@ class GamingSlideshowCardEditor extends HTMLElement {
           <input type="text" id="manual-entities-input-slide" .configValue="manual_entities" value="${
             this._config.manual_entities || ""
           }" placeholder="adam, josh, liv">
+        </div><hr>
+        <div>
+          <div class="section-title">Avatar Name Map (Advanced)</div>
+          <div class="helper-text">Override the letter shown for a Plex account's avatar badge. Comma-separated "username = letter" pairs, same format as Gaming Status's own Title/Rating Overrides. Leave blank to keep showing each account's first letter.</div>
+          <input type="text" id="avatar-name-map-input" .configValue="avatar_name_map" value="${
+            this._config.avatar_name_map || ""
+          }" placeholder="someusername = M, anotherusername = J">
         </div>
       </div>
     `;
@@ -1461,6 +1491,20 @@ class GamingSlideshowCardEditor extends HTMLElement {
     );
     manualInput.addEventListener("change", (ev) => {
       this._config = { ...this._config, manual_entities: ev.target.value };
+      this.dispatchEvent(
+        new CustomEvent("config-changed", {
+          detail: { config: this._config },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    });
+
+    const avatarNameMapInput = this.shadowRoot.getElementById(
+      "avatar-name-map-input"
+    );
+    avatarNameMapInput.addEventListener("change", (ev) => {
+      this._config = { ...this._config, avatar_name_map: ev.target.value };
       this.dispatchEvent(
         new CustomEvent("config-changed", {
           detail: { config: this._config },
