@@ -1423,8 +1423,9 @@ class GamingSlideshowCardEditor extends HTMLElement {
           }" placeholder="adam, josh, liv">
         </div>
         ${
-          this._config.plex_source === "plex" ||
-          this._config.plex_source === "tautulli"
+          this._config.show_avatars !== false &&
+          (this._config.plex_source === "plex" ||
+            this._config.plex_source === "tautulli")
             ? `<hr>
         <div>
           <div class="section-title">Avatar Name Map (Advanced)</div>
