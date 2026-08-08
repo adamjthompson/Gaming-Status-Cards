@@ -6937,6 +6937,11 @@ class GamingStatusGamercardCard extends HTMLElement {
       realtimeState ? realtimeState.last_updated : "",
       masterState ? masterState.attributes.entity_picture : "",
       masterState ? masterState.attributes.friendly_name : "",
+      masterState
+        ? (masterState.attributes.recent_sessions || [])
+            .map((s) => s.start_time)
+            .join(",")
+        : "",
       this.config.title,
       this.config.platform,
       this.config.recent_games_count,
@@ -7065,7 +7070,43 @@ class GamingStatusGamercardCard extends HTMLElement {
     const recentAchievements = realtimeState ? (realtimeState.attributes.recent_achievements || []) : [];
 
     const sortedGames = [...games].sort((a, b) => (Date.parse(b._activity_ts) || 0) - (Date.parse(a._activity_ts) || 0));
-    const selectedGames = sortedGames.slice(0, this.config.recent_games_count);
+    let selectedGames = sortedGames.slice(0, this.config.recent_games_count);
+
+    // Prefer the master sensor's own recent_sessions for "recently played"
+    // ordering over the library scan's _activity_ts -- recent_sessions is
+    // written by the same live tracker Gaming Status's ghost-suppression
+    // protects, so a mis-attributed session (e.g. a shared PC/Xbox-app
+    // sign-in echoing someone else's play onto this player's account) that
+    // never reached recent_sessions won't surface here either, unlike
+    // _activity_ts, which comes from an independent library scan with no
+    // ghost-awareness at all. Falls back to the _activity_ts sort above
+    // whenever there's nothing usable to prefer instead.
+    const recentSessions = masterState ? (masterState.attributes.recent_sessions || []) : [];
+    const platformSessions = recentSessions.filter(
+      (s) => (s.platform || "").toLowerCase() === this.config.platform
+    );
+    const sortedSessions = [...platformSessions].sort(
+      (a, b) => (Date.parse(b.start_time) || 0) - (Date.parse(a.start_time) || 0)
+    );
+    const seenTitles = new Set();
+    const orderedNames = [];
+    for (const s of sortedSessions) {
+      const key = (s.game || "").trim().toLowerCase();
+      if (!key || seenTitles.has(key)) continue;
+      seenTitles.add(key);
+      orderedNames.push(s.game);
+    }
+    if (orderedNames.length) {
+      const gamesByTitle = new Map(
+        games.map((g) => [(g.title || "").trim().toLowerCase(), g])
+      );
+      const matchedGames = orderedNames
+        .map((name) => gamesByTitle.get((name || "").trim().toLowerCase()))
+        .filter(Boolean);
+      if (matchedGames.length) {
+        selectedGames = matchedGames.slice(0, this.config.recent_games_count);
+      }
+    }
 
     // Hero background comes from the single most-recently-played game only
     // (the first of selectedGames), not a blend of all shown rows.
