@@ -258,6 +258,7 @@ An Exophase-style summary card for a single player on a single platform: avatar,
 * **Platform:** Steam, Xbox, or PlayStation — a single platform at a time, same as the Library card.
 * **Recent Games to Show:** How many of the player's most-recently-played games get their own row (1–10).
 * **Stats to Display:** Total Games in Library, Total Completion Percentage, and Game Completion Percentage (all three always offered — the last one shows each game row's own completion % next to its icons, distinct from the library-wide average above), plus whichever of these apply to the selected platform — **Total Gamerscore** (Xbox), **Total Trophies**/**Total Achievements** (PlayStation/Steam), **Total Playtime** (Steam — automatically hidden whenever it's 0, even if checked), and **Trophy Breakdown** (PlayStation — a compact Bronze/Silver/Gold/Platinum count row).
+* **Exclude Games With Zero Completion:** Keeps a game out of the recently-played rows above if it has no real completion data (unchecked by default — shows everything). Useful if this platform's sensor sometimes mis-tracks a game actually played through a different platform (e.g. a PC game launched via a different launcher that an Xbox sensor picks up anyway) — it'll always show 0% since it was never really played here, so hiding it avoids a misleading row. Only affects which games are eligible for these rows, not the Total Games/Completion Percentage stats above, which still reflect the whole library.
 * **Trophy Images** *(PlayStation only, shown when Trophy Breakdown is checked)*: **Official Trophy Images** or **Icons Only**, same option as the PlayStation Trophies card.
 
 Hovering an achievement/trophy icon shows a tooltip with its name and the date/time it was earned. A game row with no captured logo/icon/cover art falls back to its plain title text instead; a game with fewer than four recorded recent unlocks (or none at all) just shows fewer icons rather than a placeholder.
@@ -483,4 +484,5 @@ show_total_trophies: true # PlayStation/Steam only (Total Trophies / Total Achie
 show_total_playtime: true # Steam only -- hidden automatically when playtime is 0, even if true
 show_trophy_breakdown: true # PlayStation only
 image_style: official # Options: official, icons (PlayStation trophy breakdown only)
+exclude_zero_completion: false # Keep out of the recently-played rows any game with no real completion data (e.g. one this platform's sensor mis-tracked). Doesn't affect the stats above.
 ```

@@ -6884,6 +6884,7 @@ class GamingStatusGamercardCard extends HTMLElement {
       show_total_playtime: true,
       show_trophy_breakdown: true,
       image_style: "official",
+      exclude_zero_completion: false,
     };
   }
 
@@ -6903,6 +6904,13 @@ class GamingStatusGamercardCard extends HTMLElement {
       show_total_playtime: config.show_total_playtime !== false,
       show_trophy_breakdown: config.show_trophy_breakdown !== false,
       image_style: config.image_style === "icons" ? "icons" : "official",
+      // Opt-in, matching GamingStatusLibraryCard's identical option -- off
+      // by default so existing Gamercards don't silently start dropping
+      // rows. When on, hides a matched game with no real completion data,
+      // e.g. a title the platform's own sensor mis-tracked (a PC game
+      // launched through a different platform that Xbox's presence data
+      // nonetheless picked up) rather than one genuinely just started.
+      exclude_zero_completion: config.exclude_zero_completion === true,
     };
     this._lastHash = "";
   }
@@ -6970,6 +6978,7 @@ class GamingStatusGamercardCard extends HTMLElement {
       this.config.show_total_playtime,
       this.config.show_trophy_breakdown,
       this.config.image_style,
+      this.config.exclude_zero_completion,
     ].join("|");
 
     if (this._lastHash === hash) return;
@@ -7086,7 +7095,15 @@ class GamingStatusGamercardCard extends HTMLElement {
     const escapeHTML = gamingStatusEscapeHTML;
     const recentAchievements = realtimeState ? (realtimeState.attributes.recent_achievements || []) : [];
 
-    const sortedGames = [...games].sort((a, b) => (Date.parse(b._activity_ts) || 0) - (Date.parse(a._activity_ts) || 0));
+    // Only affects which games are eligible for the "recently played" rows
+    // below -- header stats (game count, average completion) still use the
+    // unfiltered `games` list, since those are meant to reflect the whole
+    // tracked library, not just this filtered view.
+    const recentCandidateGames = this.config.exclude_zero_completion
+      ? games.filter((g) => (g.percent || 0) > 0)
+      : games;
+
+    const sortedGames = [...recentCandidateGames].sort((a, b) => (Date.parse(b._activity_ts) || 0) - (Date.parse(a._activity_ts) || 0));
     let selectedGames = sortedGames.slice(0, this.config.recent_games_count);
 
     // Prefer the master sensor's own recent_sessions for "recently played"
@@ -7115,7 +7132,7 @@ class GamingStatusGamercardCard extends HTMLElement {
     }
     if (orderedNames.length) {
       const gamesByTitle = new Map(
-        games.map((g) => [(g.title || "").trim().toLowerCase(), g])
+        recentCandidateGames.map((g) => [(g.title || "").trim().toLowerCase(), g])
       );
       const matchedGames = orderedNames
         .map((name) => gamesByTitle.get((name || "").trim().toLowerCase()))
@@ -7351,6 +7368,11 @@ class GamingStatusGamercardEditor extends HTMLElement {
           </div>
           <div class="helper-text">Game Completion Percentage shows next to each game row's icons, individually -- unlike Total Completion Percentage above, which averages the whole library.</div>
           ${platform === "steam" ? `<div class="helper-text">Playtime is hidden automatically when it's 0, even if this is checked.</div>` : ""}
+        </div>
+        <hr>
+        <div>
+          <label><input type="checkbox" data-field="exclude_zero_completion" ${this._config.exclude_zero_completion === true ? "checked" : ""}> Exclude Games With Zero Completion</label>
+          <div class="helper-text">Keeps a game out of the recently-played rows above if it has no real completion data -- useful if this platform's sensor sometimes mis-tracks a game actually played through a different platform (it'll always show 0% since it was never really played here).</div>
         </div>
         ${platform === "playstation" && showTrophyBreakdown ? `
         <hr>
