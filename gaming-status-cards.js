@@ -2937,6 +2937,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       show_platform_custom: true,
       show_platform_discord: true,
       show_header: true,
+      show_column_avatar: false,
       show_column_player: true,
       show_column_game: true,
       show_column_platform: true,
@@ -2996,6 +2997,10 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       show_platform_xbox: config.show_platform_xbox !== false,
       show_platform_playstation: config.show_platform_playstation !== false,
       show_header: config.show_header !== false,
+      // Opt-in (unlike its show_column_* siblings, which default on) so
+      // existing dashboards don't suddenly grow a new avatar image they
+      // never asked for -- only enabled when explicitly turned on.
+      show_column_avatar: config.show_column_avatar === true,
       show_column_player: config.show_column_player !== false,
       show_column_game: config.show_column_game !== false,
       show_column_platform: config.show_column_platform !== false,
@@ -3054,7 +3059,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       + "|" + this.config.background
       + "|" + this.config.color_mode
       + "|" + this.config.show_header
-      + "|" + [this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end, this.config.show_column_achievement, this.config.show_column_time].join(",")
+      + "|" + [this.config.show_column_avatar, this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end, this.config.show_column_achievement, this.config.show_column_time].join(",")
       + "|" + [this.config.show_hover_player, this.config.show_hover_platform, this.config.show_hover_game, this.config.show_hover_achievement, this.config.show_hover_datetime].join(",")
       + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_playnite, this.config.show_platform_custom, this.config.show_platform_discord].join(",");
 
@@ -3250,6 +3255,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         .ract-cell.primary { font-weight: 600; }
         .ract-row.has-bg .ract-cell { color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
         .ract-achievement-icon { width: 20px; height: 20px; border-radius: 4px; object-fit: cover; vertical-align: middle; margin-right: 6px; flex-shrink: 0; }
+        .ract-player-avatar { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 6px; flex-shrink: 0; }
 
         .ract-grid { display: grid; gap: 8px; }
         .ract-icon-cell { position: relative; aspect-ratio: 1 / 1; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
@@ -3337,7 +3343,12 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         let value = "";
         let cls = "ract-cell";
         switch (c.key) {
-          case "player": value = escapeHTML(row.player); cls += " primary"; break;
+          case "player":
+            value = (this.config.show_column_avatar && row.avatar
+              ? `<img class="ract-player-avatar" src="${escapeHTML(row.avatar)}" alt="" loading="lazy">`
+              : "") + escapeHTML(row.player);
+            cls += " primary";
+            break;
           case "game": value = escapeHTML(row.game); cls += " primary"; break;
           case "platform": value = escapeHTML(row.platform); break;
           case "duration": value = escapeHTML(this._formatDuration(row.duration_seconds)); break;
@@ -3412,7 +3423,12 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         let value = "";
         let cls = "ract-cell";
         switch (c.key) {
-          case "player": value = escapeHTML(row.player); cls += " primary"; break;
+          case "player":
+            value = (this.config.show_column_avatar && row.avatar
+              ? `<img class="ract-player-avatar" src="${escapeHTML(row.avatar)}" alt="" loading="lazy">`
+              : "") + escapeHTML(row.player);
+            cls += " primary";
+            break;
           case "game": value = escapeHTML(row.game); cls += " primary"; break;
           case "platform": value = escapeHTML(row.console || row.platform); break;
           case "achievement":
@@ -3708,6 +3724,7 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
         <div>
           <div class="section-title">Visible Columns</div>
           <div class="checkbox-group">
+            ${mode !== "single" ? `<label><input type="checkbox" data-field="show_column_avatar" ${this._config.show_column_avatar === true ? "checked" : ""}> Avatar</label>` : ""}
             ${mode !== "single" ? `<label><input type="checkbox" data-field="show_column_player" ${this._config.show_column_player !== false ? "checked" : ""}> Player</label>` : ""}
             <label><input type="checkbox" data-field="show_column_game" ${this._config.show_column_game !== false ? "checked" : ""}> Game</label>
             <label><input type="checkbox" data-field="show_column_platform" ${this._config.show_column_platform !== false ? "checked" : ""}> Platform</label>

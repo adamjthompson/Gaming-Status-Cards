@@ -151,7 +151,7 @@ A configurable table (or icon grid) of recently completed play sessions or recen
 * **Background** *(Table modes only)*: Choose what renders (blurred) behind each row — **Game Artwork**, **Achievement Icon** *(Achievements only — the unlock's own icon/trophy image, falling back to the game's artwork then the player's avatar)*, **Player Avatar**, or **None**.
 * **Color Mode** *(Table modes only, hidden when Background is None)*: Sessions offers **Game Artwork (Dynamic)** (tints from that session's own recorded game color) or **Platform Native (Pre-Defined)** (fixed per-platform brand color); Achievements offers **Platform Native**, **None** (untinted), or **Game Artwork (Dynamic)** *(only offered when Game Color Extraction is enabled integration-wide, falling back to Platform Native if later disabled)*. Rows without a stored/extracted game color fall back to a neutral black gradient in Dynamic mode.
 * **Show Header Row** *(Table modes only)*: Toggle the column header row on or off.
-* **Visible Columns** *(Table modes only)*: Sessions offers Player, Game, Platform, Duration, Date, Start, and End; Achievements offers Player, Game, Platform, Achievement, Date, and Time.
+* **Visible Columns** *(Table modes only)*: Sessions offers Avatar, Player, Game, Platform, Duration, Date, Start, and End; Achievements offers Avatar, Player, Game, Platform, Achievement, Date, and Time. Avatar adds a small profile picture inside the Player cell (not its own column) and, like Player, is hidden automatically in Single Player mode.
 
 **Recent Activity (Sessions)**
 ![Recent Sessions Card Screenshot](images/recent-sessions.png)
@@ -379,6 +379,7 @@ show_hover_datetime: true # Achievements/icons only
 background: art # Table modes only. Sessions options: art, avatar, none; Achievements options: art, icon, avatar, none
 color_mode: game # Table modes only. Sessions options: game, platform; Achievements options: none, platform, game
 show_header: true # Table modes only. Set to false to hide the column header row
+show_column_avatar: false # Table modes only. Adds a small profile picture inside the Player cell -- off by default, automatically hidden when mode is 'single'
 show_column_player: true # Table modes only. Automatically hidden when mode is 'single'
 show_column_game: true # Table modes only
 show_column_platform: true # Table modes only
