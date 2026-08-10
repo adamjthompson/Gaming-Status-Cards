@@ -239,8 +239,9 @@ A scrollable, artwork-and-stats browser of a single player's full game library f
 **UI Configuration Options:**
 * **Card Title:** Optional title displayed above the list.
 * **Player:** A single player dropdown.
-* **Platform:** Steam, Xbox, or PlayStation — a single platform at a time (radio buttons, not checkboxes, since each game row's available stat fields depend on which platform is selected).
+* **Platforms:** Steam, Xbox, and/or PlayStation — independently check/uncheck which to include. With more than one enabled, icon tabs appear so you can switch between them live (each game row's available stat fields depend on whichever tab is currently active).
 * **Exclude Games With Zero Completion:** Hide games with no progress at all (unchecked by default — shows everything).
+* **Show Search Box:** Adds a search field next to the platform tabs (unchecked by default) that filters the current tab's list live as you type a partial title — it doesn't require opening the editor, and switching tabs keeps whatever you've typed.
 * **Artwork:** Same **Cover/Grid (Vertical Portrait)** (default) / **Hero (Horizontal Landscape)** / **Logo (Transparent Title)** / **Icon (Small Square)** options as the Completion Tracker card's Grid/Slideshow modes (Logo/Icon remain available here, since this card is a static list, not a crossfading slideshow). Cover/Logo/Icon display to the left of each game's data, boxed to a fixed size with square corners; Hero displays above it instead, scaled to the row's full width at its own natural aspect ratio, since a wide banner doesn't suit a narrow side thumbnail.
 * **Scroll After (Entries):** How many games show before the list scrolls instead of growing taller (default: 4).
 * **Show Total:** Toggle a "`N` games" count above the list.
@@ -459,8 +460,11 @@ show_stat_total_steam_hours: true
 type: custom:gaming-status-library-card
 title: Library
 single_entity: " " # A single player's master sensor ID
-platform: steam # Options: steam, xbox, playstation (single platform at a time)
+show_platform_steam: true # Independently toggle which platforms to include -- tabs appear when more than one is enabled
+show_platform_xbox: true
+show_platform_playstation: true
 exclude_zero_completion: false # Set to true to hide games with no progress at all
+show_search: false # Set to true to add a live title-search field next to the platform tabs
 artwork_mode: cover # Options: cover, hero, logo, icon (all four remain available -- this card is a static list, not a slideshow)
 scroll_after: 4 # Number of entries before the list scrolls
 show_total: true # Set to false to hide the "N games" count above the list

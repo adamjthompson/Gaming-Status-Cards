@@ -6398,6 +6398,7 @@ class GamingStatusLibraryCard extends HTMLElement {
       show_platform_xbox: true,
       show_platform_playstation: true,
       exclude_zero_completion: false,
+      show_search: false,
       artwork_mode: "cover",
       scroll_after: 4,
       show_total: true,
@@ -6424,6 +6425,9 @@ class GamingStatusLibraryCard extends HTMLElement {
       show_platform_xbox: hasNewPlatformFields ? config.show_platform_xbox !== false : (legacyPlatform ? legacyPlatform === "xbox" : true),
       show_platform_playstation: hasNewPlatformFields ? config.show_platform_playstation !== false : (legacyPlatform ? legacyPlatform === "playstation" : true),
       exclude_zero_completion: config.exclude_zero_completion === true,
+      // Opt-in -- adds a visible search box to the card, so it stays off
+      // for existing cards unless explicitly turned on.
+      show_search: config.show_search === true,
       artwork_mode: ["cover", "hero", "logo", "icon"].includes(config.artwork_mode) ? config.artwork_mode : "cover",
       scroll_after: config.scroll_after !== undefined ? Math.max(1, parseInt(config.scroll_after) || 4) : 4,
       show_total: config.show_total !== false,
@@ -6460,6 +6464,7 @@ class GamingStatusLibraryCard extends HTMLElement {
       games ? games.filter(g => this.config[`show_platform_${g.platform}`] !== false).map(g => `${g.title}:${g.platform}:${g.percent}`).join(",") : "none",
       [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation].join(","),
       this.config.exclude_zero_completion,
+      this.config.show_search,
       this.config.artwork_mode,
       this.config.scroll_after,
       this.config.show_total,
@@ -6502,9 +6507,14 @@ class GamingStatusLibraryCard extends HTMLElement {
           :host { display: block; }
           ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
           #lb-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
-          #lb-tabs { display: flex; gap: 8px; padding-bottom: 12px; }
+          #lb-toolbar { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; }
+          #lb-tabs { display: flex; gap: 8px; }
           .lb-tab { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.2s ease; }
           .lb-tab ha-icon { color: #ffffff; --mdc-icon-size: 20px; position: relative; top: -1px; }
+          #lb-search-wrap { display: flex; align-items: center; gap: 6px; margin-left: auto; background: rgba(120, 120, 120, 0.15); border-radius: 18px; padding: 0 12px; height: 36px; box-sizing: border-box; flex-shrink: 0; }
+          #lb-search-wrap ha-icon { color: var(--secondary-text-color); --mdc-icon-size: 18px; flex-shrink: 0; }
+          #lb-search { border: none; background: transparent; color: var(--primary-text-color); font-size: 13px; outline: none; width: 130px; min-width: 0; }
+          #lb-search::placeholder { color: var(--secondary-text-color); }
           #lb-total { font-size: 13px; color: var(--secondary-text-color); padding-bottom: 8px; }
           .lb-list { display: flex; flex-direction: column; gap: 8px; }
           .lb-list.scrollable { overflow-y: auto; }
@@ -6519,7 +6529,13 @@ class GamingStatusLibraryCard extends HTMLElement {
         </style>
         <ha-card>
           <div id="lb-title"></div>
-          <div id="lb-tabs"></div>
+          <div id="lb-toolbar">
+            <div id="lb-tabs"></div>
+            <div id="lb-search-wrap">
+              <ha-icon icon="mdi:magnify"></ha-icon>
+              <input type="text" id="lb-search" placeholder="Search titles…" autocomplete="off">
+            </div>
+          </div>
           <div id="lb-total"></div>
           <div id="lb-body"></div>
         </ha-card>
@@ -6528,6 +6544,17 @@ class GamingStatusLibraryCard extends HTMLElement {
       this._tabsEl = this.shadowRoot.getElementById("lb-tabs");
       this._totalEl = this.shadowRoot.getElementById("lb-total");
       this._bodyEl = this.shadowRoot.getElementById("lb-body");
+      this._searchWrapEl = this.shadowRoot.getElementById("lb-search-wrap");
+      this._searchInputEl = this.shadowRoot.getElementById("lb-search");
+      this._searchQuery = "";
+      // Mirrors the tab-click pattern below: mutate ephemeral instance
+      // state, then re-render the active tab's list directly -- never
+      // touches hass/processData, so typing can't lose focus/cursor
+      // position to an unrelated state update mid-keystroke.
+      this._searchInputEl.addEventListener("input", (ev) => {
+        this._searchQuery = ev.target.value.trim().toLowerCase();
+        this._renderList(this._byPlatform[this._activePlatform]);
+      });
       this.content = this._bodyEl;
     }
 
@@ -6536,6 +6563,7 @@ class GamingStatusLibraryCard extends HTMLElement {
 
     if (byPlatform === null) {
       this._tabsEl.style.display = "none";
+      this._searchWrapEl.style.display = "none";
       this._totalEl.style.display = "none";
       this._bodyEl.innerHTML = `<div class="lb-empty">Library requires Full Game Library Scan to be enabled for at least one platform.</div>`;
       return;
@@ -6546,10 +6574,13 @@ class GamingStatusLibraryCard extends HTMLElement {
 
     if (!enabledPlatforms.length) {
       this._tabsEl.style.display = "none";
+      this._searchWrapEl.style.display = "none";
       this._totalEl.style.display = "none";
       this._bodyEl.innerHTML = `<div class="lb-empty">No platforms selected.</div>`;
       return;
     }
+
+    this._searchWrapEl.style.display = this.config.show_search ? "flex" : "none";
 
     // Persist the active tab across renders (data refreshes, config
     // tweaks) -- only fall back to the first enabled platform if there's
@@ -6598,6 +6629,10 @@ class GamingStatusLibraryCard extends HTMLElement {
   // render and again (with no new data) on every tab click, so switching
   // tabs is instant and never touches hass.
   _renderList(games) {
+    if (this._searchQuery) {
+      games = games.filter(g => (g.title || "").toLowerCase().includes(this._searchQuery));
+    }
+
     if (this.config.show_total) {
       this._totalEl.style.display = "block";
       this._totalEl.textContent = `${games.length} game${games.length === 1 ? "" : "s"}`;
@@ -6785,6 +6820,11 @@ class GamingStatusLibraryEditor extends HTMLElement {
         <hr>
         <div>
           <label><input type="checkbox" data-field="exclude_zero_completion" ${this._config.exclude_zero_completion ? "checked" : ""}> Exclude Games With Zero Completion</label>
+        </div>
+        <hr>
+        <div>
+          <label><input type="checkbox" data-field="show_search" ${this._config.show_search ? "checked" : ""}> Show Search Box</label>
+          <div class="helper-text">Adds a search field next to the platform tabs to filter the list by title as you type.</div>
         </div>
         <hr>
         <div>
