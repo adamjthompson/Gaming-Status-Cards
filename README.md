@@ -154,6 +154,7 @@ A configurable table (or icon grid) of recently completed play sessions or recen
 * **Color Mode** *(Table modes only, hidden when Background is None)*: Sessions offers **Game Artwork (Dynamic)** (tints from that session's own recorded game color) or **Platform Native (Pre-Defined)** (fixed per-platform brand color); Achievements offers **Platform Native**, **None** (untinted), or **Game Artwork (Dynamic)** *(only offered when Game Color Extraction is enabled integration-wide, falling back to Platform Native if later disabled)*. Rows without a stored/extracted game color fall back to a neutral black gradient in Dynamic mode.
 * **Show Header Row** *(Table modes only)*: Toggle the column header row on or off.
 * **Visible Columns** *(Table modes only)*: Sessions offers Avatar, Player, Game, Platform, Duration, Date, Start, and End; Achievements offers Avatar, Player, Game, Platform, Achievement, Date, and Time. Avatar adds a small profile picture inside the Player cell (not its own column) and, like Player, is hidden automatically in Single Player mode.
+* **Show Achievement Description on Hover** *(Achievements Table mode only)*: Hovering the Achievement column shows its description text as a tooltip, when the platform provided one. Uses the same `show_hover_description` setting as Icon Grid's Hover Info, so it stays in sync if you switch Display Mode.
 
 **Recent Activity (Sessions)**
 ![Recent Sessions Card Screenshot](images/recent-sessions.png)
@@ -383,7 +384,7 @@ show_hover_player: true # Achievements/icons only. Automatically hidden when mod
 show_hover_platform: true # Achievements/icons only
 show_hover_game: true # Achievements/icons only
 show_hover_achievement: true # Achievements/icons only
-show_hover_description: true # Achievements/icons only. Only takes effect while show_hover_achievement is also true, and only shown when the unlock has description text
+show_hover_description: true # Achievements only (both table and icon grid modes). Icon grid: only takes effect while show_hover_achievement is also true. Table mode: governs the Achievement column's own hover tooltip. Either way, only shown when the unlock has description text
 show_hover_datetime: true # Achievements/icons only
 background: art # Table modes only. Sessions options: art, avatar, none; Achievements options: art, icon, avatar, none
 color_mode: game # Table modes only. Sessions options: game, platform; Achievements options: none, platform, game

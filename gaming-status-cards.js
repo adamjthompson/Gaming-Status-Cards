@@ -3423,7 +3423,9 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       return;
     }
 
-    this._bodyEl.innerHTML = rows.map(row => {
+    const hoverDescriptionEnabled = this.config.show_hover_description !== false;
+
+    this._bodyEl.innerHTML = rows.map((row, rowIdx) => {
       let bgUrl = "";
       if (this.config.background === "avatar") bgUrl = row.avatar;
       else if (this.config.background === "icon") bgUrl = row.icon_url || row.hero_art_url || row.avatar || "";
@@ -3448,6 +3450,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       const cellsHTML = columns.map(c => {
         let value = "";
         let cls = "ract-cell";
+        let extraAttrs = "";
         switch (c.key) {
           case "player":
             value = (this.config.show_column_avatar && row.avatar
@@ -3459,15 +3462,26 @@ class GamingStatusRecentActivityCard extends HTMLElement {
           case "platform": value = escapeHTML(row.console || row.platform); break;
           case "achievement":
             value = (row.icon_url ? `<img class="ract-achievement-icon" src="${escapeHTML(row.icon_url)}" alt="" loading="lazy">` : "") + escapeHTML(row.name);
+            if (hoverDescriptionEnabled && row.description) {
+              cls += " ract-achievement-hover";
+              extraAttrs = ` data-idx="${rowIdx}"`;
+            }
             break;
           case "date": value = escapeHTML(this._formatAchievementDate(row.unlocked_at)); break;
           case "time": value = escapeHTML(this._formatTime(row.unlocked_at)); break;
         }
-        return `<div class="${cls}" style="flex: ${c.flex};">${value}</div>`;
+        return `<div class="${cls}" style="flex: ${c.flex};"${extraAttrs}>${value}</div>`;
       }).join("");
 
       return `<div class="ract-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--ract-bg-url: url('${escapeHTML(bgUrl)}');${tintStyle}` : ""}">${cellsHTML}</div>`;
     }).join("");
+
+    if (hoverDescriptionEnabled) {
+      gamingStatusWireHtmlTooltip(this._bodyEl, this._tooltipEl, ".ract-achievement-hover", (el) => {
+        const row = rows[parseInt(el.getAttribute("data-idx"), 10)];
+        return row && row.description ? escapeHTML(row.description) : "";
+      });
+    }
   }
 
   _renderAchievementIconGrid(rows, trackingEnabled) {
@@ -3764,6 +3778,12 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
             <label><input type="checkbox" data-field="show_column_achievement" ${this._config.show_column_achievement !== false ? "checked" : ""}> Achievement</label>
             <label><input type="checkbox" data-field="show_column_time" ${this._config.show_column_time !== false ? "checked" : ""}> Time</label>`}
           </div>
+        </div>` : ""}
+        ${isTableMode && eventType === "achievements" ? `
+        <hr>
+        <div>
+          <label><input type="checkbox" data-field="show_hover_description" ${this._config.show_hover_description !== false ? "checked" : ""}> Show Achievement Description on Hover</label>
+          <div class="helper-text">Hovering the Achievement column shows its description text, when the platform provided one -- some entries (especially "secret" Steam achievements) have none.</div>
         </div>` : ""}
       </div>
     `;
