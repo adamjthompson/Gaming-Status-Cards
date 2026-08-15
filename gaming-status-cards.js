@@ -454,6 +454,7 @@ class GamingStatusCard extends HTMLElement {
 
   static getStubConfig() {
     return {
+      title: "",
       mode: "all",
       color_mode: "game",
       offline_image: "game",
@@ -468,6 +469,7 @@ class GamingStatusCard extends HTMLElement {
   setConfig(config) {
     this.config = {
       ...config,
+      title: config.title || "",
       entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       mode: config.mode || "all",
       color_mode: config.color_mode || "game",
@@ -730,6 +732,7 @@ class GamingStatusCard extends HTMLElement {
       this.shadowRoot.innerHTML = `
         <style>
           :host { display: block; }
+          #list-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
           .card-stack { display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; }
           .card-stack.scrollable { overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
           
@@ -772,10 +775,15 @@ class GamingStatusCard extends HTMLElement {
 
           .avatar.playnite { background: black; padding: 4px; box-sizing: border-box; }
         </style>
+        <div id="list-title"></div>
         <div id="players-container" class="card-stack"></div>
       `;
       this.content = this.shadowRoot.getElementById("players-container");
+      this._titleEl = this.shadowRoot.getElementById("list-title");
     }
+
+    this._titleEl.textContent = this.config.title || "";
+    this._titleEl.style.display = this.config.title ? "block" : "none";
 
     if (this.config.max_visible_players && parseInt(this.config.max_visible_players) > 0) {
       const maxPlayers = parseInt(this.config.max_visible_players);
@@ -917,6 +925,10 @@ class GamingStatusCardEditor extends HTMLElement {
         .helper-text { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 8px; line-height: 1.4; }
       </style>
       <div class="editor-container">
+        <div>
+          <div class="section-title">Card Title (Optional)</div>
+          <input type="text" id="title" data-field="title" value="${this._config.title || ""}" placeholder="e.g. The Squad">
+        </div><hr>
         <div><div class="section-title">Mode</div><div class="radio-group">
             ${modeOptions.map(opt => `<label><input type="radio" name="mode" data-field="mode" value="${opt.value}" ${
               this._config.mode === opt.value || (opt.value === "all" && !this._config.mode) ? "checked" : ""
@@ -2079,6 +2091,7 @@ class GamingStatusDonutCard extends HTMLElement {
       single_entity: "",
       selected_entities: "",
       manual_entities: "",
+      color_palette: "platform",
       custom_colors: "",
       entities_pattern: GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
     };
@@ -2092,6 +2105,7 @@ class GamingStatusDonutCard extends HTMLElement {
       single_entity: config.single_entity || config.entity || "",
       selected_entities: config.selected_entities || "",
       manual_entities: config.manual_entities || "",
+      color_palette: config.color_palette || (config.custom_colors && String(config.custom_colors).trim() ? "custom" : "platform"),
       custom_colors: config.custom_colors || "",
       entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       ...config,
@@ -2126,6 +2140,7 @@ class GamingStatusDonutCard extends HTMLElement {
 
     const hash = gamingStatusEntityHash(hass, entityIds)
       + "|" + this.config.window
+      + "|" + this.config.color_palette
       + "|" + this.config.custom_colors;
 
     if (this._lastHash === hash) return;
@@ -2160,13 +2175,13 @@ class GamingStatusDonutCard extends HTMLElement {
     const isCal = this.config.window === "calendar";
     const weeklyAttr = isCal ? "total_weekly_hours" : "rolling_weekly_hours";
     const windowStart = gamingStatusWindowStart(isCal);
-    const hasCustom = this.config.custom_colors && this.config.custom_colors.trim();
-    const customPalette = hasCustom ? this.config.custom_colors.split(",").map(c => c.trim()).filter(Boolean) : [];
+    const isPlatformPalette = this.config.color_palette === "platform" || !this.config.color_palette;
+    const palette = isPlatformPalette ? null : gamingStatusResolvePalette(this.config);
 
     const platforms = [
-      { name: "Xbox",        key: "Xbox",        color: customPalette[0] || "rgb(11, 124, 16)"  },
-      { name: "PlayStation", key: "PlayStation", color: customPalette[1] || "rgb(0, 48, 135)"   },
-      { name: "PC",          key: "PC",          color: customPalette[2] || "rgb(2, 173, 239)"  },
+      { name: "Xbox",        key: "Xbox",        color: palette ? palette[0 % palette.length] : "rgb(11, 124, 16)"  },
+      { name: "PlayStation", key: "PlayStation", color: palette ? palette[1 % palette.length] : "rgb(0, 48, 135)"   },
+      { name: "PC",          key: "PC",          color: palette ? palette[2 % palette.length] : "rgb(2, 173, 239)"  },
     ];
 
     const platformTotals = {};
@@ -2347,10 +2362,18 @@ class GamingStatusDonutEditor extends HTMLElement {
           </label>
         </div>
         <hr>
-        <label>Custom Colors (Advanced)
-          <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ""}" placeholder="rgb(11,124,16), rgb(0,48,135), rgb(2,173,239)">
-          <span class="helper-text">Leave blank for default platform colors (Xbox / PlayStation / PC).</span>
+        <label>Color Palette
+          <select id="color_palette" .configValue="color_palette">
+            <option value="platform" ${this._config.color_palette === "platform" || !this._config.color_palette ? "selected" : ""}>Platform Colors (Default)</option>
+            ${gamingStatusPaletteOptionsHTML(this._config.color_palette)}
+          </select>
         </label>
+        <div id="donut-custom-colors-wrap" style="display: ${this._config.color_palette === "custom" ? "block" : "none"}">
+          <label>Custom Colors
+            <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ""}" placeholder="rgb(11,124,16), rgb(0,48,135), rgb(2,173,239)">
+            <span class="helper-text">Three colors, in order: Xbox, PlayStation, PC.</span>
+          </label>
+        </div>
         <hr>
         <label>Legend
           <select id="show_legend" .configValue="show_legend">
@@ -2955,6 +2978,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       show_hover_platform: true,
       show_hover_game: true,
       show_hover_achievement: true,
+      show_hover_description: true,
       show_hover_datetime: true,
       entities_pattern: GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
     };
@@ -3014,6 +3038,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       show_hover_platform: config.show_hover_platform !== false,
       show_hover_game: config.show_hover_game !== false,
       show_hover_achievement: config.show_hover_achievement !== false,
+      show_hover_description: config.show_hover_description !== false,
       show_hover_datetime: config.show_hover_datetime !== false,
     };
     this._lastHash = "";
@@ -3060,7 +3085,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       + "|" + this.config.color_mode
       + "|" + this.config.show_header
       + "|" + [this.config.show_column_avatar, this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end, this.config.show_column_achievement, this.config.show_column_time].join(",")
-      + "|" + [this.config.show_hover_player, this.config.show_hover_platform, this.config.show_hover_game, this.config.show_hover_achievement, this.config.show_hover_datetime].join(",")
+      + "|" + [this.config.show_hover_player, this.config.show_hover_platform, this.config.show_hover_game, this.config.show_hover_achievement, this.config.show_hover_description, this.config.show_hover_datetime].join(",")
       + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_playnite, this.config.show_platform_custom, this.config.show_platform_discord].join(",");
 
     if (this._lastHash === hash) return;
@@ -3132,6 +3157,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
           platform: u.platform || "",
           console: u.console || "",
           name: u.name || "",
+          description: u.description || "",
           unlocked_at: u.unlocked_at || "",
           hero_art_url: u.hero_art_url || "",
           icon_url: u.icon_url || "",
@@ -3497,6 +3523,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         lines.push(escapeHTML(platformLabel));
       }
       if (this.config.show_hover_achievement) lines.push(escapeHTML(row.name));
+      if (this.config.show_hover_description && row.description) lines.push(escapeHTML(row.description));
       if (this.config.show_hover_datetime) lines.push(escapeHTML(this._formatDateTime(row.unlocked_at)));
       return lines.join("<br>");
     });
@@ -3681,6 +3708,7 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
             <label><input type="checkbox" data-field="show_hover_platform" ${this._config.show_hover_platform !== false ? "checked" : ""}> Platform</label>
             <label><input type="checkbox" data-field="show_hover_game" ${this._config.show_hover_game !== false ? "checked" : ""}> Game</label>
             <label><input type="checkbox" data-field="show_hover_achievement" ${this._config.show_hover_achievement !== false ? "checked" : ""}> Achievement</label>
+            <label><input type="checkbox" data-field="show_hover_description" ${this._config.show_hover_description !== false ? "checked" : ""}> Description</label>
             <label><input type="checkbox" data-field="show_hover_datetime" ${this._config.show_hover_datetime !== false ? "checked" : ""}> Date/Time</label>
           </div>
         </div>` : ""}
@@ -6399,6 +6427,7 @@ class GamingStatusLibraryCard extends HTMLElement {
       show_platform_playstation: true,
       exclude_zero_completion: false,
       show_search: false,
+      sort_by: "title",
       artwork_mode: "cover",
       scroll_after: 4,
       show_total: true,
@@ -6428,6 +6457,7 @@ class GamingStatusLibraryCard extends HTMLElement {
       // Opt-in -- adds a visible search box to the card, so it stays off
       // for existing cards unless explicitly turned on.
       show_search: config.show_search === true,
+      sort_by: ["title", "completion", "recent"].includes(config.sort_by) ? config.sort_by : "title",
       artwork_mode: ["cover", "hero", "logo", "icon"].includes(config.artwork_mode) ? config.artwork_mode : "cover",
       scroll_after: config.scroll_after !== undefined ? Math.max(1, parseInt(config.scroll_after) || 4) : 4,
       show_total: config.show_total !== false,
@@ -6465,6 +6495,7 @@ class GamingStatusLibraryCard extends HTMLElement {
       [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation].join(","),
       this.config.exclude_zero_completion,
       this.config.show_search,
+      this.config.sort_by,
       this.config.artwork_mode,
       this.config.scroll_after,
       this.config.show_total,
@@ -6484,12 +6515,17 @@ class GamingStatusLibraryCard extends HTMLElement {
   // tab clicks can switch instantly without touching hass or recomputing.
   processData(games) {
     const byPlatform = {};
+    const sortBy = this.config.sort_by;
+    const comparator =
+      sortBy === "completion" ? (a, b) => (b.percent || 0) - (a.percent || 0) :
+      sortBy === "recent" ? (a, b) => (Date.parse(b._activity_ts) || 0) - (Date.parse(a._activity_ts) || 0) :
+      (a, b) => (a.title || "").localeCompare(b.title || "");
     for (const p of ["steam", "xbox", "playstation"]) {
       if (this.config[`show_platform_${p}`] === false) continue;
       byPlatform[p] = games
         .filter(g => g.platform === p)
         .filter(g => !this.config.exclude_zero_completion || (g.percent || 0) > 0)
-        .sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+        .sort(comparator);
     }
     return byPlatform;
   }
@@ -6828,6 +6864,16 @@ class GamingStatusLibraryEditor extends HTMLElement {
         </div>
         <hr>
         <div>
+          <div class="section-title">Sort By</div>
+          <select id="sort_by">
+            <option value="title" ${this._config.sort_by !== "completion" && this._config.sort_by !== "recent" ? "selected" : ""}>Title (A-Z)</option>
+            <option value="completion" ${this._config.sort_by === "completion" ? "selected" : ""}>Completion %</option>
+            <option value="recent" ${this._config.sort_by === "recent" ? "selected" : ""}>Recently Played</option>
+          </select>
+          <div class="helper-text">"Recently Played" uses Xbox's true last-played time, but PlayStation/Steam's last-achievement-earned time, since that's the only recency signal those platforms' library data provides.</div>
+        </div>
+        <hr>
+        <div>
           <div class="section-title">Artwork</div>
           <select id="artwork_mode">
             <option value="cover" ${this._config.artwork_mode === "cover" ? "selected" : ""}>Cover/Grid (Vertical Portrait)</option>
@@ -6874,6 +6920,11 @@ class GamingStatusLibraryEditor extends HTMLElement {
 
     this.shadowRoot.getElementById("artwork_mode").addEventListener("change", (ev) => {
       this._config = { ...this._config, artwork_mode: ev.target.value };
+      fireChanged();
+    });
+
+    this.shadowRoot.getElementById("sort_by").addEventListener("change", (ev) => {
+      this._config = { ...this._config, sort_by: ev.target.value };
       fireChanged();
     });
 
@@ -7313,6 +7364,7 @@ class GamingStatusGamercardCard extends HTMLElement {
       const u = (iconsByRow[gi] || [])[ii];
       if (!u) return "";
       const lines = [escapeHTML(u.name || "Unknown")];
+      if (u.description) lines.push(escapeHTML(u.description));
       const dt = this._formatDateTime(u.unlocked_at);
       if (dt) lines.push(escapeHTML(dt));
       return lines.join("<br>");
