@@ -149,7 +149,7 @@ A configurable table (or icon grid) of recently completed play sessions or recen
 * **Number of Sessions/Achievements to Display** *(Table modes only)*: How many recent rows to show (default: 10, max: 20). If more than 10 would be shown, the list scrolls instead of growing taller. Type a value and click **Apply** to confirm it.
 * **Icons Per Row / Rows** *(Icon Grid only)*: How many icons appear per row (2–6) and how many rows to show (1–5). Total icons shown = Icons Per Row × Rows.
 * **Icon Background / Artwork Size** *(Icon Grid only)*: A backdrop behind each icon — **None (Transparent)**, **Black**, or **White** — since some platforms' icons have transparent backgrounds; and **Crop to Square** or **Show Full Image** for how each icon fills its cell.
-* **Hover Info** *(Icon Grid only)*: Independently toggle which fields appear when hovering an icon — Player, Platform, Game, Achievement, Description, and Date/Time. Description is only shown when the platform actually provided unlock text for that achievement/trophy — some entries (especially "secret" Steam achievements) have none.
+* **Hover Info** *(Icon Grid only)*: Independently toggle which fields appear when hovering an icon — Player, Platform, Game, Achievement, Description, and Date/Time. **Description** is nested under **Achievement** and only offered while it's checked, since a description on its own (with no achievement name shown) wouldn't say what it's describing; it's also only shown when the platform actually provided unlock text for that achievement/trophy — some entries (especially "secret" Steam achievements) have none.
 * **Background** *(Table modes only)*: Choose what renders (blurred) behind each row — **Game Artwork**, **Achievement Icon** *(Achievements only — the unlock's own icon/trophy image, falling back to the game's artwork then the player's avatar)*, **Player Avatar**, or **None**.
 * **Color Mode** *(Table modes only, hidden when Background is None)*: Sessions offers **Game Artwork (Dynamic)** (tints from that session's own recorded game color) or **Platform Native (Pre-Defined)** (fixed per-platform brand color); Achievements offers **Platform Native**, **None** (untinted), or **Game Artwork (Dynamic)** *(only offered when Game Color Extraction is enabled integration-wide, falling back to Platform Native if later disabled)*. Rows without a stored/extracted game color fall back to a neutral black gradient in Dynamic mode.
 * **Show Header Row** *(Table modes only)*: Toggle the column header row on or off.
@@ -264,8 +264,10 @@ An Exophase-style summary card for a single player on a single platform: avatar,
 * **Stats to Display:** Total Games in Library, Total Completion Percentage, and Game Completion Percentage (all three always offered — the last one shows each game row's own completion % next to its icons, distinct from the library-wide average above), plus whichever of these apply to the selected platform — **Total Gamerscore** (Xbox), **Total Trophies**/**Total Achievements** (PlayStation/Steam), **Total Playtime** (Steam — automatically hidden whenever it's 0, even if checked), and **Trophy Breakdown** (PlayStation — a compact Bronze/Silver/Gold/Platinum count row).
 * **Exclude Games With Zero Completion:** Keeps a game out of the recently-played rows above if it has no real completion data (unchecked by default — shows everything). Useful if this platform's sensor sometimes mis-tracks a game actually played through a different platform (e.g. a PC game launched via a different launcher that an Xbox sensor picks up anyway) — it'll always show 0% since it was never really played here, so hiding it avoids a misleading row. Only affects which games are eligible for these rows, not the Total Games/Completion Percentage stats above, which still reflect the whole library.
 * **Trophy Images** *(PlayStation only, shown when Trophy Breakdown is checked)*: **Official Trophy Images** or **Icons Only**, same option as the PlayStation Trophies card.
+* **Show Achievement Hover:** Toggle the tooltip that appears when hovering an achievement/trophy icon (checked by default). Turn off to disable hovering entirely.
+* **Show Achievement Description** *(shown while Show Achievement Hover is checked)*: Include the achievement/trophy's description text in that tooltip, when the platform provided one — some entries (especially "secret" Steam achievements) have none.
 
-Hovering an achievement/trophy icon shows a tooltip with its name and the date/time it was earned. A game row with no captured logo/icon/cover art falls back to its plain title text instead; a game with fewer than four recorded recent unlocks (or none at all) just shows fewer icons rather than a placeholder.
+Hovering an achievement/trophy icon (when enabled) shows a tooltip with its name, description (if available and enabled), and the date/time it was earned. A game row with no captured logo/icon/cover art falls back to its plain title text instead; a game with fewer than four recorded recent unlocks (or none at all) just shows fewer icons rather than a placeholder.
 
 ---
 
@@ -381,7 +383,7 @@ show_hover_player: true # Achievements/icons only. Automatically hidden when mod
 show_hover_platform: true # Achievements/icons only
 show_hover_game: true # Achievements/icons only
 show_hover_achievement: true # Achievements/icons only
-show_hover_description: true # Achievements/icons only. Only shown when the unlock has description text
+show_hover_description: true # Achievements/icons only. Only takes effect while show_hover_achievement is also true, and only shown when the unlock has description text
 show_hover_datetime: true # Achievements/icons only
 background: art # Table modes only. Sessions options: art, avatar, none; Achievements options: art, icon, avatar, none
 color_mode: game # Table modes only. Sessions options: game, platform; Achievements options: none, platform, game
@@ -495,4 +497,6 @@ show_total_playtime: true # Steam only -- hidden automatically when playtime is 
 show_trophy_breakdown: true # PlayStation only
 image_style: official # Options: official, icons (PlayStation trophy breakdown only)
 exclude_zero_completion: false # Keep out of the recently-played rows any game with no real completion data (e.g. one this platform's sensor mis-tracked). Doesn't affect the stats above.
+show_achievement_hover: true # Set to false to disable the achievement/trophy icon hover tooltip entirely
+show_achievement_description: true # Only used while show_achievement_hover is true. Only shown when the unlock has description text
 ```

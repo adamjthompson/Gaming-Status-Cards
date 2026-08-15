@@ -3523,7 +3523,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         lines.push(escapeHTML(platformLabel));
       }
       if (this.config.show_hover_achievement) lines.push(escapeHTML(row.name));
-      if (this.config.show_hover_description && row.description) lines.push(escapeHTML(row.description));
+      if (this.config.show_hover_achievement && this.config.show_hover_description && row.description) lines.push(escapeHTML(row.description));
       if (this.config.show_hover_datetime) lines.push(escapeHTML(this._formatDateTime(row.unlocked_at)));
       return lines.join("<br>");
     });
@@ -3708,7 +3708,7 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
             <label><input type="checkbox" data-field="show_hover_platform" ${this._config.show_hover_platform !== false ? "checked" : ""}> Platform</label>
             <label><input type="checkbox" data-field="show_hover_game" ${this._config.show_hover_game !== false ? "checked" : ""}> Game</label>
             <label><input type="checkbox" data-field="show_hover_achievement" ${this._config.show_hover_achievement !== false ? "checked" : ""}> Achievement</label>
-            <label><input type="checkbox" data-field="show_hover_description" ${this._config.show_hover_description !== false ? "checked" : ""}> Description</label>
+            ${this._config.show_hover_achievement !== false ? `<label style="padding-left: 24px;"><input type="checkbox" data-field="show_hover_description" ${this._config.show_hover_description !== false ? "checked" : ""}> Description</label>` : ""}
             <label><input type="checkbox" data-field="show_hover_datetime" ${this._config.show_hover_datetime !== false ? "checked" : ""}> Date/Time</label>
           </div>
         </div>` : ""}
@@ -3890,6 +3890,9 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
         const field = ev.target.dataset.field;
         this._config = { ...this._config, [field]: ev.target.checked };
         fireChanged();
+        // "Description" is only shown (and only relevant) when "Achievement"
+        // itself is on -- re-render so it appears/disappears immediately.
+        if (field === "show_hover_achievement") this.render();
       });
     });
   }
@@ -6976,6 +6979,8 @@ class GamingStatusGamercardCard extends HTMLElement {
       show_trophy_breakdown: true,
       image_style: "official",
       exclude_zero_completion: false,
+      show_achievement_hover: true,
+      show_achievement_description: true,
     };
   }
 
@@ -7002,6 +7007,11 @@ class GamingStatusGamercardCard extends HTMLElement {
       // launched through a different platform that Xbox's presence data
       // nonetheless picked up) rather than one genuinely just started.
       exclude_zero_completion: config.exclude_zero_completion === true,
+      // Opt-out master switch for the achievement-icon hover tooltip --
+      // defaults on to match today's always-on behavior. Description is
+      // nested under it (only ever relevant when the tooltip itself shows).
+      show_achievement_hover: config.show_achievement_hover !== false,
+      show_achievement_description: config.show_achievement_description !== false,
     };
     this._lastHash = "";
   }
@@ -7070,6 +7080,8 @@ class GamingStatusGamercardCard extends HTMLElement {
       this.config.show_trophy_breakdown,
       this.config.image_style,
       this.config.exclude_zero_completion,
+      this.config.show_achievement_hover,
+      this.config.show_achievement_description,
     ].join("|");
 
     if (this._lastHash === hash) return;
@@ -7358,17 +7370,19 @@ class GamingStatusGamercardCard extends HTMLElement {
 
     this._bodyEl.innerHTML = headerHTML + `<div class="gc-rows">${rowsHTML}</div>` + bottomHTML;
 
-    gamingStatusWireHtmlTooltip(this._bodyEl, this._tooltipEl, ".gc-icon", (el) => {
-      const gi = parseInt(el.getAttribute("data-game"), 10);
-      const ii = parseInt(el.getAttribute("data-idx"), 10);
-      const u = (iconsByRow[gi] || [])[ii];
-      if (!u) return "";
-      const lines = [escapeHTML(u.name || "Unknown")];
-      if (u.description) lines.push(escapeHTML(u.description));
-      const dt = this._formatDateTime(u.unlocked_at);
-      if (dt) lines.push(escapeHTML(dt));
-      return lines.join("<br>");
-    });
+    if (this.config.show_achievement_hover) {
+      gamingStatusWireHtmlTooltip(this._bodyEl, this._tooltipEl, ".gc-icon", (el) => {
+        const gi = parseInt(el.getAttribute("data-game"), 10);
+        const ii = parseInt(el.getAttribute("data-idx"), 10);
+        const u = (iconsByRow[gi] || [])[ii];
+        if (!u) return "";
+        const lines = [escapeHTML(u.name || "Unknown")];
+        if (this.config.show_achievement_description && u.description) lines.push(escapeHTML(u.description));
+        const dt = this._formatDateTime(u.unlocked_at);
+        if (dt) lines.push(escapeHTML(dt));
+        return lines.join("<br>");
+      });
+    }
   }
 }
 
@@ -7466,6 +7480,13 @@ class GamingStatusGamercardEditor extends HTMLElement {
           <label><input type="checkbox" data-field="exclude_zero_completion" ${this._config.exclude_zero_completion === true ? "checked" : ""}> Exclude Games With Zero Completion</label>
           <div class="helper-text">Keeps a game out of the recently-played rows above if it has no real completion data -- useful if this platform's sensor sometimes mis-tracks a game actually played through a different platform (it'll always show 0% since it was never really played here).</div>
         </div>
+        <hr>
+        <div>
+          <label><input type="checkbox" data-field="show_achievement_hover" ${this._config.show_achievement_hover !== false ? "checked" : ""}> Show Achievement Hover</label>
+          <div class="helper-text">Shows a tooltip (name, description, date) when hovering an achievement icon. Turn off to disable hovering entirely.</div>
+          ${this._config.show_achievement_hover !== false ? `
+          <label style="margin-top: 10px;"><input type="checkbox" data-field="show_achievement_description" ${this._config.show_achievement_description !== false ? "checked" : ""}> Show Achievement Description</label>` : ""}
+        </div>
         ${platform === "playstation" && showTrophyBreakdown ? `
         <hr>
         <div>
@@ -7520,6 +7541,9 @@ class GamingStatusGamercardEditor extends HTMLElement {
         // "Trophy Images" only applies (and is only shown) when Trophy
         // Breakdown is on -- re-render so it appears/disappears immediately.
         if (field === "show_trophy_breakdown") this.render();
+        // "Show Achievement Description" is only shown when the achievement
+        // hover itself is on -- re-render so it appears/disappears immediately.
+        if (field === "show_achievement_hover") this.render();
       });
     });
   }
