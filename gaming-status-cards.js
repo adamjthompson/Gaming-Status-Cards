@@ -2951,6 +2951,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       display_mode: "table",
       max_sessions: 10,
       max_achievements: 10,
+      achievements_per_game: "all",
       background: "art",
       color_mode: "game",
       show_platform_steam: true,
@@ -3007,6 +3008,12 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       show_column_end: config.show_column_end !== undefined ? config.show_column_end !== false : legacyTime,
       // Achievements-table fields
       max_achievements: config.max_achievements !== undefined ? Math.min(20, Math.max(1, parseInt(config.max_achievements) || 10)) : 10,
+      // Shared by both achievements display modes -- "all" (default,
+      // today's behavior) or a per-game cap so one recently-played game
+      // with a lot of unlocks can't crowd out every other game's entries.
+      achievements_per_game: config.achievements_per_game === undefined || config.achievements_per_game === "all" || config.achievements_per_game === ""
+        ? "all"
+        : Math.min(30, Math.max(1, parseInt(config.achievements_per_game) || 30)),
       show_column_achievement: config.show_column_achievement !== false,
       show_column_time: config.show_column_time !== false,
       // Shared field names whose valid-value domain depends on event_type
@@ -3077,6 +3084,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       + "|" + trackingEnabled
       + "|" + this.config.max_sessions
       + "|" + this.config.max_achievements
+      + "|" + this.config.achievements_per_game
       + "|" + this.config.icons_per_row
       + "|" + this.config.rows
       + "|" + this.config.icon_background
@@ -3167,6 +3175,22 @@ class GamingStatusRecentActivityCard extends HTMLElement {
     }
 
     rows.sort((a, b) => (Date.parse(b.unlocked_at) || 0) - (Date.parse(a.unlocked_at) || 0));
+
+    // Same idea as the Gamercard's own per-game cap (_matchGameAchievements)
+    // -- applied here across the whole list instead of one selected game, so
+    // a single recently-played game with a lot of unlocks can't fill the
+    // entire list/grid and crowd out every other game. Rows are already
+    // newest-first, so counting occurrences in order and dropping anything
+    // past the cap naturally keeps each game's most recent entries.
+    if (this.config.achievements_per_game !== "all") {
+      const perGameCap = this.config.achievements_per_game;
+      const seenPerGame = {};
+      rows = rows.filter((r) => {
+        const key = (r.game || "").trim().toLowerCase();
+        seenPerGame[key] = (seenPerGame[key] || 0) + 1;
+        return seenPerGame[key] <= perGameCap;
+      });
+    }
 
     const limit = this.config.display_mode === "icons"
       ? this.config.icons_per_row * this.config.rows
@@ -3679,6 +3703,16 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
             <button type="button" id="max_achievements_apply">Apply</button>
           </div>
         </div>` : ""}
+        ${eventType === "achievements" ? `
+        <hr>
+        <div>
+          <div class="section-title">Achievements Per Game</div>
+          <div class="helper-text">Caps how many achievements/trophies from the same game can appear before older ones for that game are excluded -- keeps one recently-played game with a lot of unlocks from crowding out every other game. The most recent per game are always kept.</div>
+          <select id="achievements_per_game">
+            <option value="all" ${this._config.achievements_per_game === "all" || this._config.achievements_per_game === undefined ? "selected" : ""}>All</option>
+            ${Array.from({ length: displayMode === "icons" ? 30 : 20 }, (_, i) => i + 1).map(n => `<option value="${n}" ${parseInt(this._config.achievements_per_game) === n ? "selected" : ""}>${n}</option>`).join("")}
+          </select>
+        </div>` : ""}
         ${isIconMode ? `
         <hr>
         <div>
@@ -3856,6 +3890,14 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
         const clamped = Math.min(20, Math.max(1, parseInt(input.value) || 10));
         input.value = clamped;
         this._config = { ...this._config, max_achievements: clamped };
+        fireChanged();
+      });
+    }
+
+    const achievementsPerGame = this.shadowRoot.getElementById("achievements_per_game");
+    if (achievementsPerGame) {
+      achievementsPerGame.addEventListener("change", (ev) => {
+        this._config = { ...this._config, achievements_per_game: ev.target.value === "all" ? "all" : parseInt(ev.target.value) };
         fireChanged();
       });
     }

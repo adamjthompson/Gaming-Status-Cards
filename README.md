@@ -147,6 +147,7 @@ A configurable table (or icon grid) of recently completed play sessions or recen
 * **Platforms:** Sessions offers Steam, Xbox, PlayStation, Playnite, Custom, and Discord; Achievements offers only Steam, Xbox, and PlayStation — the three platforms that ever produce achievement/trophy data. Independently check/uncheck to only include selected platforms.
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players. In **Single Player** mode, the Player column/hover field is automatically hidden since it would be redundant.
 * **Number of Sessions/Achievements to Display** *(Table modes only)*: How many recent rows to show (default: 10, max: 20). If more than 10 would be shown, the list scrolls instead of growing taller. Type a value and click **Apply** to confirm it.
+* **Achievements Per Game** *(Achievements only, both Table and Icon Grid)*: **All** (default) or a per-game cap (1–20 in Table mode, 1–30 in Icon Grid) on how many unlocks from the same game can appear before older ones for that game are excluded — the most recent per game are always kept. Prevents one recently-played game with a lot of unlocks from crowding out every other game, the same idea as the Gamercard's own fixed 4-per-game limit.
 * **Icons Per Row / Rows** *(Icon Grid only)*: How many icons appear per row (2–6) and how many rows to show (1–5). Total icons shown = Icons Per Row × Rows.
 * **Icon Background / Artwork Size** *(Icon Grid only)*: A backdrop behind each icon — **None (Transparent)**, **Black**, or **White** — since some platforms' icons have transparent backgrounds; and **Crop to Square** or **Show Full Image** for how each icon fills its cell.
 * **Hover Info** *(Icon Grid only)*: Independently toggle which fields appear when hovering an icon — Player, Platform, Game, Achievement, Description, and Date/Time. **Description** is nested under **Achievement** and only offered while it's checked, since a description on its own (with no achievement name shown) wouldn't say what it's describing; it's also only shown when the platform actually provided unlock text for that achievement/trophy — some entries (especially "secret" Steam achievements) have none.
@@ -376,6 +377,7 @@ single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated player names or entity IDs (used when mode is 'selected')
 max_sessions: 10 # Sessions/table: number of rows to display (max 20); scrolls once more than 10 are shown
 max_achievements: 10 # Achievements/table: number of rows to display (max 20); scrolls once more than 10 are shown
+achievements_per_game: all # Achievements only (both table and icon grid). Options: all, or 1-20 (table)/1-30 (icons) -- caps how many unlocks from the same game can appear before older ones for that game are excluded
 icons_per_row: 4 # Achievements/icons only. Options: 2, 3, 4, 5, 6
 rows: 1 # Achievements/icons only. 1-5; total icons shown = icons_per_row * rows
 icon_background: none # Achievements/icons only. Options: none (transparent), black, white
