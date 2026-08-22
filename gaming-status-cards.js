@@ -341,6 +341,16 @@ const GAMING_STATUS_PLATFORM_TINTS = {
   discord: "88, 101, 242",
 };
 
+// Maps a platform key to the master sensor's per-platform gamertag
+// attribute name (see sensor.py's MasterGamingSensor -- steam_gamertag/
+// xbox_gamertag/psn_gamertag). Only the three platforms that have a real
+// gamertag concept; custom/playnite/discord intentionally have no entry.
+const GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM = {
+  steam: "steam_gamertag",
+  xbox: "xbox_gamertag",
+  playstation: "psn_gamertag",
+};
+
 const GAMING_STATUS_PLATFORM_LABELS = {
   steam: "Steam",
   xbox: "Xbox",
@@ -3154,7 +3164,6 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       const stateObj = this._hass.states[entityId];
       if (!stateObj) continue;
       const playerName = gamingStatusCleanPlayerName(stateObj.attributes.friendly_name || entityId);
-      const playerGamertag = stateObj.attributes.gamertag || "";
       const avatar = stateObj.attributes.entity_picture || "";
       const sessions = stateObj.attributes.recent_sessions || [];
 
@@ -3163,9 +3172,15 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         const platformKey = Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => platformLower.includes(k));
         if (platformKey && this.config[`show_platform_${platformKey}`] === false) continue;
 
+        // This row's own platform's gamertag, not the player's overall
+        // active-or-recent identity -- a Steam session shows their Steam
+        // gamertag even if they're currently active on Xbox.
+        const gamertagAttr = platformKey && GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM[platformKey];
+        const rowGamertag = gamertagAttr ? (stateObj.attributes[gamertagAttr] || "") : "";
+
         rows.push({
           player: playerName,
-          player_gamertag: playerGamertag,
+          player_gamertag: rowGamertag,
           avatar,
           game: s.game || "Unknown",
           platform: s.platform || "",
@@ -3194,7 +3209,6 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       const stateObj = this._hass.states[entityId];
       if (!stateObj) continue;
       const playerName = gamingStatusCleanPlayerName(stateObj.attributes.friendly_name || entityId);
-      const playerGamertag = stateObj.attributes.gamertag || "";
       const avatar = stateObj.attributes.entity_picture || "";
       const unlocks = stateObj.attributes.recent_achievements || [];
 
@@ -3203,9 +3217,14 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         const platformKey = ["steam", "xbox", "playstation"].find(k => platformLower.includes(k));
         if (platformKey && this.config[`show_platform_${platformKey}`] === false) continue;
 
+        // This row's own platform's gamertag, not the player's overall
+        // active-or-recent identity -- see _processSessions for why.
+        const gamertagAttr = platformKey && GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM[platformKey];
+        const rowGamertag = gamertagAttr ? (stateObj.attributes[gamertagAttr] || "") : "";
+
         rows.push({
           player: playerName,
-          player_gamertag: playerGamertag,
+          player_gamertag: rowGamertag,
           avatar,
           game: u.game || "Unknown",
           platform: u.platform || "",
