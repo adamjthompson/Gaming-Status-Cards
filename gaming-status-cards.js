@@ -461,6 +461,7 @@ class GamingStatusCard extends HTMLElement {
       sort_by: "last_online",
       show_badges: true,
       show_text_shadow: true,
+      show_gamertags: false,
       max_visible_players: "",
       manual_entities: "",
     };
@@ -477,6 +478,9 @@ class GamingStatusCard extends HTMLElement {
       sort_by: config.sort_by || config.sort || "last_online",
       show_badges: config.show_badges !== false,
       show_text_shadow: config.show_text_shadow !== false,
+      // Opt-in, unlike show_badges/show_text_shadow -- existing dashboards
+      // shouldn't suddenly grow a "(gamertag)" suffix they never asked for.
+      show_gamertags: config.show_gamertags === true,
       max_visible_players: config.max_visible_players || "",
       manual_entities: config.manual_entities || "",
     };
@@ -711,6 +715,7 @@ class GamingStatusCard extends HTMLElement {
       return {
         entity_id: entity.entity_id,
         name: friendlyName,
+        gamertag: entity.attributes.gamertag || "",
         state: entity.state,
         secondary: entity.attributes.secondary || "",
         picture: pictureArt, // Now correctly passes an empty string if there's no picture
@@ -816,7 +821,8 @@ class GamingStatusCard extends HTMLElement {
     this.content.innerHTML = data
       .map((player) => {
         const statusClass = player.isOffline ? "offline" : "online";
-        const safeName = escapeHTML(player.name);
+        const safeName = escapeHTML(player.name)
+          + (this.config.show_gamertags && player.gamertag ? ` (${escapeHTML(player.gamertag)})` : "");
         const safeState = escapeHTML(player.state);
         const safeSecondary = escapeHTML(player.secondary);
         
@@ -971,6 +977,9 @@ class GamingStatusCardEditor extends HTMLElement {
           <label style="margin-top: 10px;"><input type="checkbox" data-field="show_text_shadow" ${
             this._config.show_text_shadow !== false ? "checked" : ""
           }> Show Text Shadow</label>
+          <label style="margin-top: 10px;"><input type="checkbox" data-field="show_gamertags" ${
+            this._config.show_gamertags === true ? "checked" : ""
+          }> Display Gamertags</label>
         </div><hr>
         <div>
           <div class="section-title">Maximum Visible Players</div>
@@ -1605,6 +1614,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
       max_games: 6,
       color_palette: "vivid",
       custom_colors: "",
+      show_gamertags: false,
       entities_pattern: GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
     };
   }
@@ -1622,6 +1632,9 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
       manual_entities: config.manual_entities || "",
       color_palette: gamingStatusNormalizePalette(config),
       custom_colors: config.custom_colors || "",
+      // Opt-in -- existing dashboards shouldn't suddenly grow a
+      // "(gamertag)" suffix in the legend they never asked for.
+      show_gamertags: config.show_gamertags === true,
       entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       window: config.window || "rolling",
       stack_by: config.stack_by === "game" ? "game" : "player",
@@ -1733,10 +1746,11 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
         const stateObj = this._hass.states[entityId];
         if (!stateObj) continue;
         const name = gamingStatusCleanPlayerName(stateObj.attributes.friendly_name || entityId);
+        const gamertag = stateObj.attributes.gamertag || "";
         const playHistory = stateObj.attributes.play_history || {};
         const weeklyHours = parseFloat(stateObj.attributes[weeklyAttr]) || 0;
 
-        if (!playerMap[name]) playerMap[name] = { name, weeklyHours, daily: {} };
+        if (!playerMap[name]) playerMap[name] = { name, gamertag, weeklyHours, daily: {} };
 
         for (const day of days) {
           const totalSecs = Object.values(playHistory[day] || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0);
@@ -1756,7 +1770,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
         }
         return entry;
       });
-      const groups = players.map(p => ({ name: p.name, totalHours: p.weeklyHours }));
+      const groups = players.map(p => ({ name: p.name, gamertag: p.gamertag, totalHours: p.weeklyHours }));
 
       this._renderChart(dailyData, groups);
     }
@@ -1869,7 +1883,8 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
           const ly = legY0 + row * legendRowH;
           svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2" style="transition:opacity 0.2s ease" data-swatch-${dataKey}="${this._esc(g.name)}"/>`;
           const hoursStr = isPlayerMode && g.totalHours > 0 ? ` (${g.totalHours.toFixed(2)}h)` : "";
-          const fullLabel = g.name + hoursStr;
+          const gamertagStr = isPlayerMode && this.config.show_gamertags && g.gamertag ? ` (${g.gamertag})` : "";
+          const fullLabel = g.name + gamertagStr + hoursStr;
           const maxCh = Math.floor(colW / 7) - 2;
           const label = fullLabel.length > maxCh ? fullLabel.slice(0, maxCh - 1) + "…" : fullLabel;
           svg += `<text x="${lx + 17}" y="${ly + 11}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(label)}</text>`;
@@ -2016,11 +2031,19 @@ class GamingStatusWeeklyActivityEditor extends HTMLElement {
             <option value="false" ${this._config.hide_empty !== true && this._config.hide_empty !== "true" ? "selected" : ""}>Show All Players</option>
             <option value="true" ${this._config.hide_empty === true || this._config.hide_empty === "true" ? "selected" : ""}>Hide Inactive Players</option>
           </select>
+        </div>
+        <div>
+          <div class="section-title">Display Gamertags</div>
+          <div class="helper-text">Show each player's platform gamertag alongside their name in the legend.</div>
+          <select id="show_gamertags">
+            <option value="false" ${this._config.show_gamertags !== true && this._config.show_gamertags !== "true" ? "selected" : ""}>Off</option>
+            <option value="true" ${this._config.show_gamertags === true || this._config.show_gamertags === "true" ? "selected" : ""}>On</option>
+          </select>
         </div>` : ""}
       </div>`;
 
-    const BOOL_FIELDS_WACT = ["show_legend", "hide_empty"];
-    ["title", "stack_by", "window", "mode", "single_entity", "selected_entities", "max_games", "color_palette", "custom_colors", "show_legend", "hide_empty"].forEach(id => {
+    const BOOL_FIELDS_WACT = ["show_legend", "hide_empty", "show_gamertags"];
+    ["title", "stack_by", "window", "mode", "single_entity", "selected_entities", "max_games", "color_palette", "custom_colors", "show_legend", "hide_empty", "show_gamertags"].forEach(id => {
       const el = this.shadowRoot.getElementById(id);
       if (!el) return;
       el.addEventListener("change", ev => {
@@ -2432,6 +2455,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       max_players: "3",
       color_palette: "vivid",
       custom_colors: "",
+      show_gamertags: false,
       entities_pattern: GAMING_STATUS_DEFAULT_ENTITIES_PATTERN
     };
   }
@@ -2449,6 +2473,10 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       ...config,
       color_palette: gamingStatusNormalizePalette(config),
+      // Opt-in -- existing dashboards shouldn't suddenly grow a
+      // "(gamertag)" suffix they never asked for. Accepts a real boolean
+      // or the editor's own select-based "true"/"false" string.
+      show_gamertags: config.show_gamertags === true || config.show_gamertags === "true",
     };
     this._lastHash = "";
   }
@@ -2688,15 +2716,16 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       for (const entityId of entityIdsToProcess) {
         const stateObj = this._hass.states[entityId];
         const friendlyName = gamingStatusCleanPlayerName(stateObj.attributes.friendly_name || entityId);
+        const gamertag = stateObj.attributes.gamertag || "";
 
         if (this.config.metric === "hours") {
           const hours = parseFloat(stateObj.attributes[isCal ? "total_weekly_hours" : "rolling_weekly_hours"]) || 0;
-          finalData.push({ name: friendlyName, value: hours, displayValue: `${hours}h` });
+          finalData.push({ name: friendlyName, gamertag, value: hours, displayValue: `${hours}h` });
         }
         else if (this.config.metric === "games") {
           const phBreakdown = this._getPlayHistoryBreakdown(stateObj.attributes, isCal);
           const count = Object.keys(phBreakdown).length;
-          finalData.push({ name: friendlyName, value: count, displayValue: `${count}` });
+          finalData.push({ name: friendlyName, gamertag, value: count, displayValue: `${count}` });
         }
         else if (this.config.metric === "longest") {
           const longest = this._windowLongestMinutes(stateObj.attributes, windowStart);
@@ -2706,20 +2735,20 @@ class GamingStatusLeaderboardCard extends HTMLElement {
             // stale all-time longest_session from the attribute fallback chain.
             // Append the game from that longest session, e.g. "Josh - Marvel Rivals".
             const label = longest.game ? `${friendlyName} - ${longest.game}` : friendlyName;
-            finalData.push({ name: label, value: longest.mins, displayValue: this.formatMinutes(longest.mins) });
+            finalData.push({ name: label, gamertag, value: longest.mins, displayValue: this.formatMinutes(longest.mins) });
           } else {
             const longestStr = getLongest(stateObj.attributes);
             const mins = this.extractMinutes(longestStr);
-            finalData.push({ name: friendlyName, value: mins, displayValue: String(longestStr) });
+            finalData.push({ name: friendlyName, gamertag, value: mins, displayValue: String(longestStr) });
           }
         }
         else if (this.config.metric === "all_time_hours") {
           const hours = parseFloat(stateObj.attributes.all_time_total_hours) || 0;
-          finalData.push({ name: friendlyName, value: hours, displayValue: `${hours}h` });
+          finalData.push({ name: friendlyName, gamertag, value: hours, displayValue: `${hours}h` });
         }
         else if (this.config.metric === "all_time_sessions") {
           const count = parseInt(stateObj.attributes.all_time_session_count) || 0;
-          finalData.push({ name: friendlyName, value: count, displayValue: `${count}` });
+          finalData.push({ name: friendlyName, gamertag, value: count, displayValue: `${count}` });
         }
       }
     }
@@ -2740,7 +2769,8 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     
     finalData.forEach((item, index) => {
       const color = activePalette[index % activePalette.length];
-      const safeName = escapeHTML(item.name);
+      const safeName = escapeHTML(item.name)
+        + (this.config.show_gamertags && item.gamertag ? ` (${escapeHTML(item.gamertag)})` : "");
       const safeDisplay = escapeHTML(item.displayValue);
 
       if (this.config.metric === "longest") {
@@ -2870,7 +2900,15 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
         <label>Items to Display (Rows)
           <input type="number" id="max_players" .configValue="max_players" value="${this._config.max_players || '3'}" min="1" max="20">
         </label>
-        
+
+        <label>Display Gamertags
+          <select id="show_gamertags" .configValue="show_gamertags">
+            <option value="false" ${this._config.show_gamertags !== true && this._config.show_gamertags !== "true" ? "selected" : ""}>Off</option>
+            <option value="true" ${this._config.show_gamertags === true || this._config.show_gamertags === "true" ? "selected" : ""}>On</option>
+          </select>
+          <span class="helper-text">Show each player's platform gamertag alongside their name.</span>
+        </label>
+
         <hr>
 
         <label>Color Palette
@@ -2981,6 +3019,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       show_hover_achievement: true,
       show_hover_description: true,
       show_hover_datetime: true,
+      show_gamertags: false,
       entities_pattern: GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
     };
   }
@@ -3047,6 +3086,9 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       show_hover_achievement: config.show_hover_achievement !== false,
       show_hover_description: config.show_hover_description !== false,
       show_hover_datetime: config.show_hover_datetime !== false,
+      // Opt-in -- existing dashboards shouldn't suddenly grow a
+      // "(gamertag)" suffix they never asked for.
+      show_gamertags: config.show_gamertags === true,
     };
     this._lastHash = "";
   }
@@ -3112,6 +3154,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       const stateObj = this._hass.states[entityId];
       if (!stateObj) continue;
       const playerName = gamingStatusCleanPlayerName(stateObj.attributes.friendly_name || entityId);
+      const playerGamertag = stateObj.attributes.gamertag || "";
       const avatar = stateObj.attributes.entity_picture || "";
       const sessions = stateObj.attributes.recent_sessions || [];
 
@@ -3122,6 +3165,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
 
         rows.push({
           player: playerName,
+          player_gamertag: playerGamertag,
           avatar,
           game: s.game || "Unknown",
           platform: s.platform || "",
@@ -3150,6 +3194,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       const stateObj = this._hass.states[entityId];
       if (!stateObj) continue;
       const playerName = gamingStatusCleanPlayerName(stateObj.attributes.friendly_name || entityId);
+      const playerGamertag = stateObj.attributes.gamertag || "";
       const avatar = stateObj.attributes.entity_picture || "";
       const unlocks = stateObj.attributes.recent_achievements || [];
 
@@ -3160,6 +3205,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
 
         rows.push({
           player: playerName,
+          player_gamertag: playerGamertag,
           avatar,
           game: u.game || "Unknown",
           platform: u.platform || "",
@@ -3396,7 +3442,8 @@ class GamingStatusRecentActivityCard extends HTMLElement {
           case "player":
             value = (this.config.show_column_avatar && row.avatar
               ? `<img class="ract-player-avatar" src="${escapeHTML(row.avatar)}" alt="" loading="lazy">`
-              : "") + escapeHTML(row.player);
+              : "") + escapeHTML(row.player)
+              + (this.config.show_gamertags && row.player_gamertag ? ` (${escapeHTML(row.player_gamertag)})` : "");
             cls += " primary";
             break;
           case "game": value = escapeHTML(row.game); cls += " primary"; break;
@@ -3479,7 +3526,8 @@ class GamingStatusRecentActivityCard extends HTMLElement {
           case "player":
             value = (this.config.show_column_avatar && row.avatar
               ? `<img class="ract-player-avatar" src="${escapeHTML(row.avatar)}" alt="" loading="lazy">`
-              : "") + escapeHTML(row.player);
+              : "") + escapeHTML(row.player)
+              + (this.config.show_gamertags && row.player_gamertag ? ` (${escapeHTML(row.player_gamertag)})` : "");
             cls += " primary";
             break;
           case "game": value = escapeHTML(row.game); cls += " primary"; break;
@@ -3551,7 +3599,12 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       const row = rows[parseInt(el.getAttribute("data-idx"), 10)];
       if (!row) return "";
       const lines = [];
-      if (this.config.show_hover_player && !isSinglePlayer) lines.push(escapeHTML(row.player));
+      if (this.config.show_hover_player && !isSinglePlayer) {
+        lines.push(
+          escapeHTML(row.player)
+          + (this.config.show_gamertags && row.player_gamertag ? ` (${escapeHTML(row.player_gamertag)})` : "")
+        );
+      }
       const platformLabel = row.console || GAMING_STATUS_PLATFORM_LABELS[row.platform] || row.platform;
       if (this.config.show_hover_game) {
         lines.push(this.config.show_hover_platform
@@ -3712,6 +3765,12 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
             <option value="all" ${this._config.achievements_per_game === "all" || this._config.achievements_per_game === undefined ? "selected" : ""}>All</option>
             ${Array.from({ length: displayMode === "icons" ? 30 : 20 }, (_, i) => i + 1).map(n => `<option value="${n}" ${parseInt(this._config.achievements_per_game) === n ? "selected" : ""}>${n}</option>`).join("")}
           </select>
+        </div>` : ""}
+        ${mode !== "single" ? `
+        <hr>
+        <div>
+          <label><input type="checkbox" data-field="show_gamertags" ${this._config.show_gamertags === true ? "checked" : ""}> Display Gamertags</label>
+          <div class="helper-text">Show each player's platform gamertag alongside their name, e.g. "Adam (Ohidjwae)".</div>
         </div>` : ""}
         ${isIconMode ? `
         <hr>
@@ -7043,6 +7102,7 @@ class GamingStatusGamercardCard extends HTMLElement {
       exclude_zero_completion: false,
       show_achievement_hover: true,
       show_achievement_description: true,
+      show_gamertags: false,
     };
   }
 
@@ -7074,6 +7134,9 @@ class GamingStatusGamercardCard extends HTMLElement {
       // nested under it (only ever relevant when the tooltip itself shows).
       show_achievement_hover: config.show_achievement_hover !== false,
       show_achievement_description: config.show_achievement_description !== false,
+      // Opt-in -- existing Gamercards shouldn't suddenly grow a
+      // "(gamertag)" suffix they never asked for.
+      show_gamertags: config.show_gamertags === true,
     };
     this._lastHash = "";
   }
@@ -7144,6 +7207,7 @@ class GamingStatusGamercardCard extends HTMLElement {
       this.config.exclude_zero_completion,
       this.config.show_achievement_hover,
       this.config.show_achievement_description,
+      this.config.show_gamertags,
     ].join("|");
 
     if (this._lastHash === hash) return;
@@ -7327,6 +7391,10 @@ class GamingStatusGamercardCard extends HTMLElement {
     // is configured for.
     const avatar = realtimeState ? (realtimeState.attributes.entity_picture || "") : (masterState ? (masterState.attributes.entity_picture || "") : "");
     const playerName = masterState ? gamingStatusCleanPlayerName(masterState.attributes.friendly_name || "") : "";
+    // Same reasoning as the avatar above -- the platform-specific gamertag
+    // this card is actually configured for, not master's cross-platform
+    // merged value.
+    const gamertag = realtimeState ? (realtimeState.attributes.gamertag || "") : (masterState ? (masterState.attributes.gamertag || "") : "");
 
     // Averaged across the platform's WHOLE library, not just the rows shown
     // below -- same formula as GamingStatusStatsCard.computeStats' avgCompletion.
@@ -7357,7 +7425,7 @@ class GamingStatusGamercardCard extends HTMLElement {
           ${avatar
             ? `<img class="gc-avatar" src="${escapeHTML(avatar)}" alt="">`
             : `<div class="gc-avatar-placeholder"><ha-icon icon="mdi:controller" style="color: var(--secondary-text-color); --mdc-icon-size: 22px;"></ha-icon></div>`}
-          <div class="gc-player-name">${escapeHTML(playerName)}</div>
+          <div class="gc-player-name">${escapeHTML(playerName)}${this.config.show_gamertags && gamertag ? ` (${escapeHTML(gamertag)})` : ""}</div>
         </div>
         ${statCells.length ? `<div class="gc-stats">${statCells.map(s => `<div class="gc-stat"><div class="gc-stat-value">${escapeHTML(s.value)}</div><div class="gc-stat-label">${escapeHTML(s.label)}</div></div>`).join("")}</div>` : ""}
       </div>`;
@@ -7548,6 +7616,11 @@ class GamingStatusGamercardEditor extends HTMLElement {
           <div class="helper-text">Shows a tooltip (name, description, date) when hovering an achievement icon. Turn off to disable hovering entirely.</div>
           ${this._config.show_achievement_hover !== false ? `
           <label style="margin-top: 10px;"><input type="checkbox" data-field="show_achievement_description" ${this._config.show_achievement_description !== false ? "checked" : ""}> Show Achievement Description</label>` : ""}
+        </div>
+        <hr>
+        <div>
+          <label><input type="checkbox" data-field="show_gamertags" ${this._config.show_gamertags === true ? "checked" : ""}> Display Gamertags</label>
+          <div class="helper-text">Show the player's platform gamertag alongside their name, e.g. "Adam (Ohidjwae)".</div>
         </div>
         ${platform === "playstation" && showTrophyBreakdown ? `
         <hr>
