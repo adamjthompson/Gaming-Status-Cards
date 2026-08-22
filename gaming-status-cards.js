@@ -349,6 +349,7 @@ const GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM = {
   steam: "steam_gamertag",
   xbox: "xbox_gamertag",
   playstation: "psn_gamertag",
+  discord: "discord_gamertag",
 };
 
 const GAMING_STATUS_PLATFORM_LABELS = {
