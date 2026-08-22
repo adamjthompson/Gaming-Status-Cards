@@ -42,6 +42,7 @@ A clean, native-feeling list of your tracked gamers. It dynamically tints the ca
 * **Sort By:** Automatically sorts players chronologically by who was `Last Online`. Actively online players are always pinned to the top. Can also be sorted alphabetically by Name or Game Title.
 * **Visibility:** Toggle the platform icon badges and text shadows to fit your dashboard theme.
 * **Maximum Visible Players:** Limit how many players will be shown at once before a scrollbar is displayed.
+* **Display Gamertags:** Show each player's real account name for the displayed platform (Steam persona name, Xbox gamertag, PSN online ID, or Discord display name) next to their player name. Off by default; has no effect for a platform with no gamertag concept (Playnite, Custom).
 
 **Online Now**
 ![Currently Playing Card Screenshot](images/playing.png)
@@ -83,6 +84,7 @@ A native SVG stacked bar chart showing daily gaming hours over a rolling 7-day (
 * **Custom Colors:** Override the default vibrant palette with a comma-separated list of CSS colors (e.g., `#ffbe0b, rgb(251, 86, 7), blue`).
 * **Legend:** Toggle the legend below the chart on or off. Hiding it reclaims the legend area and gives the chart more vertical space. Defaults to on.
 * **Exclusions** *(Stack By: Player only)*: When enabled, players with no hours in the selected time window are excluded from both the chart and the legend. Useful for squads where not everyone plays every week. Defaults to off.
+* **Display Gamertags** *(Stack By: Player only)*: Appends each player's real account name (gamertag) to their label in the legend. Off by default.
 
 **Weekly Activity (Stack By: Player)**
 ![Weekly Hours Chart Screenshot](images/week-hours.png)
@@ -126,6 +128,7 @@ A dependency-free native CSS bar chart that ranks your squad across a variety of
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Items to Display (Rows):** Set how many ranked entries are shown (default: 3, max: 20).
 * **Custom Colors:** Override the default vibrant palette with a comma-separated list of CSS colors.
+* **Display Gamertags** *(player-ranking metrics only)*: Appends each player's real account name (gamertag) next to their name. Off by default; has no effect on the Top Games metrics, which rank games rather than players.
 
 **Leaderboard Cards**
 ![Most Hours Screenshot](images/leaderboard-most-hours.png)
@@ -146,6 +149,7 @@ A configurable table (or icon grid) of recently completed play sessions or recen
 * **Display Mode** *(Achievements only)*: **Table** (one row per unlock) or **Icon Grid** (a compact grid of icons with hover detail). Sessions is always a table.
 * **Platforms:** Sessions offers Steam, Xbox, PlayStation, Playnite, Custom, and Discord; Achievements offers only Steam, Xbox, and PlayStation — the three platforms that ever produce achievement/trophy data. Independently check/uncheck to only include selected platforms.
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players. In **Single Player** mode, the Player column/hover field is automatically hidden since it would be redundant.
+* **Display Gamertags:** Appends each row's own platform-specific real account name (gamertag) next to the player's name, in both table and icon-grid hover modes. Off by default; has no effect for a row from a platform with no gamertag concept (Playnite, Custom).
 * **Number of Sessions/Achievements to Display** *(Table modes only)*: How many recent rows to show (default: 10, max: 20). If more than 10 would be shown, the list scrolls instead of growing taller. Type a value and click **Apply** to confirm it.
 * **Achievements Per Game** *(Achievements only, both Table and Icon Grid)*: **All** (default) or a per-game cap (1–20 in Table mode, 1–30 in Icon Grid) on how many unlocks from the same game can appear before older ones for that game are excluded — the most recent per game are always kept. Prevents one recently-played game with a lot of unlocks from crowding out every other game, the same idea as the Gamercard's own fixed 4-per-game limit.
 * **Icons Per Row / Rows** *(Icon Grid only)*: How many icons appear per row (2–6) and how many rows to show (1–5). Total icons shown = Icons Per Row × Rows.
@@ -268,6 +272,7 @@ An Exophase-style summary card for a single player on a single platform: avatar,
 * **Trophy Images** *(PlayStation only, shown when Trophy Breakdown is checked)*: **Official Trophy Images** or **Icons Only**, same option as the PlayStation Trophies card.
 * **Show Achievement Hover:** Toggle the tooltip that appears when hovering an achievement/trophy icon (checked by default). Turn off to disable hovering entirely.
 * **Show Achievement Description** *(shown while Show Achievement Hover is checked)*: Include the achievement/trophy's description text in that tooltip, when the platform provided one — some entries (especially "secret" Steam achievements) have none.
+* **Display Gamertags:** Appends the player's real account name (persona name, gamertag, or online ID) for the selected platform next to their name. Off by default.
 
 Hovering an achievement/trophy icon (when enabled) shows a tooltip with its name, description (if available and enabled), and the date/time it was earned. A game row with no captured logo/icon/cover art falls back to its plain title text instead; a game with fewer than four recorded recent unlocks (or none at all) just shows fewer icons rather than a placeholder.
 
@@ -302,6 +307,7 @@ color_mode: game # Options: game, platform
 offline_image: game # Options: game, avatar
 max_visible_players: " " # Limit visible rows before scrollbar appears
 manual_entities: " " # Whitelist of comma-separated player names or entity IDs
+show_gamertags: false # Show each player's real account name (gamertag) for the displayed platform next to their name
 ```
 
 **The Slideshow Card:**
@@ -331,6 +337,7 @@ max_games: 6 # Number of top games to display (stack_by: game only)
 custom_colors: " " # Override the default colors
 show_legend: true # Set to false to hide the legend and give more space to the chart
 hide_empty: false # Set to true to exclude players with no hours in the selected window (stack_by: player only)
+show_gamertags: false # Append each player's real account name (gamertag) to their legend label (stack_by: player only)
 ```
 
 **The Platforms Card:**
@@ -358,6 +365,7 @@ single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated player names or entity IDs (used when mode is 'selected')
 max_players: 3 # Number of ranked rows to display
 custom_colors: " " # Override the default colors
+show_gamertags: false # Append each player's real account name (gamertag) next to their name -- player-ranking metrics only
 ```
 
 **The Recent Activity Card:**
@@ -401,6 +409,7 @@ show_column_start: true # Sessions/table only
 show_column_end: true # Sessions/table only
 show_column_achievement: true # Achievements/table only
 show_column_time: true # Achievements/table only
+show_gamertags: false # Append each row's own platform-specific real account name (gamertag) next to the player's name, in both table and icon-grid modes
 ```
 
 **The Game Management Card:**
@@ -502,4 +511,5 @@ image_style: official # Options: official, icons (PlayStation trophy breakdown o
 exclude_zero_completion: false # Keep out of the recently-played rows any game with no real completion data (e.g. one this platform's sensor mis-tracked). Doesn't affect the stats above.
 show_achievement_hover: true # Set to false to disable the achievement/trophy icon hover tooltip entirely
 show_achievement_description: true # Only used while show_achievement_hover is true. Only shown when the unlock has description text
+show_gamertags: false # Append the player's real account name (gamertag) for the selected platform next to their name
 ```
