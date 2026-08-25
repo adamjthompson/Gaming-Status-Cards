@@ -81,7 +81,7 @@ function gamingStatusCleanPlayerName(rawName) {
 }
 
 function gamingStatusEscapeHTML(str) {
-  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 // ====================================================================
@@ -917,6 +917,9 @@ class GamingStatusCardEditor extends HTMLElement {
     this._hass = hass;
     if (first) this.render();
   }
+  _esc(s) {
+    return gamingStatusEscapeHTML(s);
+  }
   render() {
     if (!this._config) return;
 
@@ -944,7 +947,7 @@ class GamingStatusCardEditor extends HTMLElement {
       <div class="editor-container">
         <div>
           <div class="section-title">Card Title (Optional)</div>
-          <input type="text" id="title" data-field="title" value="${this._config.title || ""}" placeholder="e.g. The Squad">
+          <input type="text" id="title" data-field="title" value="${this._esc(this._config.title || "")}" placeholder="e.g. The Squad">
         </div><hr>
         <div><div class="section-title">Mode</div><div class="radio-group">
             ${modeOptions.map(opt => `<label><input type="radio" name="mode" data-field="mode" value="${opt.value}" ${
@@ -996,14 +999,14 @@ class GamingStatusCardEditor extends HTMLElement {
           <div class="section-title">Maximum Visible Players</div>
           <div class="helper-text">Leave blank to show all players. Enter a number to restrict the visible height and enable a dynamic scrollbar.</div>
           <input type="number" id="max-players-input" data-field="max_visible_players" value="${
-            this._config.max_visible_players || ""
+            this._esc(this._config.max_visible_players || "")
           }" placeholder="e.g. 3" min="1">
         </div><hr>
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
           <div class="helper-text">Leave blank to automatically grab all sensors. To restrict this card to specific people, enter a comma-separated list of player names (e.g. <code>adam, josh, liv</code>) or full entity IDs.</div>
           <input type="text" id="manual-entities-input" data-field="manual_entities" value="${
-            this._config.manual_entities || ""
+            this._esc(this._config.manual_entities || "")
           }" placeholder="adam, josh, liv">
         </div>
       </div>
@@ -1345,7 +1348,7 @@ class GamingSlideshowCard extends HTMLElement {
     const anim_name = `anim_${item_ids}`;
 
     // Eliminate first-load flash by setting the first slide as the static container background
-    this.content.style.backgroundImage = `url('${data[0].art}')`;
+    this.content.style.backgroundImage = `url('${gamingStatusEscapeHTML(data[0].art)}')`;
     this.content.style.backgroundSize = bgSize;
     this.content.style.backgroundPosition = "center";
     this.content.style.backgroundRepeat = bgRepeat;
@@ -1390,6 +1393,9 @@ class GamingSlideshowCardEditor extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
   }
+  _esc(s) {
+    return gamingStatusEscapeHTML(s);
+  }
 
   render() {
     if (!this._config) return;
@@ -1418,7 +1424,7 @@ class GamingSlideshowCardEditor extends HTMLElement {
           <div class="section-title">Aspect Ratio Override</div>
           <div class="helper-text">Leave blank to automatically use the default ratio for your selected artwork style.</div>
           <input type="text" id="aspect-input" .configValue="aspect_ratio" value="${
-            this._config.aspect_ratio || ""
+            this._esc(this._config.aspect_ratio || "")
           }" placeholder="e.g. 16/9">
         </div>
 
@@ -1451,7 +1457,7 @@ class GamingSlideshowCardEditor extends HTMLElement {
           <div class="section-title">Manual Entities (Advanced)</div>
           <div class="helper-text">Leave blank to automatically grab all sensors, or restrict by entering comma-separated player names (e.g. adam, josh, liv) or full entity IDs.</div>
           <input type="text" id="manual-entities-input-slide" .configValue="manual_entities" value="${
-            this._config.manual_entities || ""
+            this._esc(this._config.manual_entities || "")
           }" placeholder="adam, josh, liv">
         </div>
         ${
@@ -1463,7 +1469,7 @@ class GamingSlideshowCardEditor extends HTMLElement {
           <div class="section-title">Avatar Name Map (Advanced)</div>
           <div class="helper-text">Override the letter shown for a Plex account's avatar badge. Comma-separated "username = letter" pairs, same format as Gaming Status's own Title/Rating Overrides. Leave blank to keep showing each account's first letter.</div>
           <input type="text" id="avatar-name-map-input" .configValue="avatar_name_map" value="${
-            this._config.avatar_name_map || ""
+            this._esc(this._config.avatar_name_map || "")
           }" placeholder="someusername = M, anotherusername = J">
         </div>`
             : ""
@@ -2346,6 +2352,9 @@ class GamingStatusDonutEditor extends HTMLElement {
     this._hass = hass;
     if (firstLoad) this.render();
   }
+  _esc(s) {
+    return gamingStatusEscapeHTML(s);
+  }
 
   render() {
     if (!this._hass || !this._config) return;
@@ -2366,7 +2375,7 @@ class GamingStatusDonutEditor extends HTMLElement {
       </style>
       <div class="container">
         <label>Card Title (Optional)
-          <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ""}">
+          <input type="text" id="title" .configValue="title" value="${this._esc(this._config.title !== undefined ? this._config.title : "")}">
         </label>
         <label>Time Window
           <select id="window" .configValue="window">
@@ -2385,13 +2394,13 @@ class GamingStatusDonutEditor extends HTMLElement {
           <label>Select Player
             <select id="single_entity" .configValue="single_entity">
               <option value="" disabled ${!this._config.single_entity ? "selected" : ""}>Select a player...</option>
-              ${gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity)}
+              ${gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s))}
             </select>
           </label>
         </div>
         <div id="selected-selector" style="display: ${this._config.mode === "selected" ? "block" : "none"}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ""}" placeholder="adam, josh, liv">
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="adam, josh, liv">
             <span class="helper-text">Comma-separated player names (or full entity IDs) to include in the aggregate.</span>
           </label>
         </div>
@@ -2404,7 +2413,7 @@ class GamingStatusDonutEditor extends HTMLElement {
         </label>
         <div id="donut-custom-colors-wrap" style="display: ${this._config.color_palette === "custom" ? "block" : "none"}">
           <label>Custom Colors
-            <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ""}" placeholder="rgb(11,124,16), rgb(0,48,135), rgb(2,173,239)">
+            <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._esc(this._config.custom_colors || "")}" placeholder="rgb(11,124,16), rgb(0,48,135), rgb(2,173,239)">
             <span class="helper-text">Three colors, in order: Xbox, PlayStation, PC.</span>
           </label>
         </div>
@@ -2828,10 +2837,13 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
   }
   setConfig(config) { this._config = config; this.render(); }
   
-  set hass(hass) { 
+  set hass(hass) {
     const firstLoad = !this._hass;
-    this._hass = hass; 
+    this._hass = hass;
     if (firstLoad) this.render();
+  }
+  _esc(s) {
+    return gamingStatusEscapeHTML(s);
   }
 
   render() {
@@ -2842,7 +2854,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
     if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
-    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity);
+    const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
 
     const colorPalette = gamingStatusNormalizePalette(this._config);
     const isAllTimeMetric = ['all_time_hours', 'all_time_sessions', 'all_time_top_games', 'steam_total_playtime'].includes(this._config.metric);
@@ -2859,7 +2871,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
       <div class="container">
 
         <label>Card Title (Optional)
-          <input type="text" id="title" .configValue="title" value="${this._config.title !== undefined ? this._config.title : ''}">
+          <input type="text" id="title" .configValue="title" value="${this._esc(this._config.title !== undefined ? this._config.title : '')}">
         </label>
         
         <label>Leaderboard Metric
@@ -2903,13 +2915,13 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
         <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._config.selected_entities || ''}" placeholder="adam, josh, liv">
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._esc(this._config.selected_entities || '')}" placeholder="adam, josh, liv">
             <span class="helper-text">Enter a comma-separated list of player names (or full entity IDs).</span>
           </label>
         </div>
 
         <label>Items to Display (Rows)
-          <input type="number" id="max_players" .configValue="max_players" value="${this._config.max_players || '3'}" min="1" max="20">
+          <input type="number" id="max_players" .configValue="max_players" value="${this._esc(this._config.max_players || '3')}" min="1" max="20">
         </label>
 
         <label>Display Gamertags
@@ -2929,7 +2941,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
         <div id="custom-colors-selector" style="display: ${colorPalette === 'custom' ? 'block' : 'none'}">
           <label>Custom Colors (Advanced)
-            <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._config.custom_colors || ''}" placeholder="#ffbe0b, #fb5607, ...">
+            <input type="text" id="custom_colors" .configValue="custom_colors" value="${this._esc(this._config.custom_colors || '')}" placeholder="#ffbe0b, #fb5607, ...">
             <span class="helper-text">Comma-separated colors. A 10-color palette is recommended so colors don't repeat.</span>
           </label>
         </div>
@@ -4159,6 +4171,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
       single_entity: config.single_entity || "",
     };
     this._lastHash = "";
+    this._lastCheapFingerprint = "";
   }
 
   set hass(hass) {
@@ -4166,6 +4179,23 @@ class GamingStatusGameManagementCard extends HTMLElement {
     if (!this.config) return;
 
     this._resolveTarget();
+
+    const stateObj = this._targetEntityId ? this._hass.states[this._targetEntityId] : null;
+
+    // Cheap pre-check before ever calling the real aggregation below --
+    // last_updated changes whenever this entity's state OR attributes
+    // change, so this alone rules out the common case (some unrelated
+    // entity elsewhere in Home Assistant triggered this hass() call)
+    // without walking recent_sessions/play_history/recent_achievements
+    // every single time.
+    const cheapFingerprint = [
+      this._selectedPlayerId,
+      this._selectedPlatform,
+      this._targetEntityId,
+      stateObj ? stateObj.last_updated : "none",
+    ].join("|");
+    if (this._lastCheapFingerprint === cheapFingerprint && this.content) return;
+    this._lastCheapFingerprint = cheapFingerprint;
 
     // Hash on the actual game list/totals (what _getGameOptions derives and
     // the dropdown displays), not just session count/dates — a rename or
@@ -4178,7 +4208,6 @@ class GamingStatusGameManagementCard extends HTMLElement {
     // log) would otherwise leave this hash unchanged and skip the re-render,
     // stranding a stale, still-clickable "Delete Session" control.
     const gameOptions = this._getGameOptions(this._targetEntityId);
-    const stateObj = this._targetEntityId ? this._hass.states[this._targetEntityId] : null;
     const sessionIds = ((stateObj && stateObj.attributes.recent_sessions) || []).map(s => s.start_time).join(",");
     const hash = [
       this._selectedPlayerId,
@@ -5268,7 +5297,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
     // #pt-content in a separate absolutely-positioned layer so the filter
     // never blurs the actual trophy icons/text on top of it).
     if (activeGame && this.config.show_active_artwork && activeGame.game_hero_art) {
-      this._bgEl.style.backgroundImage = `url("${activeGame.game_hero_art}")`;
+      this._bgEl.style.backgroundImage = `url("${gamingStatusEscapeHTML(activeGame.game_hero_art)}")`;
       this._bgEl.style.display = "block";
     } else {
       this._bgEl.style.display = "none";
@@ -5544,6 +5573,7 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
       custom_colors: config.custom_colors || "",
     };
     this._lastHash = "";
+    this._lastCheapFingerprint = "";
   }
 
   // Per-artwork-mode fixed box heights so `object-fit: contain` never has to
@@ -5587,6 +5617,35 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
 
     const targetEntityId = this._resolveTargetEntityId(hass);
     const stateObj = targetEntityId ? hass.states[targetEntityId] : null;
+
+    // Cheap pre-check before ever touching the (potentially large) games
+    // array below -- last_updated changes whenever this entity's state OR
+    // attributes change, so this alone rules out the common case (some
+    // unrelated entity elsewhere in Home Assistant triggered this hass()
+    // call) without doing a full per-game filter+map+join every single time.
+    const cheapFingerprint = [
+      targetEntityId,
+      stateObj ? stateObj.last_updated : "none",
+      this.config.filter,
+      this.config.max_games,
+      this.config.display_mode,
+      this.config.grid_columns,
+      this.config.grid_max_rows,
+      this.config.time_per_slide,
+      this.config.transition_time,
+      this.config.artwork_mode,
+      this.config.scroll_after,
+      this.config.exclude_inactive_months,
+      this.config.exclude_playstation_no_platinum,
+      this.config.color_palette,
+      this.config.custom_colors,
+      this.config.show_platform_steam,
+      this.config.show_platform_xbox,
+      this.config.show_platform_playstation,
+    ].join("|");
+    if (this._lastCheapFingerprint === cheapFingerprint) return;
+    this._lastCheapFingerprint = cheapFingerprint;
+
     const games = stateObj ? (stateObj.attributes.games || []) : null;
     const isComplete = this.config.filter !== "near";
 
@@ -6029,11 +6088,11 @@ class GamingStatusCompletionTrackerEditor extends HTMLElement {
         <hr>
         <div>
           <div class="section-title">Time Per Slide (Seconds)</div>
-          <input type="number" id="time_per_slide" value="${this._config.time_per_slide}" min="1" step="0.5">
+          <input type="number" id="time_per_slide" value="${this._esc(this._config.time_per_slide)}" min="1" step="0.5">
         </div>
         <div>
           <div class="section-title">Transition Fade Time (Seconds)</div>
-          <input type="number" id="transition_time" value="${this._config.transition_time}" min="0.1" step="0.1">
+          <input type="number" id="transition_time" value="${this._esc(this._config.transition_time)}" min="0.1" step="0.1">
         </div>` : ""}
         ${displayMode === "list" ? `
         <hr>
@@ -6610,6 +6669,7 @@ class GamingStatusLibraryCard extends HTMLElement {
       show_field_counts: config.show_field_counts !== false,
     };
     this._lastHash = "";
+    this._lastCheapFingerprint = "";
   }
 
   // Derives sensor.gaming_status_<owner>_library_summary -- same technique
@@ -6631,6 +6691,31 @@ class GamingStatusLibraryCard extends HTMLElement {
 
     const targetEntityId = this._resolveTargetEntityId(hass);
     const stateObj = targetEntityId ? hass.states[targetEntityId] : null;
+
+    // Cheap pre-check before ever touching the (potentially large) games
+    // array below -- last_updated changes whenever this entity's state OR
+    // attributes change, so this alone rules out the common case (some
+    // unrelated entity elsewhere in Home Assistant triggered this hass()
+    // call) without doing a full per-game filter+map+join every single time.
+    const cheapFingerprint = [
+      targetEntityId,
+      stateObj ? stateObj.last_updated : "none",
+      this.config.show_platform_steam,
+      this.config.show_platform_xbox,
+      this.config.show_platform_playstation,
+      this.config.exclude_zero_completion,
+      this.config.show_search,
+      this.config.sort_by,
+      this.config.artwork_mode,
+      this.config.scroll_after,
+      this.config.show_total,
+      this.config.show_field_title,
+      this.config.show_field_percent,
+      this.config.show_field_counts,
+    ].join("|");
+    if (this._lastCheapFingerprint === cheapFingerprint) return;
+    this._lastCheapFingerprint = cheapFingerprint;
+
     const games = stateObj ? (stateObj.attributes.games || []) : null;
 
     const hash = [
@@ -7395,7 +7480,7 @@ class GamingStatusGamercardCard extends HTMLElement {
     // (the first of selectedGames), not a blend of all shown rows.
     const heroArt = selectedGames.length ? (selectedGames[0].game_hero_art || selectedGames[0].game_cover_art || "") : "";
     if (heroArt) {
-      this._bgEl.style.backgroundImage = `url("${heroArt}")`;
+      this._bgEl.style.backgroundImage = `url("${gamingStatusEscapeHTML(heroArt)}")`;
       this._bgEl.style.display = "block";
       this._contentEl.classList.add("has-bg");
     } else {
