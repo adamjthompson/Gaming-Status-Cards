@@ -5468,7 +5468,7 @@ class GamingStatusPlaystationTrophiesEditor extends HTMLElement {
             <label><input type="checkbox" data-field="show_game_title" ${this._config.show_game_title !== false ? "checked" : ""}> Show Game Title</label>
             <label><input type="checkbox" data-field="show_active_artwork" ${this._config.show_active_artwork === true ? "checked" : ""}> Show Active Game Artwork</label>` : ""}
           </div>
-          <div class="helper-text">When checked, shows trophies for the PlayStation game this player is currently playing instead of their full library totals -- falls back to the full library whenever no PlayStation game is currently active.</div>
+          <div class="helper-text">When checked, shows trophies for the PlayStation game this player is currently playing instead of their full library totals. Falls back to the full library whenever no PlayStation game is currently active.</div>
         </div>
         <hr>
         <div>
