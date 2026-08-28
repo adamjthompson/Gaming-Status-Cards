@@ -307,18 +307,22 @@ function gamingStatusWireLegendFocus(contentEl, dataKey) {
   const swatchKey = "swatch" + cap;
   const legendKey = "legend" + cap;
   let focused = null;
+  // Queried once here, at wiring time, instead of on every mouseenter/
+  // mouseleave/click below -- these two rect sets don't change until the
+  // chart itself is rebuilt (which re-wires from scratch anyway).
+  const dataRects = contentEl.querySelectorAll(`rect[data-${dataKey}]`);
+  const swatchRects = contentEl.querySelectorAll(`rect[data-swatch-${dataKey}]`);
   const applyFocus = (name) => {
-    contentEl.querySelectorAll(`rect[data-${dataKey}]`).forEach(r => {
+    dataRects.forEach(r => {
       r.style.opacity = r.dataset[dataKey] === name ? "1" : "0.15";
     });
-    contentEl.querySelectorAll(`rect[data-swatch-${dataKey}]`).forEach(r => {
+    swatchRects.forEach(r => {
       r.style.opacity = r.dataset[swatchKey] === name ? "1" : "0.15";
     });
   };
   const clearFocus = () => {
-    contentEl.querySelectorAll(`rect[data-${dataKey}], rect[data-swatch-${dataKey}]`).forEach(r => {
-      r.style.opacity = "1";
-    });
+    dataRects.forEach(r => { r.style.opacity = "1"; });
+    swatchRects.forEach(r => { r.style.opacity = "1"; });
   };
   contentEl.querySelectorAll(`rect[data-legend-${dataKey}]`).forEach(hitRect => {
     const name = hitRect.dataset[legendKey];
@@ -1138,8 +1142,23 @@ class GamingSlideshowCard extends HTMLElement {
       }
     }
 
+    // Cheap pre-check before ever calling processData()/JSON.stringify()
+    // below -- skips both entirely when none of the currently-matched
+    // entities (or the config) changed at all, the common case for a
+    // push triggered by some unrelated entity elsewhere in Home
+    // Assistant. Deliberately NOT a replacement for the output hash
+    // below -- a relevant entity's last_updated can tick without the
+    // actual displayed content changing, and that check is what avoids
+    // resetting the CSS crossfade animation in that case.
+    const cheapFingerprint =
+      JSON.stringify(this.config) +
+      "|" +
+      rawEntities.map((e) => `${e.entity_id}:${e.last_updated}`).join(",");
+    if (this._lastCheapFingerprint === cheapFingerprint) return;
+    this._lastCheapFingerprint = cheapFingerprint;
+
     const processedData = this.processData(rawEntities);
-    
+
     // Hash the actual visual output to prevent animation resets when timestamps tick
     const dataHash = JSON.stringify(processedData);
     if (this._lastHash === dataHash) return;
@@ -4227,10 +4246,12 @@ class GamingStatusGameManagementCard extends HTMLElement {
   // to. Shared by set hass() and the player/platform <select> change handlers
   // so both paths stay in sync without waiting for a fresh hass push.
   _resolveTarget() {
-    const players = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-
     let playerId = this.config.mode === "single" ? this.config.single_entity : this._selectedPlayerId;
     if (!playerId || !this._hass.states[playerId]) {
+      // Only scan/sort every player entity in Home Assistant when there's
+      // no already-valid selection to fall back on -- the common case
+      // (a configured, still-existing player) never needs this list.
+      const players = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
       playerId = players.length ? players[0].id : "";
     }
     this._selectedPlayerId = playerId;
@@ -5132,12 +5153,16 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       image_style: config.image_style === "icons" ? "icons" : "official",
     };
     this._lastHash = "";
+    this._lastCheapFingerprint = "";
   }
 
   _resolvePlayerId(hass) {
-    const players = gamingStatusGetPlayerEntities(hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
     let playerId = this.config.single_entity;
     if (!playerId || !hass.states[playerId]) {
+      // Only scan/sort every player entity in Home Assistant when there's
+      // no already-valid selection to fall back on -- the common case
+      // (a configured, still-existing player) never needs this list.
+      const players = gamingStatusGetPlayerEntities(hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
       playerId = players.length ? players[0].id : "";
     }
     return playerId;
@@ -5176,6 +5201,30 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
     const playerId = this._resolvePlayerId(hass);
     const targetEntityId = this._resolveTargetEntityId(hass, playerId);
     const stateObj = targetEntityId ? hass.states[targetEntityId] : null;
+    const activeTitle = this.config.show_active_game
+      ? this._resolveActiveGameTitle(hass, playerId)
+      : "";
+
+    // Cheap pre-check before ever scanning the (potentially large,
+    // uncapped) games array below via .find() -- everything the eventual
+    // activeGame result can depend on (which library entity, its
+    // last_updated, and the live active-game title) is already captured
+    // here, cheaply.
+    const cheapFingerprint = [
+      targetEntityId,
+      stateObj ? stateObj.last_updated : "",
+      activeTitle,
+      this.config.background,
+      this.config.title,
+      this.config.show_total,
+      this.config.show_labels,
+      this.config.show_active_game,
+      this.config.show_game_title,
+      this.config.show_active_artwork,
+      this.config.image_style,
+    ].join("|");
+    if (this._lastCheapFingerprint === cheapFingerprint) return;
+    this._lastCheapFingerprint = cheapFingerprint;
 
     // "Show Active Game Trophies" swaps the displayed tier counts to just
     // the currently-played game's own trophies_earned/trophies_total
@@ -5185,15 +5234,12 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
     // the scanned list yet (e.g. a brand new title not yet resolved by a
     // library scan).
     let activeGame = null;
-    if (this.config.show_active_game && stateObj) {
-      const activeTitle = this._resolveActiveGameTitle(hass, playerId);
-      if (activeTitle) {
-        const normalized = activeTitle.trim().toLowerCase();
-        const games = stateObj.attributes.games || [];
-        activeGame = games.find(g =>
-          (g.platform || "").toLowerCase() === "playstation" && (g.title || "").trim().toLowerCase() === normalized
-        ) || null;
-      }
+    if (this.config.show_active_game && stateObj && activeTitle) {
+      const normalized = activeTitle.trim().toLowerCase();
+      const games = stateObj.attributes.games || [];
+      activeGame = games.find(g =>
+        (g.platform || "").toLowerCase() === "playstation" && (g.title || "").trim().toLowerCase() === normalized
+      ) || null;
     }
 
     const hash = [
@@ -5601,9 +5647,12 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
   // Derives sensor.gaming_status_<owner>_library_summary -- same technique
   // as GamingStatusPlaystationTrophiesCard, different target sensor.
   _resolveTargetEntityId(hass) {
-    const players = gamingStatusGetPlayerEntities(hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
     let playerId = this.config.single_entity;
     if (!playerId || !hass.states[playerId]) {
+      // Only scan/sort every player entity in Home Assistant when there's
+      // no already-valid selection to fall back on -- the common case
+      // (a configured, still-existing player) never needs this list.
+      const players = gamingStatusGetPlayerEntities(hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
       playerId = players.length ? players[0].id : "";
     }
     if (!playerId) return "";
@@ -6364,9 +6413,12 @@ class GamingStatusStatsCard extends HTMLElement {
   // Derives sensor.gaming_status_<owner>_library_summary -- same technique
   // as GamingStatusCompletionCard.
   _resolveTargetEntityId(hass) {
-    const players = gamingStatusGetPlayerEntities(hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
     let playerId = this.config.single_entity;
     if (!playerId || !hass.states[playerId]) {
+      // Only scan/sort every player entity in Home Assistant when there's
+      // no already-valid selection to fall back on -- the common case
+      // (a configured, still-existing player) never needs this list.
+      const players = gamingStatusGetPlayerEntities(hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
       playerId = players.length ? players[0].id : "";
     }
     if (!playerId) return "";
@@ -6675,9 +6727,12 @@ class GamingStatusLibraryCard extends HTMLElement {
   // Derives sensor.gaming_status_<owner>_library_summary -- same technique
   // as GamingStatusCompletionCard.
   _resolveTargetEntityId(hass) {
-    const players = gamingStatusGetPlayerEntities(hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
     let playerId = this.config.single_entity;
     if (!playerId || !hass.states[playerId]) {
+      // Only scan/sort every player entity in Home Assistant when there's
+      // no already-valid selection to fall back on -- the common case
+      // (a configured, still-existing player) never needs this list.
+      const players = gamingStatusGetPlayerEntities(hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
       playerId = players.length ? players[0].id : "";
     }
     if (!playerId) return "";
@@ -7247,9 +7302,12 @@ class GamingStatusGamercardCard extends HTMLElement {
   }
 
   _resolvePlayerId(hass) {
-    const players = gamingStatusGetPlayerEntities(hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
     let playerId = this.config.single_entity;
     if (!playerId || !hass.states[playerId]) {
+      // Only scan/sort every player entity in Home Assistant when there's
+      // no already-valid selection to fall back on -- the common case
+      // (a configured, still-existing player) never needs this list.
+      const players = gamingStatusGetPlayerEntities(hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
       playerId = players.length ? players[0].id : "";
     }
     return playerId;
