@@ -3204,16 +3204,19 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         const platformKey = Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => platformLower.includes(k));
         if (platformKey && this.config[`show_platform_${platformKey}`] === false) continue;
 
-        // This row's own platform's gamertag, not the player's overall
-        // active-or-recent identity -- a Steam session shows their Steam
-        // gamertag even if they're currently active on Xbox.
+        // This row's own platform's avatar/gamertag, not the player's
+        // overall active-or-recent identity -- a Steam session shows their
+        // Steam avatar/gamertag even if they're currently active on Xbox.
         const gamertagAttr = platformKey && GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM[platformKey];
         const rowGamertag = gamertagAttr ? (stateObj.attributes[gamertagAttr] || "") : "";
+        const platformEntityId = platformKey ? entityId.replace(/_master$/, `_${platformKey}`) : "";
+        const platformStateObj = platformEntityId ? this._hass.states[platformEntityId] : null;
+        const rowAvatar = (platformStateObj && platformStateObj.attributes.entity_picture) || avatar;
 
         rows.push({
           player: playerName,
           player_gamertag: rowGamertag,
-          avatar,
+          avatar: rowAvatar,
           game: s.game || "Unknown",
           platform: s.platform || "",
           duration_seconds: parseInt(s.duration_seconds) || 0,
@@ -3249,15 +3252,18 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         const platformKey = ["steam", "xbox", "playstation"].find(k => platformLower.includes(k));
         if (platformKey && this.config[`show_platform_${platformKey}`] === false) continue;
 
-        // This row's own platform's gamertag, not the player's overall
-        // active-or-recent identity -- see _processSessions for why.
+        // This row's own platform's avatar/gamertag, not the player's
+        // overall active-or-recent identity -- see _processSessions for why.
         const gamertagAttr = platformKey && GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM[platformKey];
         const rowGamertag = gamertagAttr ? (stateObj.attributes[gamertagAttr] || "") : "";
+        const platformEntityId = platformKey ? entityId.replace(/_master$/, `_${platformKey}`) : "";
+        const platformStateObj = platformEntityId ? this._hass.states[platformEntityId] : null;
+        const rowAvatar = (platformStateObj && platformStateObj.attributes.entity_picture) || avatar;
 
         rows.push({
           player: playerName,
           player_gamertag: rowGamertag,
-          avatar,
+          avatar: rowAvatar,
           game: u.game || "Unknown",
           platform: u.platform || "",
           console: u.console || "",
