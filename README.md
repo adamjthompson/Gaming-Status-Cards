@@ -186,6 +186,8 @@ Pick an **Action** first — **Add**, **Delete**, **Reassign**, or **Rename** �
 * **Reassign:** Pick a session from the picker, then choose a destination **player** and **platform** (the platform list is scoped to whatever that player actually has configured) and click **Reassign** to move the selected session to them instead (corrects totals on both ends). Useful when a session was tracked under the wrong person's profile, e.g. the wrong account signed into a shared Xbox/Steam app or console.
 * **Add:** Enter a game title and a start/end time (a live duration preview appears once both are set) and click **Add Session** to manually backfill history that was never tracked — e.g. play that happened while the integration was offline, or a title that wasn't detected.
 
+![Game Management Card Screenshot](images/management.png)
+
 ---
 
 ### 8. Gaming Status - PlayStation Trophies
@@ -202,6 +204,8 @@ A single player's lifetime Bronze/Silver/Gold/Platinum trophy totals, shown as f
 * **Show Game Title** *(only shown when Show Active Game Trophies is checked)*: Adds a centered line below the trophies naming the active game — its specific console too, if known (e.g. "Ratchet & Clank (PS3)"). Checked by default.
 * **Show Active Game Artwork** *(only shown when Show Active Game Trophies is checked)*: Displays the active game's hero art as a blurred, slightly darkened background behind the whole card. Unchecked by default.
 * **Trophy Images:** **Official Trophy Images** (default — tries PSN's own official trophy image per tier, falling back to a `mdi:trophy` icon tinted to approximate that tier's real-world color if the image fails to load) or **Icons Only** (always use the tinted icon, never attempt to load an image).
+
+![PlayStation Trophies Card Screenshot](images/trophies.png)
 
 ---
 
@@ -226,6 +230,8 @@ A single player's 100%-complete or near-complete games, shown as a slideshow, a 
 
 In Grid mode, hovering an image shows a tooltip with the game's title (and platform, if more than one platform is checked) — matching the same tooltip style used elsewhere in this bundle. Slideshow mode shows artwork only, with no title or tooltip — a hover tooltip isn't technically possible there, since every slide occupies the same on-screen position and only differs by which one is currently faded in.
 
+![Completion Card Screenshot](images/completion.png)
+
 ---
 
 ### 10. Gaming Status - Stats
@@ -237,6 +243,8 @@ A configurable, two-column summary of a single player's completion/trophy/achiev
 * **Player:** A single player dropdown.
 * **Platforms:** Independently check/uncheck Steam, Xbox, and PlayStation — unchecking a platform removes its contribution from every stat below, not just the platform-specific ones.
 * **Stats to Display:** Independently toggle any of: Games Tracked, Average Completion, Total Gamerscore, Total Trophies, Platinum/Gold/Silver/Bronze Trophies, Steam Achievements, and Total Steam Hours. Each shows as "earned / total" where a total naturally exists (all except Games Tracked, Average Completion, and Total Steam Hours).
+
+![Stats Card Screenshot](images/stats.png)
 
 ---
 
@@ -255,6 +263,8 @@ A scrollable, artwork-and-stats browser of a single player's full game library f
 * **Scroll After (Entries):** How many games show before the list scrolls instead of growing taller (default: 4).
 * **Show Total:** Toggle a "`N` games" count above the list.
 * **Fields to Display:** Title, Completion Percentage, and either **Trophy Counts** (PlayStation — four lines, one per tier: "Bronze: X / Y", etc.) or **Achievement Count** (Steam/Xbox — one "X / Y" line), whichever applies to the selected platform.
+
+![Library Card Screenshot](images/libraries.png)
 
 ---
 
@@ -275,6 +285,8 @@ An Exophase-style summary card for a single player on a single platform: avatar,
 * **Display Gamertags:** Appends the player's real account name (persona name, gamertag, or online ID) for the selected platform next to their name. Off by default.
 
 Hovering an achievement/trophy icon (when enabled) shows a tooltip with its name, description (if available and enabled), and the date/time it was earned. A game row with no captured logo/icon/cover art falls back to its plain title text instead; a game with fewer than four recorded recent unlocks (or none at all) just shows fewer icons rather than a placeholder.
+
+![Gamercard Card Screenshot](images/gamercard.png)
 
 ---
 
