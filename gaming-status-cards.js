@@ -73,7 +73,7 @@ const GAMING_STATUS_DEFAULT_ENTITIES_PATTERN = "_master";
 
 // Strips the trailing "Gaming Status"/"Master"/platform-name suffixes HA
 // tacks onto a gaming_status entity's friendly_name, leaving just the
-// player's name (e.g. "Adam Gaming Status Master" -> "Adam"). Includes the
+// player's name (e.g. "Player1 Gaming Status Master" -> "Player1"). Includes the
 // platform words (Steam/Xbox/...) too, not just "Master", so this stays
 // correct for any entities_pattern, not only the default "_master" suffix.
 function gamingStatusCleanPlayerName(rawName) {
@@ -105,7 +105,7 @@ function gamingStatusGetPlayerEntities(hass, targetSuffix) {
 // Resolves a "Selected Entities" config string into real entity IDs. Each
 // comma-separated token can be either a full entity_id (kept as-is, so
 // existing configs pasted before this helper existed keep working
-// unchanged) or a bare player name like "adam" (matched case-insensitively
+// unchanged) or a bare player name like "player1" (matched case-insensitively
 // against gamingStatusGetPlayerEntities' cleaned display names for the
 // given suffix). Tokens that match neither are silently dropped, same as
 // the previous "only accept entity IDs that actually exist" behavior.
@@ -1008,10 +1008,10 @@ class GamingStatusCardEditor extends HTMLElement {
         </div><hr>
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
-          <div class="helper-text">Leave blank to automatically grab all sensors. To restrict this card to specific people, enter a comma-separated list of player names (e.g. <code>adam, josh, liv</code>) or full entity IDs.</div>
+          <div class="helper-text">Leave blank to automatically grab all sensors. To restrict this card to specific people, enter a comma-separated list of player names (e.g. <code>player1, player2, player3</code>) or full entity IDs.</div>
           <input type="text" id="manual-entities-input" data-field="manual_entities" value="${
             this._esc(this._config.manual_entities || "")
-          }" placeholder="adam, josh, liv">
+          }" placeholder="player1, player2, player3">
         </div>
       </div>
     `;
@@ -1474,10 +1474,10 @@ class GamingSlideshowCardEditor extends HTMLElement {
         </div><hr>
         <div>
           <div class="section-title">Manual Entities (Advanced)</div>
-          <div class="helper-text">Leave blank to automatically grab all sensors, or restrict by entering comma-separated player names (e.g. adam, josh, liv) or full entity IDs.</div>
+          <div class="helper-text">Leave blank to automatically grab all sensors, or restrict by entering comma-separated player names (e.g. player1, player2, player3) or full entity IDs.</div>
           <input type="text" id="manual-entities-input-slide" .configValue="manual_entities" value="${
             this._esc(this._config.manual_entities || "")
-          }" placeholder="adam, josh, liv">
+          }" placeholder="player1, player2, player3">
         </div>
         ${
           this._config.show_avatars !== false &&
@@ -2029,7 +2029,7 @@ class GamingStatusWeeklyActivityEditor extends HTMLElement {
         <div>
           <div class="section-title">Selected Entities</div>
           <div class="helper-text">Comma-separated player names (or full entity IDs) to include in the chart.</div>
-          <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="adam, josh, liv">
+          <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="player1, player2, player3">
         </div>` : ""}
         ${stackBy === "game" ? `
         <hr>
@@ -2419,7 +2419,7 @@ class GamingStatusDonutEditor extends HTMLElement {
         </div>
         <div id="selected-selector" style="display: ${this._config.mode === "selected" ? "block" : "none"}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="adam, josh, liv">
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="player1, player2, player3">
             <span class="helper-text">Comma-separated player names (or full entity IDs) to include in the aggregate.</span>
           </label>
         </div>
@@ -2772,7 +2772,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
             // Session-log based: correctly reads 0 when nobody has played in the
             // window (e.g. Calendar on a Sunday morning) instead of surfacing a
             // stale all-time longest_session from the attribute fallback chain.
-            // Append the game from that longest session, e.g. "Josh - Marvel Rivals".
+            // Append the game from that longest session, e.g. "Player1 - Marvel Rivals".
             const label = longest.game ? `${friendlyName} - ${longest.game}` : friendlyName;
             finalData.push({ name: label, gamertag, value: longest.mins, displayValue: this.formatMinutes(longest.mins) });
           } else {
@@ -2934,7 +2934,7 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
         <div id="selected-selector" style="display: ${this._config.mode === 'selected' ? 'block' : 'none'}">
           <label>Selected Entities:
-            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._esc(this._config.selected_entities || '')}" placeholder="adam, josh, liv">
+            <input type="text" id="selected_entities" .configValue="selected_entities" value="${this._esc(this._config.selected_entities || '')}" placeholder="player1, player2, player3">
             <span class="helper-text">Enter a comma-separated list of player names (or full entity IDs).</span>
           </label>
         </div>
@@ -3791,7 +3791,7 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
         <div>
           <div class="section-title">Selected Entities</div>
           <div class="helper-text">Comma-separated player names (or full entity IDs) to include.</div>
-          <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="adam, josh, liv">
+          <input type="text" id="selected_entities" value="${this._esc(this._config.selected_entities || "")}" placeholder="player1, player2, player3">
         </div>` : ""}
         ${eventType === "sessions" ? `
         <hr>
@@ -3827,7 +3827,7 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
         <hr>
         <div>
           <label><input type="checkbox" data-field="show_gamertags" ${this._config.show_gamertags === true ? "checked" : ""}> Display Gamertags</label>
-          <div class="helper-text">Show each player's platform gamertag alongside their name, e.g. "Adam (Ohidjwae)".</div>
+          <div class="helper-text">Show each player's platform gamertag alongside their name, e.g. "Player1 (Gamertag)".</div>
         </div>` : ""}
         ${isIconMode ? `
         <hr>
@@ -7789,7 +7789,7 @@ class GamingStatusGamercardEditor extends HTMLElement {
         <hr>
         <div>
           <label><input type="checkbox" data-field="show_gamertags" ${this._config.show_gamertags === true ? "checked" : ""}> Display Gamertags</label>
-          <div class="helper-text">Show the player's platform gamertag alongside their name, e.g. "Adam (Ohidjwae)".</div>
+          <div class="helper-text">Show the player's platform gamertag alongside their name, e.g. "Player1 (Gamertag)".</div>
         </div>
         ${platform === "playstation" && showTrophyBreakdown ? `
         <hr>

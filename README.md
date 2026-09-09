@@ -284,11 +284,11 @@ By default, all cards are entirely plug-and-play. They automatically scan your H
 
 The **List** and **Slideshow** cards feature a **Manual Entities** override in their Advanced section. The **Weekly Activity**, **Platforms**, **Leaderboard**, and **Recent Activity** cards use a **Player Filter** setting instead, with a **Selected Players** option that reveals the same kind of field. (**PlayStation Trophies**, **Completion Tracker**, **Stats**, **Library**, and **Gamercard** are always scoped to a single player, so they use a plain player dropdown instead.)
 
-In both cases, just enter a comma-separated list of **player names** — e.g. `adam, josh, liv` — no need to look up or type full entity IDs. Full entity IDs are still accepted too (handy for non-gamer entities like Plex sessions below, or in the rare case a name is ambiguous), and any entry that doesn't match a known player name or an existing entity is silently ignored rather than causing an error.
+In both cases, just enter a comma-separated list of **player names** — e.g. `player1, player2, player3` — no need to look up or type full entity IDs. Full entity IDs are still accepted too (handy for non-gamer entities like Plex sessions below, or in the rare case a name is ambiguous), and any entry that doesn't match a known player name or an existing entity is silently ignored rather than causing an error.
 
 **How Manual Entities interact with Plex (Slideshow card):**
-* **To restrict both gamers AND Plex sessions:** Set the Plex Integration to **None**, and manually type out only the gamers and Plex session sensors you want to see (e.g., `adam, sensor.plex_session_1_tautulli`). The card will automatically format the Tautulli text bubbles correctly.
-* **To restrict gamers but show ALL Plex sessions:** Type your specific gamers into the Manual Entities box (e.g., `adam, josh`), and set Plex Integration to **Tautulli** or **Plex**. The card will restrict the gaming sensors to your list, but automatically sweep up every active Plex session on your network.
+* **To restrict both gamers AND Plex sessions:** Set the Plex Integration to **None**, and manually type out only the gamers and Plex session sensors you want to see (e.g., `player1, sensor.plex_session_1_tautulli`). The card will automatically format the Tautulli text bubbles correctly.
+* **To restrict gamers but show ALL Plex sessions:** Type your specific gamers into the Manual Entities box (e.g., `player1, player2`), and set Plex Integration to **Tautulli** or **Plex**. The card will restrict the gaming sensors to your list, but automatically sweep up every active Plex session on your network.
 
 ---
 
