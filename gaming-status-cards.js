@@ -7788,7 +7788,7 @@ class GamingStatusGamercardEditor extends HTMLElement {
         </div>
         <hr>
         <div>
-          <label><input type="checkbox" data-field="show_gamertags" ${this._config.show_gamertags === true ? "checked" : ""}> Display Gamertags</label>
+          <label><input type="checkbox" data-field="show_gamertags" ${this._config.show_gamertags === true ? "checked" : ""}> Display Gamertag</label>
           <div class="helper-text">Show the player's platform gamertag alongside their name, e.g. "Player1 (Gamertag)".</div>
         </div>
         ${platform === "playstation" && showTrophyBreakdown ? `
