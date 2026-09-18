@@ -5736,7 +5736,13 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
   processData(games) {
     const isComplete = this.config.filter !== "near";
     let filtered = games
-      .filter(g => isComplete ? (g.percent || 0) >= 100 : (g.percent || 0) < 100)
+      // A game with achievement data confirmed unavailable (a restricted
+      // Steam family-shared account -- see the backend's is_confirmed_owner
+      // gate) has percent === null, not a real 0 -- it can't honestly be
+      // called either "complete" or "near complete," so it's excluded
+      // entirely rather than showing as a misleading 0%-complete entry.
+      .filter(g => g.percent != null)
+      .filter(g => isComplete ? g.percent >= 100 : g.percent < 100)
       .filter(g => this.config[`show_platform_${(g.platform || "").toLowerCase()}`] !== false);
 
     if (isComplete) {
@@ -6484,7 +6490,12 @@ class GamingStatusStatsCard extends HTMLElement {
     const steamAchTotal = sum(steamGames, "achievements_total");
     const steamHours = sum(steamGames, "playtime_hours");
 
-    const avgCompletion = filtered.length ? filtered.reduce((s, g) => s + (g.percent || 0), 0) / filtered.length : 0;
+    // Excludes (not coerces to 0) games with achievement data confirmed
+    // unavailable (percent === null, e.g. a restricted Steam family-shared
+    // account) -- counting those as 0% would silently deflate this average
+    // for a reason that has nothing to do with anyone's actual completion.
+    const knownPercent = filtered.filter(g => g.percent != null);
+    const avgCompletion = knownPercent.length ? knownPercent.reduce((s, g) => s + g.percent, 0) / knownPercent.length : 0;
 
     return {
       games_tracked: `${filtered.length}`,
@@ -7010,7 +7021,12 @@ class GamingStatusLibraryCard extends HTMLElement {
           const titleText = g.console ? `${g.title || "Unknown"} (${g.console})` : (g.title || "Unknown");
           lines.push(`<div class="lb-title-text">${escapeHTML(titleText)}</div>`);
         }
-        if (this.config.show_field_percent) lines.push(`<div class="lb-line">${Math.round((g.percent || 0) * 10) / 10}%</div>`);
+        // percent/achievements_earned === null means achievement data is
+        // confirmed unavailable (e.g. a restricted Steam family-shared
+        // account -- see the backend's is_confirmed_owner gate), not a
+        // real 0 -- shown as "unavailable" instead of a misleading "0%"/
+        // "0 / 47".
+        if (this.config.show_field_percent) lines.push(`<div class="lb-line">${g.percent == null ? "Achievement data unavailable" : `${Math.round(g.percent * 10) / 10}%`}</div>`);
         if (this.config.show_field_counts) {
           if (isPS) {
             const earned = g.trophies_earned || {};
@@ -7021,6 +7037,8 @@ class GamingStatusLibraryCard extends HTMLElement {
               .map(tier => `${tier.charAt(0).toUpperCase() + tier.slice(1)}: ${earned[tier] || 0}/${total[tier] || 0}`)
               .join(" | ");
             lines.push(`<div class="lb-line">${tierText}</div>`);
+          } else if (g.achievements_earned == null) {
+            lines.push(`<div class="lb-line">Achievements: data unavailable</div>`);
           } else {
             lines.push(`<div class="lb-line">Achievements: ${g.achievements_earned || 0} / ${g.achievements_total || 0}</div>`);
           }
@@ -7566,8 +7584,12 @@ class GamingStatusGamercardCard extends HTMLElement {
     const gamertag = realtimeState ? (realtimeState.attributes.gamertag || "") : (masterState ? (masterState.attributes.gamertag || "") : "");
 
     // Averaged across the platform's WHOLE library, not just the rows shown
-    // below -- same formula as GamingStatusStatsCard.computeStats' avgCompletion.
-    const avgCompletion = games.length ? games.reduce((s, g) => s + (g.percent || 0), 0) / games.length : 0;
+    // below -- same formula as GamingStatusStatsCard.computeStats' avgCompletion,
+    // including excluding (not coercing to 0) games with achievement data
+    // confirmed unavailable (percent === null, e.g. a restricted Steam
+    // family-shared account).
+    const knownPercentGames = games.filter(g => g.percent != null);
+    const avgCompletion = knownPercentGames.length ? knownPercentGames.reduce((s, g) => s + g.percent, 0) / knownPercentGames.length : 0;
 
     const statCells = [];
     if (this.config.show_game_count) {
@@ -7616,7 +7638,9 @@ class GamingStatusGamercardCard extends HTMLElement {
       }).join("");
 
       const percentHTML = this.config.show_game_completion
-        ? `<span class="gc-game-percent">${escapeHTML(Math.round((g.percent || 0) * 10) / 10)}%</span>`
+        ? (g.percent == null
+            ? `<span class="gc-game-percent">Unavailable</span>`
+            : `<span class="gc-game-percent">${escapeHTML(Math.round(g.percent * 10) / 10)}%</span>`)
         : "";
 
       return `
