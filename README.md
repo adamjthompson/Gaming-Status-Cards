@@ -36,13 +36,13 @@ A clean, native-feeling list of your tracked gamers. It dynamically tints the ca
 
 **UI Configuration Options:**
 * **Card Title:** Optional title displayed above the list.
-* **Mode:** Choose who to show. Show everyone, strictly online players, or filter by a specific platform (PC, Custom, Discord, Steam, Xbox, PlayStation, Playnite).
+* **Mode:** Choose who to show. Show everyone, strictly online players, or filter by a specific platform (PC, GSA (Gaming Status Agent), Discord, Steam, Xbox, PlayStation, Playnite).
 * **Color Mode:** Select border and background fade colors based on the game's dominant color or the platform color. The "Game Artwork (Dynamic)" option is hidden (and the platform color is used automatically) if **Enable Game Color Extraction** is turned off in the integration's Global Settings, since no game color would ever be available.
 * **Offline Image Style:** Choose whether offline players display their last played game's artwork or their player avatar.
 * **Sort By:** Automatically sorts players chronologically by who was `Last Online`. Actively online players are always pinned to the top. Can also be sorted alphabetically by Name or Game Title.
 * **Visibility:** Toggle the platform icon badges and text shadows to fit your dashboard theme.
 * **Maximum Visible Players:** Limit how many players will be shown at once before a scrollbar is displayed.
-* **Display Gamertags:** Show each player's real account name for the displayed platform (Steam persona name, Xbox gamertag, PSN online ID, or Discord display name) next to their player name. Off by default; has no effect for a platform with no gamertag concept (Playnite, Custom).
+* **Display Gamertags:** Show each player's real account name for the displayed platform (Steam persona name, Xbox gamertag, PSN online ID, Discord display name, or GSA Profile Name) next to their player name. Off by default; has no effect for a platform with no gamertag concept (Playnite).
 
 **Online Now**
 ![Currently Playing Card Screenshot](images/playing.png)
@@ -147,9 +147,9 @@ A configurable table (or icon grid) of recently completed play sessions or recen
 * **Card Title:** Optional title displayed above the card.
 * **Event Type:** **Sessions** (play sessions) or **Achievements/Trophies** (unlock history).
 * **Display Mode** *(Achievements only)*: **Table** (one row per unlock) or **Icon Grid** (a compact grid of icons with hover detail). Sessions is always a table.
-* **Platforms:** Sessions offers Steam, Xbox, PlayStation, Playnite, Custom, and Discord; Achievements offers only Steam, Xbox, and PlayStation — the three platforms that ever produce achievement/trophy data. Independently check/uncheck to only include selected platforms.
+* **Platforms:** Sessions offers Steam, Xbox, PlayStation, Playnite, GSA (Gaming Status Agent), and Discord; Achievements offers only Steam, Xbox, and PlayStation — the three platforms that ever produce achievement/trophy data. Independently check/uncheck to only include selected platforms.
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players. In **Single Player** mode, the Player column/hover field is automatically hidden since it would be redundant.
-* **Display Gamertags:** Appends each row's own platform-specific real account name (gamertag) next to the player's name, in both table and icon-grid hover modes. Off by default; has no effect for a row from a platform with no gamertag concept (Playnite, Custom).
+* **Display Gamertags:** Appends each row's own platform-specific real account name (gamertag) next to the player's name, in both table and icon-grid hover modes. Off by default; has no effect for a row from a platform with no gamertag concept (Playnite). GSA sessions are shown under the launcher they came from (e.g. "Epic") and filtered by the GSA checkbox, except Steam and Xbox games from GSA's optional Steam/Xbox detection, which show and filter as Steam and Xbox. Sessions recorded under the old Custom platform count as GSA.
 * **Number of Sessions/Achievements to Display** *(Table modes only)*: How many recent rows to show (default: 10, max: 20). If more than 10 would be shown, the list scrolls instead of growing taller. Type a value and click **Apply** to confirm it.
 * **Achievements Per Game** *(Achievements only, both Table and Icon Grid)*: **All** (default) or a per-game cap (1–20 in Table mode, 1–30 in Icon Grid) on how many unlocks from the same game can appear before older ones for that game are excluded — the most recent per game are always kept. Prevents one recently-played game with a lot of unlocks from crowding out every other game, the same idea as the Gamercard's own fixed 4-per-game limit.
 * **Icons Per Row / Rows** *(Icon Grid only)*: How many icons appear per row (2–6) and how many rows to show (1–5). Total icons shown = Icons Per Row × Rows.
@@ -311,7 +311,7 @@ For advanced users who prefer to write YAML, here are the base configurations fo
 ```yaml
 type: custom:gaming-status-card
 title: The Squad # Can be left blank to omit the title
-mode: all # Options: all, online, pc, custom, discord, steam, xbox, playstation, playnite
+mode: all # Options: all, online, pc, gsa, discord, steam, xbox, playstation, playnite ("custom" from older configs is read as gsa)
 sort_by: last_online # Options: last_online, name, state
 show_badges: true
 show_text_shadow: true
@@ -386,11 +386,11 @@ type: custom:gaming-status-recent-activity-card
 title: Recent Activity
 event_type: sessions # Options: sessions, achievements
 display_mode: table # Options: table, icons (achievements only -- sessions is always a table)
-show_platform_steam: true # Sessions: steam/xbox/playstation/playnite/custom/discord; Achievements: steam/xbox/playstation only
+show_platform_steam: true # Sessions: steam/xbox/playstation/playnite/gsa/discord; Achievements: steam/xbox/playstation only
 show_platform_xbox: true
 show_platform_playstation: true
 show_platform_playnite: true # Sessions only
-show_platform_custom: true # Sessions only
+show_platform_gsa: true # Sessions only (older show_platform_custom is still honored)
 show_platform_discord: true # Sessions only
 mode: all # Options: all, single, selected
 single_entity: " " # A single sensor ID (used when mode is 'single')

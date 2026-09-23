@@ -50,7 +50,7 @@ function gamingStatusWindowStart(isCalendar, now) {
 
 // Buckets a session's platform string into the three groups the Platforms card
 // charts. Anything that isn't Xbox or PlayStation (Steam, Playnite, Discord,
-// Custom, bare PC, …) rolls up into PC, matching the integration's own split.
+// GSA, bare PC, …) rolls up into PC, matching the integration's own split.
 function gamingStatusPlatformBucket(platform) {
   const p = String(platform || "").toLowerCase();
   if (p.includes("xbox")) return "Xbox";
@@ -77,7 +77,7 @@ const GAMING_STATUS_DEFAULT_ENTITIES_PATTERN = "_master";
 // platform words (Steam/Xbox/...) too, not just "Master", so this stays
 // correct for any entities_pattern, not only the default "_master" suffix.
 function gamingStatusCleanPlayerName(rawName) {
-  return String(rawName).replace(/ Gaming Status| Master| Chart| Steam| Xbox| PlayStation| PC| Custom| Discord| Playnite/gi, "").trim();
+  return String(rawName).replace(/ Gaming Status Agent| Gaming Status| Master| Chart| Steam| Xbox| PlayStation| PC| Custom| Discord| Playnite/gi, "").trim();
 }
 
 function gamingStatusEscapeHTML(str) {
@@ -341,19 +341,20 @@ const GAMING_STATUS_PLATFORM_TINTS = {
   xbox: "11, 124, 16",
   playstation: "0, 48, 135",
   playnite: "255, 88, 51",
-  custom: "100, 50, 100",
+  gsa: "100, 50, 100",
   discord: "88, 101, 242",
 };
 
 // Maps a platform key to the master sensor's per-platform gamertag
 // attribute name (see sensor.py's MasterGamingSensor -- steam_gamertag/
 // xbox_gamertag/psn_gamertag). Only the three platforms that have a real
-// gamertag concept; custom/playnite/discord intentionally have no entry.
+// gamertag concept; playnite intentionally has no entry.
 const GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM = {
   steam: "steam_gamertag",
   xbox: "xbox_gamertag",
   playstation: "psn_gamertag",
   discord: "discord_gamertag",
+  gsa: "gsa_gamertag",
 };
 
 const GAMING_STATUS_PLATFORM_LABELS = {
@@ -361,9 +362,45 @@ const GAMING_STATUS_PLATFORM_LABELS = {
   xbox: "Xbox",
   playstation: "PlayStation",
   playnite: "Playnite",
-  custom: "Custom",
+  gsa: "GSA",
   discord: "Discord",
 };
+
+// Longer names used only in card editors, where a bare acronym would be
+// unclear. Falls back to the short display label.
+const GAMING_STATUS_PLATFORM_EDITOR_LABELS = {
+  gsa: "GSA (Gaming Status Agent)",
+};
+
+function gamingStatusPlatformEditorLabel(key) {
+  return GAMING_STATUS_PLATFORM_EDITOR_LABELS[key] || GAMING_STATUS_PLATFORM_LABELS[key] || key;
+}
+
+// Label words that belong to Gaming Status Agent rather than a native
+// platform. "custom" covers sessions recorded under the old Custom platform
+// (which the integration migrated to GSA) as well as the Agent's own
+// "Custom" launcher.
+const GAMING_STATUS_GSA_LABEL_ALIASES = ["gaming status agent", "custom", "gsa"];
+
+// Resolves the platform key (steam/xbox/.../gsa) for a session or sensor.
+// Prefers the integration's raw key, because the display label for a GSA
+// session is its launcher ("Epic", or even "Steam"), then falls back to
+// matching the label for entries recorded before the key existed.
+function gamingStatusResolvePlatformKey(label, rawKey) {
+  const key = String(rawKey || "").toLowerCase();
+  if (key === "custom") return "gsa";
+  if (GAMING_STATUS_PLATFORM_LABELS[key]) return key;
+  const lower = String(label || "").toLowerCase();
+  if (GAMING_STATUS_GSA_LABEL_ALIASES.some(a => lower.includes(a))) return "gsa";
+  return Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => lower.includes(k)) || null;
+}
+
+// Card configs saved before GSA replaced Custom use mode: "custom" and
+// show_platform_custom; both are read as their GSA equivalents.
+function gamingStatusShowPlatformGsa(config) {
+  if (config.show_platform_gsa !== undefined) return config.show_platform_gsa !== false;
+  return config.show_platform_custom !== false;
+}
 
 // Returns the Set of platform keys that currently have at least one real
 // gaming_status entity, so editors can hide platform-specific options that
@@ -381,6 +418,22 @@ function gamingStatusGetAvailablePlatforms(hass) {
       hass.states[k].attributes.secondary !== undefined
     );
     if (hasEntity) available.add(platform);
+  });
+  return available;
+}
+
+// Like gamingStatusGetAvailablePlatforms, plus Steam/Xbox when only Gaming
+// Status Agent reports them: the Agent's optional Steam/Xbox detection
+// records those sessions as steam/xbox, so a player with no native Steam or
+// Xbox sensor can still have Steam/Xbox sessions to filter.
+function gamingStatusGetSessionPlatforms(hass) {
+  const available = gamingStatusGetAvailablePlatforms(hass);
+  if (!available) return null;
+  Object.keys(hass.states).forEach(k => {
+    if (!k.startsWith("sensor.gaming_status_") || !k.endsWith("_gsa")) return;
+    (hass.states[k].attributes.recent_sessions || []).forEach(s => {
+      if (s.platform_key && GAMING_STATUS_PLATFORM_LABELS[s.platform_key]) available.add(s.platform_key);
+    });
   });
   return available;
 }
@@ -487,7 +540,8 @@ class GamingStatusCard extends HTMLElement {
       ...config,
       title: config.title || "",
       entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
-      mode: config.mode || "all",
+      // "custom" was renamed to "gsa" when Gaming Status Agent replaced it.
+      mode: (config.mode === "custom" ? "gsa" : config.mode) || "all",
       color_mode: config.color_mode || "game",
       offline_image: config.offline_image || "game",
       sort_by: config.sort_by || config.sort || "last_online",
@@ -507,7 +561,7 @@ class GamingStatusCard extends HTMLElement {
     if (!this.config) return;
 
     let targetSuffix = GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
-    if (["steam", "xbox", "playstation", "pc", "custom", "discord", "playnite"].includes(this.config.mode)) {
+    if (["steam", "xbox", "playstation", "pc", "gsa", "discord", "playnite"].includes(this.config.mode)) {
       targetSuffix = `_${this.config.mode}`;
     }
 
@@ -641,7 +695,7 @@ class GamingStatusCard extends HTMLElement {
     });
 
     return filtered.map((entity) => {
-      const isPlatformMode = ["steam", "xbox", "playstation", "pc", "custom", "discord", "playnite"].includes(this.config.mode);
+      const isPlatformMode = ["steam", "xbox", "playstation", "pc", "gsa", "discord", "playnite"].includes(this.config.mode);
       
       // Look at the active_platform attribute FIRST.
       // If missing (because it's a direct platform sensor), scan the entity_id itself!
@@ -652,15 +706,19 @@ class GamingStatusCard extends HTMLElement {
         "xbox": { icon: "mdi:microsoft-xbox", color: "11, 124, 16" },
         "playstation": { icon: "mdi:sony-playstation", color: "0, 48, 135" },
         "playnite": { icon: "https://cdn2.steamgriddb.com/icon/a281004dce23a29d1821f1e8430b6f8f.png", color: "255, 88, 51" },
-        "custom": { icon: "mdi:gamepad-square", color: "100, 50, 100" },
+        "gsa": { icon: "mdi:gamepad-square", color: "100, 50, 100" },
         "discord": { icon: "https://cdn2.steamgriddb.com/icon/d8a6b69c1e76aeb1500df754b7b86802.png", color: "88, 101, 242" }
       };
 
       let badgeIcon = "mdi:controller";
       let platformColor = "100, 50, 100";
 
-      // Find the first key that matches the platform string
-      const matchedKey = Object.keys(platformMap).find(key => platform.includes(key));
+      // Find the first key that matches the platform string. A GSA game on
+      // a launcher with no badge of its own (Epic, GOG, ...) falls back to
+      // the raw platform key, so it still gets the GSA badge.
+      const matchedKey = Object.keys(platformMap).find(key => platform.includes(key))
+        || (GAMING_STATUS_GSA_LABEL_ALIASES.some(a => platform.includes(a)) ? "gsa" : null)
+        || (platformMap[entity.attributes.active_platform_key] ? entity.attributes.active_platform_key : null);
       
       if (matchedKey) {
         badgeIcon = platformMap[matchedKey].icon;
@@ -901,10 +959,10 @@ const GAMING_STATUS_MODE_OPTIONS = [
   { value: "steam", label: "Steam", platforms: ["steam"] },
   { value: "xbox", label: "Xbox", platforms: ["xbox"] },
   { value: "playstation", label: "PlayStation", platforms: ["playstation"] },
-  { value: "pc", label: "PC (Steam, Discord, Playnite, & Custom)", platforms: ["steam", "discord", "playnite", "custom"] },
+  { value: "pc", label: "PC (Steam, Discord, Playnite, & GSA (Gaming Status Agent))", platforms: ["steam", "discord", "playnite", "gsa"] },
   { value: "discord", label: "Discord", platforms: ["discord"] },
   { value: "playnite", label: "Playnite", platforms: ["playnite"] },
-  { value: "custom", label: "Custom", platforms: ["custom"] },
+  { value: "gsa", label: "GSA (Gaming Status Agent)", platforms: ["gsa"] },
 ];
 
 class GamingStatusCardEditor extends HTMLElement {
@@ -933,7 +991,7 @@ class GamingStatusCardEditor extends HTMLElement {
       .filter(opt => !opt.platforms || !availablePlatforms || opt.platforms.some(p => availablePlatforms.has(p)))
       .map(opt => {
         if (opt.value !== "pc" || !availablePlatforms) return opt;
-        const activeLabels = opt.platforms.filter(p => availablePlatforms.has(p)).map(p => GAMING_STATUS_PLATFORM_LABELS[p]);
+        const activeLabels = opt.platforms.filter(p => availablePlatforms.has(p)).map(p => gamingStatusPlatformEditorLabel(p));
         return { ...opt, label: `PC (${gamingStatusJoinLabels(activeLabels)})` };
       });
 
@@ -955,7 +1013,7 @@ class GamingStatusCardEditor extends HTMLElement {
         </div><hr>
         <div><div class="section-title">Mode</div><div class="radio-group">
             ${modeOptions.map(opt => `<label><input type="radio" name="mode" data-field="mode" value="${opt.value}" ${
-              this._config.mode === opt.value || (opt.value === "all" && !this._config.mode) ? "checked" : ""
+              this._config.mode === opt.value || (opt.value === "gsa" && this._config.mode === "custom") || (opt.value === "all" && !this._config.mode) ? "checked" : ""
             }> ${opt.label}</label>`).join("")}
         </div></div><hr>
         ${colorExtractionEnabled ? `
@@ -3038,7 +3096,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       show_platform_xbox: true,
       show_platform_playstation: true,
       show_platform_playnite: true,
-      show_platform_custom: true,
+      show_platform_gsa: true,
       show_platform_discord: true,
       show_header: true,
       show_column_avatar: false,
@@ -3082,7 +3140,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       // Sessions fields
       max_sessions: config.max_sessions !== undefined ? Math.min(20, Math.max(1, parseInt(config.max_sessions) || 10)) : 10,
       show_platform_playnite: config.show_platform_playnite !== false,
-      show_platform_custom: config.show_platform_custom !== false,
+      show_platform_gsa: gamingStatusShowPlatformGsa(config),
       show_platform_discord: config.show_platform_discord !== false,
       show_column_duration: config.show_column_duration !== false,
       show_column_start: config.show_column_start !== undefined ? config.show_column_start !== false : legacyTime,
@@ -3178,7 +3236,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       + "|" + this.config.show_header
       + "|" + [this.config.show_column_avatar, this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end, this.config.show_column_achievement, this.config.show_column_time].join(",")
       + "|" + [this.config.show_hover_player, this.config.show_hover_platform, this.config.show_hover_game, this.config.show_hover_achievement, this.config.show_hover_description, this.config.show_hover_datetime].join(",")
-      + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_playnite, this.config.show_platform_custom, this.config.show_platform_discord].join(",");
+      + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_playnite, this.config.show_platform_gsa, this.config.show_platform_discord].join(",");
 
     if (this._lastHash === hash) return;
     this._lastHash = hash;
@@ -3200,8 +3258,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       const sessions = stateObj.attributes.recent_sessions || [];
 
       for (const s of sessions) {
-        const platformLower = (s.platform || "").toLowerCase();
-        const platformKey = Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => platformLower.includes(k));
+        const platformKey = gamingStatusResolvePlatformKey(s.platform, s.platform_key);
         if (platformKey && this.config[`show_platform_${platformKey}`] === false) continue;
 
         // This row's own platform's avatar/gamertag, not the player's
@@ -3219,6 +3276,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
           avatar: rowAvatar,
           game: s.game || "Unknown",
           platform: s.platform || "",
+          platform_key: platformKey || "",
           duration_seconds: parseInt(s.duration_seconds) || 0,
           date: s.date || "",
           start_time: s.start_time || "",
@@ -3479,8 +3537,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
 
       let tintStyle = "";
       if (hasBg && (this.config.color_mode === "platform" || !colorExtractionEnabled)) {
-        const platformLower = (row.platform || "").toLowerCase();
-        const tintKey = Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => platformLower.includes(k));
+        const tintKey = row.platform_key || gamingStatusResolvePlatformKey(row.platform);
         if (tintKey) {
           const rgb = GAMING_STATUS_PLATFORM_TINTS[tintKey];
           tintStyle = ` --ract-tint-start: rgb(${rgb}); --ract-tint-end: rgba(0, 0, 0, 0.5);`;
@@ -3562,8 +3619,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
 
       let tintStyle = "";
       if (hasBg && (this.config.color_mode === "platform" || (this.config.color_mode === "game" && !colorExtractionEnabled))) {
-        const platformLower = (row.platform || "").toLowerCase();
-        const tintKey = Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => platformLower.includes(k));
+        const tintKey = row.platform_key || gamingStatusResolvePlatformKey(row.platform);
         if (tintKey) {
           const rgb = GAMING_STATUS_PLATFORM_TINTS[tintKey];
           tintStyle = ` --ract-tint-start: rgb(${rgb}); --ract-tint-end: rgba(0, 0, 0, 0.5);`;
@@ -3719,7 +3775,7 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
-    const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
+    const availablePlatforms = eventType === "sessions" ? gamingStatusGetSessionPlatforms(this._hass) : gamingStatusGetAvailablePlatforms(this._hass);
     const colorExtractionEnabled = gamingStatusIsColorExtractionEnabled(this._hass);
     const platformKeys = eventType === "sessions" ? Object.keys(GAMING_STATUS_PLATFORM_LABELS) : ["steam", "xbox", "playstation"];
 
@@ -3767,7 +3823,7 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
           <div class="checkbox-group">
             ${platformKeys
               .filter(key => !availablePlatforms || availablePlatforms.has(key))
-              .map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${GAMING_STATUS_PLATFORM_LABELS[key]}</label>`).join("")}
+              .map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${gamingStatusPlatformEditorLabel(key)}</label>`).join("")}
           </div>
         </div>
         <hr>
@@ -6081,7 +6137,7 @@ class GamingStatusCompletionTrackerEditor extends HTMLElement {
           <div class="checkbox-group">
             ${completionPlatforms
               .filter(key => !availablePlatforms || availablePlatforms.has(key))
-              .map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${GAMING_STATUS_PLATFORM_LABELS[key]}</label>`).join("")}
+              .map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${gamingStatusPlatformEditorLabel(key)}</label>`).join("")}
           </div>
         </div>
         ${filter === "complete" && this._config.show_platform_playstation !== false ? `
@@ -6619,7 +6675,7 @@ class GamingStatusStatsEditor extends HTMLElement {
           <div class="checkbox-group">
             ${statsPlatforms
               .filter(key => !availablePlatforms || availablePlatforms.has(key))
-              .map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${GAMING_STATUS_PLATFORM_LABELS[key]}</label>`).join("")}
+              .map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${gamingStatusPlatformEditorLabel(key)}</label>`).join("")}
           </div>
         </div>
         <hr>
@@ -7158,7 +7214,7 @@ class GamingStatusLibraryEditor extends HTMLElement {
           <div class="checkbox-group">
             ${libraryPlatforms
               .filter(key => !availablePlatforms || availablePlatforms.has(key))
-              .map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${GAMING_STATUS_PLATFORM_LABELS[key]}</label>`).join("")}
+              .map(key => `<label><input type="checkbox" data-field="show_platform_${key}" ${this._config[`show_platform_${key}`] !== false ? "checked" : ""}> ${gamingStatusPlatformEditorLabel(key)}</label>`).join("")}
           </div>
         </div>
         <hr>
@@ -7773,7 +7829,7 @@ class GamingStatusGamercardEditor extends HTMLElement {
           <div class="radio-group">
             ${gamercardPlatforms
               .filter(key => !availablePlatforms || availablePlatforms.has(key))
-              .map(key => `<label><input type="radio" name="platform" data-field="platform" value="${key}" ${platform === key ? "checked" : ""}> ${GAMING_STATUS_PLATFORM_LABELS[key]}</label>`).join("")}
+              .map(key => `<label><input type="radio" name="platform" data-field="platform" value="${key}" ${platform === key ? "checked" : ""}> ${gamingStatusPlatformEditorLabel(key)}</label>`).join("")}
           </div>
         </div>
         <hr>
