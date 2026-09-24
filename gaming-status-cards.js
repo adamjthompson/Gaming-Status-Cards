@@ -77,7 +77,7 @@ const GAMING_STATUS_DEFAULT_ENTITIES_PATTERN = "_master";
 // platform words (Steam/Xbox/...) too, not just "Master", so this stays
 // correct for any entities_pattern, not only the default "_master" suffix.
 function gamingStatusCleanPlayerName(rawName) {
-  return String(rawName).replace(/ Gaming Status Agent| Gaming Status| Master| Chart| Steam| Xbox| PlayStation| PC| Custom| Discord| Playnite/gi, "").trim();
+  return String(rawName).replace(/ Gaming Status Agent| Gaming Status| Master| GSA| Chart| Steam| Xbox| PlayStation| PC| Custom| Discord| Playnite/gi, "").trim();
 }
 
 function gamingStatusEscapeHTML(str) {
