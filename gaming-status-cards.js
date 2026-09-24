@@ -3474,6 +3474,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         .ract-row.has-bg .ract-cell { color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
         .ract-achievement-icon { width: 20px; height: 20px; border-radius: 4px; object-fit: cover; vertical-align: middle; margin-right: 6px; flex-shrink: 0; }
         .ract-player-avatar { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 6px; flex-shrink: 0; }
+        .ract-avatar-placeholder { display: inline-flex; align-items: center; justify-content: center; background: #000; color: #fff; --mdc-icon-size: 12px; }
 
         .ract-grid { display: grid; gap: 8px; }
         .ract-icon-cell { position: relative; aspect-ratio: 1 / 1; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
@@ -3564,7 +3565,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
             value = (!this.config.show_column_avatar ? ""
               : row.avatar
               ? `<img class="ract-player-avatar" src="${escapeHTML(row.avatar)}" alt="" loading="lazy">`
-              : `<ha-icon class="ract-player-avatar" icon="mdi:controller" style="--mdc-icon-size: 18px;"></ha-icon>`) + escapeHTML(row.player)
+              : `<span class="ract-player-avatar ract-avatar-placeholder"><ha-icon icon="mdi:controller"></ha-icon></span>`) + escapeHTML(row.player)
               + (this.config.show_gamertags && row.player_gamertag ? ` (${escapeHTML(row.player_gamertag)})` : "");
             cls += " primary";
             break;
@@ -3648,7 +3649,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
             value = (!this.config.show_column_avatar ? ""
               : row.avatar
               ? `<img class="ract-player-avatar" src="${escapeHTML(row.avatar)}" alt="" loading="lazy">`
-              : `<ha-icon class="ract-player-avatar" icon="mdi:controller" style="--mdc-icon-size: 18px;"></ha-icon>`) + escapeHTML(row.player)
+              : `<span class="ract-player-avatar ract-avatar-placeholder"><ha-icon icon="mdi:controller"></ha-icon></span>`) + escapeHTML(row.player)
               + (this.config.show_gamertags && row.player_gamertag ? ` (${escapeHTML(row.player_gamertag)})` : "");
             cls += " primary";
             break;
