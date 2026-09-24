@@ -3268,14 +3268,21 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         const rowGamertag = gamertagAttr ? (stateObj.attributes[gamertagAttr] || "") : "";
         const platformEntityId = platformKey ? entityId.replace(/_master$/, `_${platformKey}`) : "";
         const platformStateObj = platformEntityId ? this._hass.states[platformEntityId] : null;
-        const rowAvatar = (platformStateObj && platformStateObj.attributes.entity_picture) || avatar;
+        // Only the player's overall picture when the row's platform is
+        // unknown -- a platform with no picture of its own (e.g. a GSA/Epic
+        // session) shows the placeholder instead of borrowing another
+        // platform's gamerpic.
+        const rowAvatar = platformKey
+          ? ((platformStateObj && platformStateObj.attributes.entity_picture) || "")
+          : avatar;
 
         rows.push({
           player: playerName,
           player_gamertag: rowGamertag,
           avatar: rowAvatar,
           game: s.game || "Unknown",
-          platform: s.platform || "",
+          // Sessions recorded before the GSA rename carry the long name.
+          platform: s.platform === "Gaming Status Agent" ? "GSA" : (s.platform || ""),
           platform_key: platformKey || "",
           duration_seconds: parseInt(s.duration_seconds) || 0,
           date: s.date || "",
@@ -3554,9 +3561,10 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         let cls = "ract-cell";
         switch (c.key) {
           case "player":
-            value = (this.config.show_column_avatar && row.avatar
+            value = (!this.config.show_column_avatar ? ""
+              : row.avatar
               ? `<img class="ract-player-avatar" src="${escapeHTML(row.avatar)}" alt="" loading="lazy">`
-              : "") + escapeHTML(row.player)
+              : `<ha-icon class="ract-player-avatar" icon="mdi:controller" style="--mdc-icon-size: 18px;"></ha-icon>`) + escapeHTML(row.player)
               + (this.config.show_gamertags && row.player_gamertag ? ` (${escapeHTML(row.player_gamertag)})` : "");
             cls += " primary";
             break;
@@ -3637,9 +3645,10 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         let extraAttrs = "";
         switch (c.key) {
           case "player":
-            value = (this.config.show_column_avatar && row.avatar
+            value = (!this.config.show_column_avatar ? ""
+              : row.avatar
               ? `<img class="ract-player-avatar" src="${escapeHTML(row.avatar)}" alt="" loading="lazy">`
-              : "") + escapeHTML(row.player)
+              : `<ha-icon class="ract-player-avatar" icon="mdi:controller" style="--mdc-icon-size: 18px;"></ha-icon>`) + escapeHTML(row.player)
               + (this.config.show_gamertags && row.player_gamertag ? ` (${escapeHTML(row.player_gamertag)})` : "");
             cls += " primary";
             break;
