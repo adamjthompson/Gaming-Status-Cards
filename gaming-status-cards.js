@@ -1895,6 +1895,10 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
     const areaW = VW - padL - padR;
 
     const isSingleGroup = groups.length === 1;
+    // The player's name is only redundant when the card is set to one
+    // player. In all/selected mode a week where just one player logged time
+    // still has to say whose time it is.
+    const omitPlayerName = isPlayerMode && this.config.mode === "single";
     const showLegend = this.config.show_legend !== false;
     const legendRowH = 22;
     let legendCols, legendH;
@@ -1965,7 +1969,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
       if (isSingleGroup) {
         const g = groups[0];
         if (g.totalHours > 0) {
-          svg += `<text x="${(padL + areaW / 2).toFixed(1)}" y="${legY0 + 18}" text-anchor="middle" font-size="14" fill="var(--primary-text-color,#ddd)">Total: ${g.totalHours.toFixed(2)}h</text>`;
+          svg += `<text x="${(padL + areaW / 2).toFixed(1)}" y="${legY0 + 18}" text-anchor="middle" font-size="14" fill="var(--primary-text-color,#ddd)">${isPlayerMode && !omitPlayerName ? `${this._esc(g.name)}: ` : "Total: "}${g.totalHours.toFixed(2)}h</text>`;
         }
       } else {
         const colW = areaW / legendCols;
@@ -1994,7 +1998,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
       const h = Math.floor(totalMins / 60);
       const m = totalMins % 60;
       const display = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
-      return (isPlayerMode && isSingleGroup) ? display : `${rect.dataset[dataKey]}: ${display}`;
+      return omitPlayerName ? display : `${rect.dataset[dataKey]}: ${display}`;
     });
     gamingStatusWireLegendFocus(this._contentEl, dataKey);
   }
