@@ -342,6 +342,7 @@ const GAMING_STATUS_PLATFORM_TINTS = {
   playstation: "0, 48, 135",
   playnite: "255, 88, 51",
   gsa: "100, 50, 100",
+  custom: "100, 50, 100",
   discord: "88, 101, 242",
 };
 
@@ -363,6 +364,7 @@ const GAMING_STATUS_PLATFORM_LABELS = {
   playstation: "PlayStation",
   playnite: "Playnite",
   gsa: "GSA",
+  custom: "Custom",
   discord: "Discord",
 };
 
@@ -377,10 +379,10 @@ function gamingStatusPlatformEditorLabel(key) {
 }
 
 // Label words that belong to Gaming Status Agent rather than a native
-// platform. "custom" covers sessions recorded under the old Custom platform
-// (which the integration migrated to GSA) as well as the Agent's own
-// "Custom" launcher.
-const GAMING_STATUS_GSA_LABEL_ALIASES = ["gaming status agent", "custom", "gsa"];
+// platform. A bare "Custom" label is the Custom platform: GSA's own "Custom"
+// launcher sessions always carry platform_key "gsa", so they never reach
+// the label fallback.
+const GAMING_STATUS_GSA_LABEL_ALIASES = ["gaming status agent", "gsa"];
 
 // Resolves the platform key (steam/xbox/.../gsa) for a session or sensor.
 // Prefers the integration's raw key, because the display label for a GSA
@@ -388,18 +390,10 @@ const GAMING_STATUS_GSA_LABEL_ALIASES = ["gaming status agent", "custom", "gsa"]
 // matching the label for entries recorded before the key existed.
 function gamingStatusResolvePlatformKey(label, rawKey) {
   const key = String(rawKey || "").toLowerCase();
-  if (key === "custom") return "gsa";
   if (GAMING_STATUS_PLATFORM_LABELS[key]) return key;
   const lower = String(label || "").toLowerCase();
   if (GAMING_STATUS_GSA_LABEL_ALIASES.some(a => lower.includes(a))) return "gsa";
   return Object.keys(GAMING_STATUS_PLATFORM_TINTS).find(k => lower.includes(k)) || null;
-}
-
-// Card configs saved before GSA replaced Custom use mode: "custom" and
-// show_platform_custom; both are read as their GSA equivalents.
-function gamingStatusShowPlatformGsa(config) {
-  if (config.show_platform_gsa !== undefined) return config.show_platform_gsa !== false;
-  return config.show_platform_custom !== false;
 }
 
 // Returns the Set of platform keys that currently have at least one real
@@ -540,8 +534,7 @@ class GamingStatusCard extends HTMLElement {
       ...config,
       title: config.title || "",
       entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
-      // "custom" was renamed to "gsa" when Gaming Status Agent replaced it.
-      mode: (config.mode === "custom" ? "gsa" : config.mode) || "all",
+      mode: config.mode || "all",
       color_mode: config.color_mode || "game",
       offline_image: config.offline_image || "game",
       sort_by: config.sort_by || config.sort || "last_online",
@@ -561,7 +554,7 @@ class GamingStatusCard extends HTMLElement {
     if (!this.config) return;
 
     let targetSuffix = GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
-    if (["steam", "xbox", "playstation", "pc", "gsa", "discord", "playnite"].includes(this.config.mode)) {
+    if (["steam", "xbox", "playstation", "pc", "gsa", "custom", "discord", "playnite"].includes(this.config.mode)) {
       targetSuffix = `_${this.config.mode}`;
     }
 
@@ -695,7 +688,7 @@ class GamingStatusCard extends HTMLElement {
     });
 
     return filtered.map((entity) => {
-      const isPlatformMode = ["steam", "xbox", "playstation", "pc", "gsa", "discord", "playnite"].includes(this.config.mode);
+      const isPlatformMode = ["steam", "xbox", "playstation", "pc", "gsa", "custom", "discord", "playnite"].includes(this.config.mode);
       
       // Look at the active_platform attribute FIRST.
       // If missing (because it's a direct platform sensor), scan the entity_id itself!
@@ -707,6 +700,7 @@ class GamingStatusCard extends HTMLElement {
         "playstation": { icon: "mdi:sony-playstation", color: "0, 48, 135" },
         "playnite": { icon: "https://cdn2.steamgriddb.com/icon/a281004dce23a29d1821f1e8430b6f8f.png", color: "255, 88, 51" },
         "gsa": { icon: "mdi:gamepad-square", color: "100, 50, 100" },
+        "custom": { icon: "mdi:gamepad-square", color: "100, 50, 100" },
         "discord": { icon: "https://cdn2.steamgriddb.com/icon/d8a6b69c1e76aeb1500df754b7b86802.png", color: "88, 101, 242" }
       };
 
@@ -715,10 +709,14 @@ class GamingStatusCard extends HTMLElement {
 
       // Find the first key that matches the platform string. A GSA game on
       // a launcher with no badge of its own (Epic, GOG, ...) falls back to
-      // the raw platform key, so it still gets the GSA badge.
-      const matchedKey = Object.keys(platformMap).find(key => platform.includes(key))
+      // the raw platform key, so it still gets the GSA badge. A raw "gsa" key
+      // wins outright, since a GSA "Custom" launcher game is labelled "Custom"
+      // (GSA Steam/Xbox games carry "steam"/"xbox" keys instead).
+      const rawKey = entity.attributes.active_platform_key;
+      const matchedKey = (rawKey === "gsa" ? "gsa" : null)
+        || Object.keys(platformMap).find(key => platform.includes(key))
         || (GAMING_STATUS_GSA_LABEL_ALIASES.some(a => platform.includes(a)) ? "gsa" : null)
-        || (platformMap[entity.attributes.active_platform_key] ? entity.attributes.active_platform_key : null);
+        || (platformMap[rawKey] ? rawKey : null);
       
       if (matchedKey) {
         badgeIcon = platformMap[matchedKey].icon;
@@ -959,10 +957,11 @@ const GAMING_STATUS_MODE_OPTIONS = [
   { value: "steam", label: "Steam", platforms: ["steam"] },
   { value: "xbox", label: "Xbox", platforms: ["xbox"] },
   { value: "playstation", label: "PlayStation", platforms: ["playstation"] },
-  { value: "pc", label: "PC (Steam, Discord, Playnite, & GSA (Gaming Status Agent))", platforms: ["steam", "discord", "playnite", "gsa"] },
+  { value: "pc", label: "PC (Steam, Discord, Playnite, GSA (Gaming Status Agent), & Custom)", platforms: ["steam", "discord", "playnite", "gsa", "custom"] },
   { value: "discord", label: "Discord", platforms: ["discord"] },
   { value: "playnite", label: "Playnite", platforms: ["playnite"] },
   { value: "gsa", label: "GSA (Gaming Status Agent)", platforms: ["gsa"] },
+  { value: "custom", label: "Custom", platforms: ["custom"] },
 ];
 
 class GamingStatusCardEditor extends HTMLElement {
@@ -1013,7 +1012,7 @@ class GamingStatusCardEditor extends HTMLElement {
         </div><hr>
         <div><div class="section-title">Mode</div><div class="radio-group">
             ${modeOptions.map(opt => `<label><input type="radio" name="mode" data-field="mode" value="${opt.value}" ${
-              this._config.mode === opt.value || (opt.value === "gsa" && this._config.mode === "custom") || (opt.value === "all" && !this._config.mode) ? "checked" : ""
+              this._config.mode === opt.value || (opt.value === "all" && !this._config.mode) ? "checked" : ""
             }> ${opt.label}</label>`).join("")}
         </div></div><hr>
         ${colorExtractionEnabled ? `
@@ -3097,6 +3096,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       show_platform_playstation: true,
       show_platform_playnite: true,
       show_platform_gsa: true,
+      show_platform_custom: true,
       show_platform_discord: true,
       show_header: true,
       show_column_avatar: false,
@@ -3140,7 +3140,8 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       // Sessions fields
       max_sessions: config.max_sessions !== undefined ? Math.min(20, Math.max(1, parseInt(config.max_sessions) || 10)) : 10,
       show_platform_playnite: config.show_platform_playnite !== false,
-      show_platform_gsa: gamingStatusShowPlatformGsa(config),
+      show_platform_gsa: config.show_platform_gsa !== false,
+      show_platform_custom: config.show_platform_custom !== false,
       show_platform_discord: config.show_platform_discord !== false,
       show_column_duration: config.show_column_duration !== false,
       show_column_start: config.show_column_start !== undefined ? config.show_column_start !== false : legacyTime,
@@ -3236,7 +3237,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       + "|" + this.config.show_header
       + "|" + [this.config.show_column_avatar, this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end, this.config.show_column_achievement, this.config.show_column_time].join(",")
       + "|" + [this.config.show_hover_player, this.config.show_hover_platform, this.config.show_hover_game, this.config.show_hover_achievement, this.config.show_hover_description, this.config.show_hover_datetime].join(",")
-      + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_playnite, this.config.show_platform_gsa, this.config.show_platform_discord].join(",");
+      + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_playnite, this.config.show_platform_gsa, this.config.show_platform_custom, this.config.show_platform_discord].join(",");
 
     if (this._lastHash === hash) return;
     this._lastHash = hash;
