@@ -312,16 +312,7 @@ In both cases, just enter a comma-separated list of **player names** — e.g. `p
 ## YAML Reference
 For advanced users who prefer to write YAML, here are the base configurations for each card:
 
-**Legacy card types:** These older types are hidden from the card picker but still work, mapping onto the current cards with a fixed setting:
-* `gaming-status-chart-card` → Weekly Activity (`stack_by: player`)
-* `gaming-status-game-chart-card` → Weekly Activity (`stack_by: game`; a legacy `entity` is read as `single_entity`)
-* `gaming-status-recent-sessions-card` → Recent Activity (`event_type: sessions`)
-* `gaming-status-recent-achievements-card` → Recent Activity (`event_type: achievements`, `display_mode: table`)
-* `gaming-status-achievement-icons-card` → Recent Activity (`event_type: achievements`, `display_mode: icons`)
-* `gaming-status-completion-card` → Completion Tracker (`filter: complete`)
-* `gaming-status-near-completion-card` → Completion Tracker (`filter: near`, `display_mode: list`)
-
-**The List Card:**
+**List Card:**
 ```yaml
 type: custom:gaming-status-card
 title: The Squad # Can be left blank to omit the title
@@ -336,7 +327,7 @@ manual_entities: " " # Whitelist of comma-separated player names or entity IDs
 show_gamertags: false # Show each player's real account name (gamertag) for the displayed platform next to their name
 ```
 
-**The Slideshow Card:**
+**Slideshow Card:**
 ```yaml
 type: custom:gaming-slideshow-card
 artwork_type: hero # Options: hero, cover (logo/icon removed -- transparency issues when crossfading)
@@ -350,7 +341,7 @@ manual_entities: " " # Whitelist of comma-separated player names or entity IDs
 avatar_name_map: " " # Only used when show_avatars is true and plex_source is plex/tautulli. "username = letter" pairs, e.g. "someusername = M, anotherusername = J"
 ```
 
-**The Weekly Activity Card:**
+**Weekly Activity Card:**
 ```yaml
 type: custom:gaming-status-weekly-activity-card
 title: Weekly Activity
@@ -367,7 +358,7 @@ hide_empty: false # Set to true to exclude players with no hours in the selected
 show_gamertags: false # Append each player's real account name (gamertag) to their legend label (stack_by: player only)
 ```
 
-**The Platforms Card:**
+**Platforms Card:**
 ```yaml
 type: custom:gaming-status-donut-card
 title: Platform Split
@@ -381,7 +372,7 @@ show_legend: true # Set to false to hide the platform legend; legend wraps autom
 show_total: true # Set to false to hide the grand total playtime line
 ```
 
-**The Leaderboard Card:**
+**Leaderboard Card:**
 ```yaml
 type: custom:gaming-status-leaderboard-card
 title: Gaming Leaderboard
@@ -396,7 +387,7 @@ custom_colors: " " # Comma-separated colors -- only used when color_palette is '
 show_gamertags: false # Append each player's real account name (gamertag) next to their name -- player-ranking metrics only
 ```
 
-**The Recent Activity Card:**
+**Recent Activity Card:**
 ```yaml
 type: custom:gaming-status-recent-activity-card
 title: Recent Activity
@@ -442,7 +433,7 @@ show_column_time: true # Achievements/table only
 show_gamertags: false # Append each row's own platform-specific real account name (gamertag) next to the player's name, in both table and icon-grid modes
 ```
 
-**The Game Management Card:**
+**Game Management Card:**
 ```yaml
 type: custom:gaming-status-game-management-card
 title: Game Management
@@ -450,7 +441,7 @@ mode: all # Options: all, single
 single_entity: " " # A single player's master sensor ID (used when mode is 'single')
 ```
 
-**The PlayStation Trophies Card:**
+**PlayStation Trophies Card:**
 ```yaml
 type: custom:gaming-status-playstation-trophies-card
 title: PlayStation Trophies
@@ -464,7 +455,7 @@ show_active_artwork: false # show_active_game only. Blurred hero-art background 
 image_style: official # Options: official (try PSN's own image, fall back to a tinted icon), icons (icon only, never attempt an image)
 ```
 
-**The Completion Tracker Card:**
+**Completion Tracker Card:**
 ```yaml
 type: custom:gaming-status-completion-tracker-card
 title: Completion Tracker
@@ -487,7 +478,7 @@ color_palette: platform # List mode only. Options: platform (default, per-game p
 custom_colors: "" # List mode only. Comma-separated hex colors (used when color_palette is 'custom')
 ```
 
-**The Stats Card:**
+**Stats Card:**
 ```yaml
 type: custom:gaming-status-stats-card
 title: Stats
@@ -507,7 +498,7 @@ show_stat_steam_achievements: true
 show_stat_total_steam_hours: true
 ```
 
-**The Library Card:**
+**Library Card:**
 ```yaml
 type: custom:gaming-status-library-card
 title: Library
@@ -526,7 +517,7 @@ show_field_percent: true
 show_field_counts: true # Trophy Counts (PlayStation) or Achievement Count (Steam/Xbox), depending on the active tab
 ```
 
-**The Gamercard:**
+**Gamercard:**
 ```yaml
 type: custom:gaming-status-gamercard-card
 title: Gamercard
@@ -546,3 +537,12 @@ show_achievement_hover: true # Set to false to disable the achievement/trophy ic
 show_achievement_description: true # Only used while show_achievement_hover is true. Only shown when the unlock has description text
 show_gamertags: false # Append the player's real account name (gamertag) for the selected platform next to their name
 ```
+
+**Legacy card types:** These older types are hidden from the card picker but still work, mapping onto the current cards with a fixed setting:
+* `gaming-status-chart-card` → Weekly Activity (`stack_by: player`)
+* `gaming-status-game-chart-card` → Weekly Activity (`stack_by: game`; a legacy `entity` is read as `single_entity`)
+* `gaming-status-recent-sessions-card` → Recent Activity (`event_type: sessions`)
+* `gaming-status-recent-achievements-card` → Recent Activity (`event_type: achievements`, `display_mode: table`)
+* `gaming-status-achievement-icons-card` → Recent Activity (`event_type: achievements`, `display_mode: icons`)
+* `gaming-status-completion-card` → Completion Tracker (`filter: complete`)
+* `gaming-status-near-completion-card` → Completion Tracker (`filter: near`, `display_mode: list`)
