@@ -81,7 +81,8 @@ A native SVG stacked bar chart showing daily gaming hours over a rolling 7-day (
 * **Time Window:** Choose the time period to display: **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**.
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Max Games to Display** *(Stack By: Game only)*: Ranks games by total hours across all selected players and shows the top N titles (default: 6, max: 20).
-* **Custom Colors:** Override the default vibrant palette with a comma-separated list of CSS colors (e.g., `#ffbe0b, rgb(251, 86, 7), blue`).
+* **Color Palette:** **Vivid** (default), **Material**, **Muted**, **Soft**, or **Custom Colors**. Colors are assigned to players (or games) in order and cycle if there are more than the palette's 10 colors.
+* **Custom Colors** *(Color Palette: Custom only)*: A comma-separated list of CSS colors (e.g., `#ffbe0b, rgb(251, 86, 7), blue`). Older configs that set `custom_colors` without a `color_palette` are treated as Custom automatically.
 * **Legend:** Toggle the legend below the chart on or off. Hiding it reclaims the legend area and gives the chart more vertical space. Defaults to on.
 * **Exclusions** *(Stack By: Player only)*: When enabled, players with no hours in the selected time window are excluded from both the chart and the legend. Useful for squads where not everyone plays every week. Defaults to off.
 * **Display Gamertags** *(Stack By: Player only)*: Appends each player's real account name (gamertag) to their label in the legend. Off by default.
@@ -127,7 +128,8 @@ A dependency-free native CSS bar chart that ranks your squad across a variety of
 * **Time Window:** Choose the time period to display: **Rolling (Past 7 Days)** or **Calendar (Since Sunday)**. Automatically hidden when an All-Time metric or **Steam Games: Total Playtime** is selected, since neither is scoped to a window.
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players.
 * **Items to Display (Rows):** Set how many ranked entries are shown (default: 3, max: 20).
-* **Custom Colors:** Override the default vibrant palette with a comma-separated list of CSS colors.
+* **Color Palette:** **Vivid** (default), **Material**, **Muted**, **Soft**, or **Custom Colors**. Colors are assigned to rows in order and cycle if there are more than the palette's 10 colors.
+* **Custom Colors** *(Color Palette: Custom only)*: A comma-separated list of CSS colors (e.g., `#ffbe0b, rgb(251, 86, 7), blue`). Older configs that set `custom_colors` without a `color_palette` are treated as Custom automatically.
 * **Display Gamertags** *(player-ranking metrics only)*: Appends each player's real account name (gamertag) next to their name. Off by default; has no effect on the Top Games metrics, which rank games rather than players.
 
 **Leaderboard Cards**
@@ -152,12 +154,12 @@ A configurable table (or icon grid) of recently completed play sessions or recen
 * **Display Gamertags:** Appends each row's own platform-specific real account name (gamertag) next to the player's name, in both table and icon-grid hover modes. Off by default; has no effect for a row from a platform with no gamertag concept (Playnite, Custom). GSA sessions are shown under the launcher they came from (e.g. "Epic") and filtered by the GSA checkbox, except Steam and Xbox games from GSA's optional Steam/Xbox detection, which show and filter as Steam and Xbox. Custom sensor sessions show and filter as Custom.
 * **Number of Sessions/Achievements to Display** *(Table modes only)*: How many recent rows to show (default: 10, max: 20). If more than 10 would be shown, the list scrolls instead of growing taller. Type a value and click **Apply** to confirm it.
 * **Sort By** *(Sessions, All Tracked Players / Selected Players only)*: **Start Time** (default), **End Time**, or **Player Name**. Only reorders the sessions being shown -- the most recent sessions are always the ones selected.
-* **Achievements Per Game** *(Achievements only, both Table and Icon Grid)*: **All** (default) or a per-game cap (1–20 in Table mode, 1–30 in Icon Grid) on how many unlocks from the same game can appear before older ones for that game are excluded — the most recent per game are always kept. Prevents one recently-played game with a lot of unlocks from crowding out every other game, the same idea as the Gamercard's own fixed 4-per-game limit.
+* **Achievements Per Game** *(Achievements only, both Table and Icon Grid)*: **All** (default) or a per-game cap (the editor offers 1–20 in Table mode and 1–30 in Icon Grid; YAML accepts up to 30 in either) on how many unlocks from the same game can appear before older ones for that game are excluded — the most recent per game are always kept. Prevents one recently-played game with a lot of unlocks from crowding out every other game, the same idea as the Gamercard's own fixed 4-per-game limit.
 * **Icons Per Row / Rows** *(Icon Grid only)*: How many icons appear per row (2–6) and how many rows to show (1–5). Total icons shown = Icons Per Row × Rows.
 * **Icon Background / Artwork Size** *(Icon Grid only)*: A backdrop behind each icon — **None (Transparent)**, **Black**, or **White** — since some platforms' icons have transparent backgrounds; and **Crop to Square** or **Show Full Image** for how each icon fills its cell.
 * **Hover Info** *(Icon Grid only)*: Independently toggle which fields appear when hovering an icon — Player, Platform, Game, Achievement, Description, and Date/Time. **Description** is nested under **Achievement** and only offered while it's checked, since a description on its own (with no achievement name shown) wouldn't say what it's describing; it's also only shown when the platform actually provided unlock text for that achievement/trophy — some entries (especially "secret" Steam achievements) have none.
 * **Background** *(Table modes only)*: Choose what renders (blurred) behind each row — **Game Artwork**, **Achievement Icon** *(Achievements only — the unlock's own icon/trophy image, falling back to the game's artwork then the player's avatar)*, **Player Avatar**, or **None**.
-* **Color Mode** *(Table modes only, hidden when Background is None)*: Sessions offers **Game Artwork (Dynamic)** (tints from that session's own recorded game color) or **Platform Native (Pre-Defined)** (fixed per-platform brand color); Achievements offers **Platform Native**, **None** (untinted), or **Game Artwork (Dynamic)** *(only offered when Game Color Extraction is enabled integration-wide, falling back to Platform Native if later disabled)*. Rows without a stored/extracted game color fall back to a neutral black gradient in Dynamic mode.
+* **Color Mode** *(Table modes only, hidden when Background is None)*: Sessions offers **Game Artwork (Dynamic)** (default; tints from that session's own recorded game color) or **Platform Native (Pre-Defined)** (fixed per-platform brand color); Achievements offers **Platform Native** (default), **None** (untinted), or **Game Artwork (Dynamic)** *(only offered when Game Color Extraction is enabled integration-wide, falling back to Platform Native if later disabled)*. Rows without a stored/extracted game color fall back to a neutral black gradient in Dynamic mode.
 * **Show Header Row** *(Table modes only)*: Toggle the column header row on or off.
 * **Visible Columns** *(Table modes only)*: Sessions offers Avatar, Player, Game, Platform, Duration, Date, Start, and End; Achievements offers Avatar, Player, Game, Platform, Achievement, Date, and Time. Avatar adds a small profile picture inside the Player cell (not its own column) and, like Player, is hidden automatically in Single Player mode.
 * **Show Achievement Description on Hover** *(Achievements Table mode only)*: Hovering the Achievement column shows its description text as a tooltip, when the platform provided one. Uses the same `show_hover_description` setting as Icon Grid's Hover Info, so it stays in sync if you switch Display Mode.
@@ -224,9 +226,9 @@ A single player's 100%-complete or near-complete games, shown as a slideshow, a 
 * **Max Games to Display:** How many games to show at most (1–50). Click **Apply** to confirm the value.
 * **Display Mode:** **Grid** (a responsive grid of artwork), **Slideshow** (one game crossfading into the next, using the same CSS-animated crossfade as the Slideshow card), or **Ranked List** *(Filter: Near Completion only — Ranked List isn't offered under 100% Complete, since sorting by percentage is meaningless when everything shown is already at 100%)*.
 * **Artwork** *(Grid/Slideshow only):* Which image to show per game — **Cover/Grid (Vertical Portrait)** (default), **Hero (Horizontal Landscape)**, **Logo (Transparent Title)**, or **Icon (Small Square)**. Falls back to Cover, then Hero, if the selected type wasn't captured for a given game. **Logo and Icon aren't offered when Display Mode is Slideshow** — their transparent backgrounds can look broken crossfading over whatever's behind them — the field resets to Cover if you switch a saved Logo/Icon config to Slideshow.
-* **Grid Columns** / **Rows Before Scrolling** *(Grid mode only):* 1–4 images per row; how many rows show before the grid scrolls instead of growing taller (default: 3).
+* **Grid Columns** / **Rows Before Scrolling** *(Grid mode only):* 1–4 images per row; how many rows show before the grid scrolls instead of growing taller (default: 3, max: 20).
 * **Time Per Slide** / **Transition Fade Time** *(Slideshow mode only):* Seconds each game's artwork is shown, and seconds spent crossfading into the next one.
-* **Scroll After (Entries)** *(Ranked List only):* How many rows show before the list scrolls instead of growing taller (default: 10).
+* **Scroll After (Entries)** *(Ranked List only):* How many rows show before the list scrolls instead of growing taller (default: 10, max: 50).
 * **Bar Color** *(Ranked List only):* **Platform Colors** (default — each bar tinted by that game's own platform: Steam blue, Xbox green, PlayStation blue), or the same named palettes (Vivid, Material, Muted, Soft) and Custom Colors option available on the Leaderboard/Weekly Activity/Platforms cards.
 
 In Grid mode, hovering an image shows a tooltip with the game's title (and platform, if more than one platform is checked) — matching the same tooltip style used elsewhere in this bundle. Slideshow mode shows artwork only, with no title or tooltip — a hover tooltip isn't technically possible there, since every slide occupies the same on-screen position and only differs by which one is currently faded in.
@@ -261,7 +263,7 @@ A scrollable, artwork-and-stats browser of a single player's full game library f
 * **Show Search Box:** Adds a search field next to the platform tabs (unchecked by default) that filters the current tab's list live as you type a partial title — it doesn't require opening the editor, and switching tabs keeps whatever you've typed.
 * **Sort By:** **Title (A-Z)** (default), **Completion %** (highest first), or **Recently Played**. "Recently Played" uses Xbox's true last-played time, but PlayStation/Steam's last-achievement-earned time, since that's the only recency signal those platforms' library data provides.
 * **Artwork:** Same **Cover/Grid (Vertical Portrait)** (default) / **Hero (Horizontal Landscape)** / **Logo (Transparent Title)** / **Icon (Small Square)** options as the Completion Tracker card's Grid/Slideshow modes (Logo/Icon remain available here, since this card is a static list, not a crossfading slideshow). Cover/Logo/Icon display to the left of each game's data, boxed to a fixed size with square corners; Hero displays above it instead, scaled to the row's full width at its own natural aspect ratio, since a wide banner doesn't suit a narrow side thumbnail.
-* **Scroll After (Entries):** How many games show before the list scrolls instead of growing taller (default: 4).
+* **Scroll After (Entries):** How many games show before the list scrolls instead of growing taller (default: 4, 1–50).
 * **Show Total:** Toggle a "`N` games" count above the list.
 * **Fields to Display:** Title, Completion Percentage, and either **Trophy Counts** (PlayStation — four lines, one per tier: "Bronze: X / Y", etc.) or **Achievement Count** (Steam/Xbox — one "X / Y" line), whichever applies to the selected platform.
 
@@ -303,10 +305,21 @@ In both cases, just enter a comma-separated list of **player names** — e.g. `p
 * **To restrict both gamers AND Plex sessions:** Set the Plex Integration to **None**, and manually type out only the gamers and Plex session sensors you want to see (e.g., `player1, sensor.plex_session_1_tautulli`). The card will automatically format the Tautulli text bubbles correctly.
 * **To restrict gamers but show ALL Plex sessions:** Type your specific gamers into the Manual Entities box (e.g., `player1, player2`), and set Plex Integration to **Tautulli** or **Plex**. The card will restrict the gaming sensors to your list, but automatically sweep up every active Plex session on your network.
 
+**Entity suffix (`entities_pattern`, YAML only):** The **List**, **Slideshow**, **Weekly Activity**, **Platforms**, **Leaderboard**, and **Recent Activity** cards auto-discover players by entity ID suffix, defaulting to `_master`. Set `entities_pattern` to override it, e.g. `entities_pattern: _master`. The single-player cards always use the default.
+
 ---
 
 ## YAML Reference
 For advanced users who prefer to write YAML, here are the base configurations for each card:
+
+**Legacy card types:** These older types are hidden from the card picker but still work, mapping onto the current cards with a fixed setting:
+* `gaming-status-chart-card` → Weekly Activity (`stack_by: player`)
+* `gaming-status-game-chart-card` → Weekly Activity (`stack_by: game`; a legacy `entity` is read as `single_entity`)
+* `gaming-status-recent-sessions-card` → Recent Activity (`event_type: sessions`)
+* `gaming-status-recent-achievements-card` → Recent Activity (`event_type: achievements`, `display_mode: table`)
+* `gaming-status-achievement-icons-card` → Recent Activity (`event_type: achievements`, `display_mode: icons`)
+* `gaming-status-completion-card` → Completion Tracker (`filter: complete`)
+* `gaming-status-near-completion-card` → Completion Tracker (`filter: near`, `display_mode: list`)
 
 **The List Card:**
 ```yaml
@@ -347,7 +360,8 @@ mode: all # Options: all, single, selected
 single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated player names or entity IDs (used when mode is 'selected')
 max_games: 6 # Number of top games to display (stack_by: game only)
-custom_colors: " " # Override the default colors
+color_palette: vivid # Options: vivid (default), material, muted, soft, custom
+custom_colors: " " # Comma-separated colors -- only used when color_palette is 'custom'
 show_legend: true # Set to false to hide the legend and give more space to the chart
 hide_empty: false # Set to true to exclude players with no hours in the selected window (stack_by: player only)
 show_gamertags: false # Append each player's real account name (gamertag) to their legend label (stack_by: player only)
@@ -371,13 +385,14 @@ show_total: true # Set to false to hide the grand total playtime line
 ```yaml
 type: custom:gaming-status-leaderboard-card
 title: Gaming Leaderboard
-metric: hours # Options: hours, longest, games, game_hours, all_time_hours, all_time_sessions, all_time_top_games
+metric: hours # Options: hours, longest, games, game_hours, all_time_hours, all_time_sessions, all_time_top_games, steam_total_playtime
 window: rolling # Options: rolling, calendar
 mode: all # Options: all, single, selected
 single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated player names or entity IDs (used when mode is 'selected')
 max_players: 3 # Number of ranked rows to display
-custom_colors: " " # Override the default colors
+color_palette: vivid # Options: vivid (default), material, muted, soft, custom
+custom_colors: " " # Comma-separated colors -- only used when color_palette is 'custom'
 show_gamertags: false # Append each player's real account name (gamertag) next to their name -- player-ranking metrics only
 ```
 
@@ -400,7 +415,7 @@ selected_entities: " " # Comma-separated player names or entity IDs (used when m
 max_sessions: 10 # Sessions/table: number of rows to display (max 20); scrolls once more than 10 are shown
 session_sort: start_time # Sessions (all/selected modes): start_time, end_time, player
 max_achievements: 10 # Achievements/table: number of rows to display (max 20); scrolls once more than 10 are shown
-achievements_per_game: all # Achievements only (both table and icon grid). Options: all, or 1-20 (table)/1-30 (icons) -- caps how many unlocks from the same game can appear before older ones for that game are excluded
+achievements_per_game: all # Achievements only (both table and icon grid). Options: all, or 1-30 (editor offers 1-20 in table mode) -- caps how many unlocks from the same game can appear before older ones for that game are excluded
 icons_per_row: 4 # Achievements/icons only. Options: 2, 3, 4, 5, 6
 rows: 1 # Achievements/icons only. 1-5; total icons shown = icons_per_row * rows
 icon_background: none # Achievements/icons only. Options: none (transparent), black, white
@@ -412,7 +427,7 @@ show_hover_achievement: true # Achievements/icons only
 show_hover_description: true # Achievements only (both table and icon grid modes). Icon grid: only takes effect while show_hover_achievement is also true. Table mode: governs the Achievement column's own hover tooltip. Either way, only shown when the unlock has description text
 show_hover_datetime: true # Achievements/icons only
 background: art # Table modes only. Sessions options: art, avatar, none; Achievements options: art, icon, avatar, none
-color_mode: game # Table modes only. Sessions options: game, platform; Achievements options: none, platform, game
+color_mode: game # Table modes only. Default: game for sessions, platform for achievements. Sessions options: game, platform; Achievements options: none, platform, game
 show_header: true # Table modes only. Set to false to hide the column header row
 show_column_avatar: false # Table modes only. Adds a small profile picture inside the Player cell -- off by default, automatically hidden when mode is 'single'
 show_column_player: true # Table modes only. Automatically hidden when mode is 'single'
@@ -441,8 +456,11 @@ type: custom:gaming-status-playstation-trophies-card
 title: PlayStation Trophies
 single_entity: " " # A single player's master sensor ID
 background: none # Options: none (transparent), black, white
-show_labels: true # Set to false to hide the Bronze/Silver/Gold/Platinum tier prefixes
-show_total: true # Set to false to hide the "/Y" half of each count, leaving just the earned number
+show_labels: true # Set to false to hide the Bronze/Silver/Gold/Platinum label under each icon
+show_total: true # Set to false to hide the "of Y" total-possible line under each count
+show_active_game: false # Set to true to show the currently-played PlayStation game's trophies instead of library totals
+show_game_title: true # show_active_game only. Names the active game below the trophies
+show_active_artwork: false # show_active_game only. Blurred hero-art background of the active game
 image_style: official # Options: official (try PSN's own image, fall back to a tinted icon), icons (icon only, never attempt an image)
 ```
 
@@ -456,15 +474,15 @@ show_platform_steam: true # Uncheck any of these to exclude that platform's game
 show_platform_xbox: true
 show_platform_playstation: true
 exclude_playstation_no_platinum: false # filter: complete only
-exclude_inactive_months: 0 # filter: near only. Options: 0 (never exclude, default), 1-12 -- Steam games are never excluded (no last-activity data available)
+exclude_inactive_months: 0 # filter: near only. Options: 0 (never exclude, default), 1-12 -- PlayStation/Steam use last trophy/achievement-earned time; games with no recorded activity are never excluded
 max_games: 12 # Number of games to display (max 50)
 display_mode: grid # Options: grid, slideshow, list (list -- Ranked List -- is only offered when filter is 'near')
 artwork_mode: cover # Grid/Slideshow only. Options: cover, hero, logo, icon (logo/icon are only valid when display_mode is 'grid')
 grid_columns: 3 # Grid mode only. Options: 1, 2, 3, 4
-grid_max_rows: 3 # Grid mode only. Rows before the grid scrolls
+grid_max_rows: 3 # Grid mode only. Rows before the grid scrolls (editor: 1-20)
 time_per_slide: 5 # Slideshow mode only. Seconds per slide
 transition_time: 1 # Slideshow mode only. Crossfade duration in seconds
-scroll_after: 10 # List mode only. Number of rows before the list scrolls
+scroll_after: 10 # List mode only. Number of rows before the list scrolls (editor: 1-50)
 color_palette: platform # List mode only. Options: platform (default, per-game platform color), vivid, material, muted, soft, custom
 custom_colors: "" # List mode only. Comma-separated hex colors (used when color_palette is 'custom')
 ```
@@ -501,11 +519,11 @@ exclude_zero_completion: false # Set to true to hide games with no progress at a
 show_search: false # Set to true to add a live title-search field next to the platform tabs
 sort_by: title # Options: title, completion, recent
 artwork_mode: cover # Options: cover, hero, logo, icon (all four remain available -- this card is a static list, not a slideshow)
-scroll_after: 4 # Number of entries before the list scrolls
+scroll_after: 4 # Number of entries before the list scrolls (editor: 1-50)
 show_total: true # Set to false to hide the "N games" count above the list
 show_field_title: true
 show_field_percent: true
-show_field_counts: true # Trophy Counts (PlayStation) or Achievement Count (Steam/Xbox), depending on `platform`
+show_field_counts: true # Trophy Counts (PlayStation) or Achievement Count (Steam/Xbox), depending on the active tab
 ```
 
 **The Gamercard:**

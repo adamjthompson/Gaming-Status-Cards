@@ -8135,7 +8135,7 @@ window.customCards.push({
   type: "gaming-status-game-management-card",
   name: "Gaming Status - Game Management",
   preview: true,
-  description: "Rename or permanently delete a game from a player's stored play history."
+  description: "Add a session, or rename, reassign, or permanently delete a game in a player's stored play history."
 });
 
 window.customCards.push({
