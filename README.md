@@ -151,6 +151,7 @@ A configurable table (or icon grid) of recently completed play sessions or recen
 * **Player Filter:** Show all tracked players, a single selected player, or a custom subset of players. In **Single Player** mode, the Player column/hover field is automatically hidden since it would be redundant.
 * **Display Gamertags:** Appends each row's own platform-specific real account name (gamertag) next to the player's name, in both table and icon-grid hover modes. Off by default; has no effect for a row from a platform with no gamertag concept (Playnite, Custom). GSA sessions are shown under the launcher they came from (e.g. "Epic") and filtered by the GSA checkbox, except Steam and Xbox games from GSA's optional Steam/Xbox detection, which show and filter as Steam and Xbox. Custom sensor sessions show and filter as Custom.
 * **Number of Sessions/Achievements to Display** *(Table modes only)*: How many recent rows to show (default: 10, max: 20). If more than 10 would be shown, the list scrolls instead of growing taller. Type a value and click **Apply** to confirm it.
+* **Sort By** *(Sessions, All Tracked Players / Selected Players only)*: **Start Time** (default), **End Time**, or **Player Name**. Only reorders the sessions being shown -- the most recent sessions are always the ones selected.
 * **Achievements Per Game** *(Achievements only, both Table and Icon Grid)*: **All** (default) or a per-game cap (1–20 in Table mode, 1–30 in Icon Grid) on how many unlocks from the same game can appear before older ones for that game are excluded — the most recent per game are always kept. Prevents one recently-played game with a lot of unlocks from crowding out every other game, the same idea as the Gamercard's own fixed 4-per-game limit.
 * **Icons Per Row / Rows** *(Icon Grid only)*: How many icons appear per row (2–6) and how many rows to show (1–5). Total icons shown = Icons Per Row × Rows.
 * **Icon Background / Artwork Size** *(Icon Grid only)*: A backdrop behind each icon — **None (Transparent)**, **Black**, or **White** — since some platforms' icons have transparent backgrounds; and **Crop to Square** or **Show Full Image** for how each icon fills its cell.
@@ -397,6 +398,7 @@ mode: all # Options: all, single, selected
 single_entity: " " # A single sensor ID (used when mode is 'single')
 selected_entities: " " # Comma-separated player names or entity IDs (used when mode is 'selected')
 max_sessions: 10 # Sessions/table: number of rows to display (max 20); scrolls once more than 10 are shown
+session_sort: start_time # Sessions (all/selected modes): start_time, end_time, player
 max_achievements: 10 # Achievements/table: number of rows to display (max 20); scrolls once more than 10 are shown
 achievements_per_game: all # Achievements only (both table and icon grid). Options: all, or 1-20 (table)/1-30 (icons) -- caps how many unlocks from the same game can appear before older ones for that game are excluded
 icons_per_row: 4 # Achievements/icons only. Options: 2, 3, 4, 5, 6

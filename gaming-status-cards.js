@@ -3107,6 +3107,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       event_type: "sessions",
       display_mode: "table",
       max_sessions: 10,
+      session_sort: "start_time",
       max_achievements: 10,
       achievements_per_game: "all",
       background: "art",
@@ -3159,6 +3160,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       display_mode: config.display_mode === "icons" ? "icons" : "table",
       // Sessions fields
       max_sessions: config.max_sessions !== undefined ? Math.min(20, Math.max(1, parseInt(config.max_sessions) || 10)) : 10,
+      session_sort: ["end_time", "player"].includes(config.session_sort) ? config.session_sort : "start_time",
       show_platform_playnite: config.show_platform_playnite !== false,
       show_platform_gsa: config.show_platform_gsa !== false,
       show_platform_custom: config.show_platform_custom !== false,
@@ -3246,6 +3248,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       + "|" + this.config.display_mode
       + "|" + trackingEnabled
       + "|" + this.config.max_sessions
+      + "|" + this.config.session_sort
       + "|" + this.config.max_achievements
       + "|" + this.config.achievements_per_game
       + "|" + this.config.icons_per_row
@@ -3318,7 +3321,19 @@ class GamingStatusRecentActivityCard extends HTMLElement {
     rows.sort((a, b) => (Date.parse(b.start_time) || 0) - (Date.parse(a.start_time) || 0));
 
     const limit = Math.min(20, Math.max(1, parseInt(this.config.max_sessions) || 10));
-    return rows.slice(0, limit);
+    rows = rows.slice(0, limit);
+
+    // Sort only reorders the N most recent sessions picked above -- it never
+    // changes which sessions make the cut. Single Player has no Sort option.
+    if (this.config.mode !== "single") {
+      if (this.config.session_sort === "end_time") {
+        rows.sort((a, b) => (Date.parse(b.end_time) || 0) - (Date.parse(a.end_time) || 0));
+      } else if (this.config.session_sort === "player") {
+        // Stable sort keeps each player's sessions newest-first.
+        rows.sort((a, b) => a.player.localeCompare(b.player, undefined, { sensitivity: "base" }));
+      }
+    }
+    return rows;
   }
 
   // Same union-and-sort shape whether Display Mode ends up Table or Icon
@@ -3889,7 +3904,17 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
             <input type="number" id="max_sessions" value="${parseInt(this._config.max_sessions) || 10}" min="1" max="20">
             <button type="button" id="max_sessions_apply">Apply</button>
           </div>
-        </div>` : ""}
+        </div>
+        ${mode !== "single" ? `
+        <div>
+          <div class="section-title">Sort By</div>
+          <div class="helper-text">Order of the sessions shown. Player Name keeps each player's sessions newest-first.</div>
+          <select id="session_sort">
+            <option value="start_time" ${this._config.session_sort !== "end_time" && this._config.session_sort !== "player" ? "selected" : ""}>Start Time</option>
+            <option value="end_time" ${this._config.session_sort === "end_time" ? "selected" : ""}>End Time</option>
+            <option value="player" ${this._config.session_sort === "player" ? "selected" : ""}>Player Name</option>
+          </select>
+        </div>` : ""}` : ""}
         ${eventType === "achievements" && displayMode === "table" ? `
         <hr>
         <div>
@@ -4093,6 +4118,14 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
         const clamped = Math.min(20, Math.max(1, parseInt(input.value) || 10));
         input.value = clamped;
         this._config = { ...this._config, max_achievements: clamped };
+        fireChanged();
+      });
+    }
+
+    const sessionSort = this.shadowRoot.getElementById("session_sort");
+    if (sessionSort) {
+      sessionSort.addEventListener("change", (ev) => {
+        this._config = { ...this._config, session_sort: ev.target.value };
         fireChanged();
       });
     }
