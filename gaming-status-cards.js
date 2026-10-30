@@ -819,6 +819,8 @@ class GamingStatusCard extends HTMLElement {
 
   render(data) {
     const escapeHTML = gamingStatusEscapeHTML;
+    // Set by the integration's public page, which has no more-info dialog.
+    const readOnly = Boolean(this._hass && this._hass.readOnly);
 
     if (!this.content) {
       this.shadowRoot.innerHTML = `
@@ -841,6 +843,9 @@ class GamingStatusCard extends HTMLElement {
             flex-shrink: 0;
           }
           .player-card:active { transform: scale(0.98); }
+          /* Read-only hosts (the integration's public page) have no more-info dialog to open. */
+          .player-card.read-only { cursor: default; }
+          .player-card.read-only:active { transform: none; }
           .player-card::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background-size: cover; background-position: center; z-index: 0; pointer-events: none;background-image: linear-gradient(to right, var(--card-gradient-color) 0%, rgba(0, 0, 0, 0.5) 100%), var(--bg-url); filter: var(--card-filter); }
           
           .player-card.online { border-right: 8px solid var(--card-accent-color); }
@@ -917,7 +922,7 @@ class GamingStatusCard extends HTMLElement {
         const bgLayer2 = player.picture && player.picture !== player.cover ? `, url('${escapeHTML(gamingStatusArtUrl(player.picture))}')` : '';
         
         return `
-        <div class="player-card ${statusClass}" style="--bg-url: ${bgLayer1}${bgLayer2}; --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
+        <div class="player-card ${statusClass}${readOnly ? " read-only" : ""}" style="--bg-url: ${bgLayer1}${bgLayer2}; --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
           <div class="content-wrapper">
             <div class="avatar-container">
               ${player.picture
@@ -941,6 +946,7 @@ class GamingStatusCard extends HTMLElement {
       })
       .join("");
 
+    if (readOnly) return;
     this.shadowRoot.querySelectorAll(".player-card").forEach((row) => {
       row.addEventListener("click", (e) => {
         const entityId = e.currentTarget.getAttribute("data-entity-id");
