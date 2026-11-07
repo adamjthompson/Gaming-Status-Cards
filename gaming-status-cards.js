@@ -362,27 +362,15 @@ const GAMING_STATUS_PLATFORM_TINTS = {
   discord: "88, 101, 242",
 };
 
-// Epic Games and Ubisoft logos from Simple Icons v13.21.0 (CC0-1.0,
-// https://simpleicons.org). MDI has neither, so they're drawn inline as SVGs
-// wherever an <ha-icon> would otherwise go. Both are library-only platforms
-// (their live status comes from Gaming Status Agent), so they're kept out of
-// the shared platform maps above -- adding them there would make the label
-// fallback in gamingStatusResolvePlatformKey classify old Agent sessions
-// labelled "Epic"/"Ubisoft" as their own platform.
-const GAMING_STATUS_EPIC_ICON_PATH = "M3.537 0C2.165 0 1.66.506 1.66 1.879V18.44a4.262 4.262 0 00.02.433c.031.3.037.59.316.92.027.033.311.245.311.245.153.075.258.13.43.2l8.335 3.491c.433.199.614.276.928.27h.002c.314.006.495-.071.928-.27l8.335-3.492c.172-.07.277-.124.43-.2 0 0 .284-.211.311-.243.28-.33.285-.621.316-.92a4.261 4.261 0 00.02-.434V1.879c0-1.373-.506-1.88-1.878-1.88zm13.366 3.11h.68c1.138 0 1.688.553 1.688 1.696v1.88h-1.374v-1.8c0-.369-.17-.54-.523-.54h-.235c-.367 0-.537.17-.537.539v5.81c0 .369.17.54.537.54h.262c.353 0 .523-.171.523-.54V8.619h1.373v2.143c0 1.144-.562 1.71-1.7 1.71h-.694c-1.138 0-1.7-.566-1.7-1.71V4.82c0-1.144.562-1.709 1.7-1.709zm-12.186.08h3.114v1.274H6.117v2.603h1.648v1.275H6.117v2.774h1.74v1.275h-3.14zm3.816 0h2.198c1.138 0 1.7.564 1.7 1.708v2.445c0 1.144-.562 1.71-1.7 1.71h-.799v3.338h-1.4zm4.53 0h1.4v9.201h-1.4zm-3.13 1.235v3.392h.575c.354 0 .523-.171.523-.54V4.965c0-.368-.17-.54-.523-.54zm-3.74 10.147a1.708 1.708 0 01.591.108 1.745 1.745 0 01.49.299l-.452.546a1.247 1.247 0 00-.308-.195.91.91 0 00-.363-.068.658.658 0 00-.28.06.703.703 0 00-.224.163.783.783 0 00-.151.243.799.799 0 00-.056.299v.008a.852.852 0 00.056.31.7.7 0 00.157.245.736.736 0 00.238.16.774.774 0 00.303.058.79.79 0 00.445-.116v-.339h-.548v-.565H7.37v1.255a2.019 2.019 0 01-.524.307 1.789 1.789 0 01-.683.123 1.642 1.642 0 01-.602-.107 1.46 1.46 0 01-.478-.3 1.371 1.371 0 01-.318-.455 1.438 1.438 0 01-.115-.58v-.008a1.426 1.426 0 01.113-.57 1.449 1.449 0 01.312-.46 1.418 1.418 0 01.474-.309 1.58 1.58 0 01.598-.111 1.708 1.708 0 01.045 0zm11.963.008a2.006 2.006 0 01.612.094 1.61 1.61 0 01.507.277l-.386.546a1.562 1.562 0 00-.39-.205 1.178 1.178 0 00-.388-.07.347.347 0 00-.208.052.154.154 0 00-.07.127v.008a.158.158 0 00.022.084.198.198 0 00.076.066.831.831 0 00.147.06c.062.02.14.04.236.061a3.389 3.389 0 01.43.122 1.292 1.292 0 01.328.17.678.678 0 01.207.24.739.739 0 01.071.337v.008a.865.865 0 01-.081.382.82.82 0 01-.229.285 1.032 1.032 0 01-.353.18 1.606 1.606 0 01-.46.061 2.16 2.16 0 01-.71-.116 1.718 1.718 0 01-.593-.346l.43-.514c.277.223.578.335.9.335a.457.457 0 00.236-.05.157.157 0 00.082-.142v-.008a.15.15 0 00-.02-.077.204.204 0 00-.073-.066.753.753 0 00-.143-.062 2.45 2.45 0 00-.233-.062 5.036 5.036 0 01-.413-.113 1.26 1.26 0 01-.331-.16.72.72 0 01-.222-.243.73.73 0 01-.082-.36v-.008a.863.863 0 01.074-.359.794.794 0 01.214-.283 1.007 1.007 0 01.34-.185 1.423 1.423 0 01.448-.066 2.006 2.006 0 01.025 0zm-9.358.025h.742l1.183 2.81h-.825l-.203-.499H8.623l-.198.498h-.81zm2.197.02h.814l.663 1.08.663-1.08h.814v2.79h-.766v-1.602l-.711 1.091h-.016l-.707-1.083v1.593h-.754zm3.469 0h2.235v.658h-1.473v.422h1.334v.61h-1.334v.442h1.493v.658h-2.255zm-5.3.897l-.315.793h.624zm-1.145 5.19h8.014l-4.09 1.348z";
-
-const GAMING_STATUS_UBISOFT_ICON_PATH = "M23.561 11.988C23.301-.304 6.954-4.89.656 6.634c.282.206.661.477.943.672a11.747 11.747 0 00-.976 3.067 11.885 11.885 0 00-.184 2.071C.439 18.818 5.621 24 12.005 24c6.385 0 11.556-5.17 11.556-11.556v-.455zm-20.27 2.06c-.152 1.246-.054 1.636-.054 1.788l-.282.098c-.108-.206-.37-.932-.488-1.908C2.163 10.308 4.7 6.96 8.57 6.33c3.544-.52 6.937 1.68 7.728 4.758l-.282.098c-.087-.087-.228-.336-.77-.878-4.281-4.281-11.002-2.32-11.956 3.74zm11.002 2.081a3.145 3.145 0 01-2.59 1.355 3.15 3.15 0 01-3.155-3.155 3.159 3.159 0 012.927-3.144c1.018-.043 1.972.51 2.416 1.398a2.58 2.58 0 01-.455 2.95c.293.205.575.4.856.595zm6.58.12c-1.669 3.782-5.106 5.766-8.77 5.712-7.034-.347-9.083-8.466-4.38-11.393l.207.206c-.076.108-.358.325-.791 1.182-.51 1.041-.672 2.081-.607 2.732.369 5.67 8.314 6.83 11.045 1.214C21.057 8.217 11.822.401 3.626 6.374l-.184-.184C5.599 2.808 9.816 1.3 13.837 2.309c6.147 1.55 9.453 7.956 7.035 13.94z";
-
-const GAMING_STATUS_BRAND_ICONS = {
-  epic: { path: GAMING_STATUS_EPIC_ICON_PATH, label: "Epic Games" },
-  ubisoft: { path: GAMING_STATUS_UBISOFT_ICON_PATH, label: "Ubisoft" },
-};
-
-function gamingStatusBrandIconSVG(key) {
-  const icon = GAMING_STATUS_BRAND_ICONS[key];
-  if (!icon) return "";
-  return `<svg viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="${icon.label}"><path d="${icon.path}"/></svg>`;
-}
+// Epic Games, Ubisoft, Discord and Playnite logos come from the Gaming Status
+// integration's "gaming-status:" icon set (registered on every Home Assistant
+// page, and on its public page), used through <ha-icon> exactly like MDI
+// icons, so they follow the theme's colors. Epic and Ubisoft are library-only
+// platforms (their live status comes from Gaming Status Agent), so they're
+// kept out of the shared platform maps above -- adding them there would make
+// the label fallback in gamingStatusResolvePlatformKey classify old Agent
+// sessions labelled "Epic"/"Ubisoft" as their own platform.
+const GAMING_STATUS_LIBRARY_ONLY_LABELS = { epic: "Epic Games", ubisoft: "Ubisoft" };
 
 // Maps a platform key to the master sensor's per-platform gamertag
 // attribute name (see sensor.py's MasterGamingSensor -- steam_gamertag/
@@ -736,10 +724,10 @@ class GamingStatusCard extends HTMLElement {
         "steam": { icon: "mdi:steam", color: "2, 173, 239" },
         "xbox": { icon: "mdi:microsoft-xbox", color: "11, 124, 16" },
         "playstation": { icon: "mdi:sony-playstation", color: "0, 48, 135" },
-        "playnite": { icon: "https://cdn2.steamgriddb.com/icon/a281004dce23a29d1821f1e8430b6f8f.png", color: "255, 88, 51" },
+        "playnite": { icon: "gaming-status:playnite", color: "255, 88, 51" },
         "gsa": { icon: "mdi:gamepad-square", color: "100, 50, 100" },
         "custom": { icon: "mdi:gamepad-square", color: "100, 50, 100" },
-        "discord": { icon: "https://cdn2.steamgriddb.com/icon/d8a6b69c1e76aeb1500df754b7b86802.png", color: "88, 101, 242" }
+        "discord": { icon: "gaming-status:discord", color: "88, 101, 242" }
       };
 
       let badgeIcon = "mdi:controller";
@@ -953,7 +941,7 @@ class GamingStatusCard extends HTMLElement {
               }
               ${this.config.show_badges ? `
               <div class="badge">
-                ${player.badgeIcon.startsWith('mdi:')
+                ${/^[a-z0-9-]+:/.test(player.badgeIcon) && !/^https?:/.test(player.badgeIcon)
                   ? `<ha-icon icon="${escapeHTML(player.badgeIcon)}"></ha-icon>`
                   : `<img class="custom-badge" src="${escapeHTML(gamingStatusArtUrl(player.badgeIcon))}" />`
                 }
@@ -6836,19 +6824,23 @@ class GamingStatusLibraryCard extends HTMLElement {
   };
 
   // Same brand icons already used for platform badges in the List card.
-  // Epic and Ubisoft have no MDI icons -- see gamingStatusBrandIconSVG.
+  // Epic and Ubisoft use the integration's "gaming-status:" icon set.
   static PLATFORMS = ["steam", "xbox", "playstation", "epic", "ubisoft"];
   // Shown only when the library actually has games on them, so cards saved
   // before they existed don't grow empty tabs.
   static OPTIONAL_PLATFORMS = ["epic", "ubisoft"];
-  static PLATFORM_ICONS = { steam: "mdi:steam", xbox: "mdi:microsoft-xbox", playstation: "mdi:sony-playstation" };
+  static PLATFORM_ICONS = {
+    steam: "mdi:steam",
+    xbox: "mdi:microsoft-xbox",
+    playstation: "mdi:sony-playstation",
+    epic: "gaming-status:epic",
+    ubisoft: "gaming-status:ubisoft",
+  };
   // Selected-tab colors: Epic #0f4840, Ubisoft #0070FF.
   static PLATFORM_TINTS = { ...GAMING_STATUS_PLATFORM_TINTS, epic: "15, 72, 64", ubisoft: "0, 112, 255" };
 
   static tabIconHTML(platform) {
-    return GAMING_STATUS_BRAND_ICONS[platform]
-      ? gamingStatusBrandIconSVG(platform)
-      : `<ha-icon icon="${GamingStatusLibraryCard.PLATFORM_ICONS[platform]}"></ha-icon>`;
+    return `<ha-icon icon="${GamingStatusLibraryCard.PLATFORM_ICONS[platform]}"></ha-icon>`;
   }
 
   static getStubConfig() {
@@ -7021,7 +7013,6 @@ class GamingStatusLibraryCard extends HTMLElement {
           #lb-tabs { display: flex; gap: 8px; }
           .lb-tab { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.2s ease; }
           .lb-tab ha-icon { color: #ffffff; --mdc-icon-size: 20px; position: relative; top: -1px; }
-          .lb-tab svg { color: #ffffff; width: 20px; height: 20px; display: block; }
           #lb-search-wrap { display: flex; align-items: center; gap: 6px; margin-left: auto; background: rgba(120, 120, 120, 0.15); border-radius: 18px; padding: 0 12px; height: 36px; box-sizing: border-box; flex-shrink: 0; }
           #lb-search-wrap ha-icon { color: var(--secondary-text-color); --mdc-icon-size: 18px; flex-shrink: 0; }
           #lb-search { border: none; background: transparent; color: var(--primary-text-color); font-size: 13px; outline: none; width: 130px; min-width: 0; }
@@ -7310,7 +7301,7 @@ class GamingStatusLibraryEditor extends HTMLElement {
     const isAvailable = (key) => GamingStatusLibraryCard.OPTIONAL_PLATFORMS.includes(key)
       ? hasLibrary(key)
       : (!availablePlatforms || availablePlatforms.has(key));
-    const platformLabel = (key) => GAMING_STATUS_BRAND_ICONS[key]?.label || gamingStatusPlatformEditorLabel(key);
+    const platformLabel = (key) => GAMING_STATUS_LIBRARY_ONLY_LABELS[key] || gamingStatusPlatformEditorLabel(key);
 
     this.shadowRoot.innerHTML = `
       <style>
