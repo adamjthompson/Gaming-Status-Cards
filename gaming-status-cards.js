@@ -248,13 +248,25 @@ function gamingStatusWireResize(contentEl, rerender) {
   return ro;
 }
 
-// Returns contentEl's current width, or schedules a rAF retry (via
-// `rerender`) and returns 0 if the container hasn't been laid out yet (e.g.
-// a card added to a not-yet-visible tab). Callers should bail out of
+// Returns the card's chart container width, or 0 if it hasn't been laid out
+// yet (e.g. a card added to a not-yet-visible tab, a view you've navigated
+// away from, or a hidden conditional card). Callers should bail out of
 // rendering whenever this returns a falsy value.
-function gamingStatusChartWidth(contentEl, rerender) {
-  const VW = contentEl.clientWidth;
-  if (!VW) requestAnimationFrame(rerender);
+//
+// The card's ResizeObserver (wired in _ensureShell() before the first
+// render) re-renders as soon as the container gets a real width, so nothing
+// needs to poll. Only without one does this retry on the next frame, and
+// only a few times: Home Assistant keeps views you've left in memory, so a
+// card that stays hidden would otherwise re-render every frame forever.
+const GAMING_STATUS_CHART_WIDTH_RETRIES = 10;
+function gamingStatusChartWidth(card) {
+  const VW = card._contentEl.clientWidth;
+  if (VW) {
+    card._widthRetries = 0;
+  } else if (!card._ro && (card._widthRetries || 0) < GAMING_STATUS_CHART_WIDTH_RETRIES) {
+    card._widthRetries = (card._widthRetries || 0) + 1;
+    requestAnimationFrame(gamingStatusRerenderer(card));
+  }
   return VW;
 }
 
@@ -1950,7 +1962,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
   _renderChart(dailyData, groups) {
     if (!this._contentEl) return;
     this._lastRenderArgs = [dailyData, groups];
-    const VW = gamingStatusChartWidth(this._contentEl, gamingStatusRerenderer(this));
+    const VW = gamingStatusChartWidth(this);
     if (!VW) return;
 
     if (!groups.length || dailyData.every(d => !Object.keys(d.groups).length)) {
@@ -2415,7 +2427,7 @@ class GamingStatusDonutCard extends HTMLElement {
   _renderChart(platforms, platformTotals, grandTotal) {
     if (!this._contentEl) return;
     this._lastRenderArgs = [platforms, platformTotals, grandTotal];
-    const VW = gamingStatusChartWidth(this._contentEl, gamingStatusRerenderer(this));
+    const VW = gamingStatusChartWidth(this);
     if (!VW) return;
 
     if (grandTotal <= 0) {
