@@ -3302,6 +3302,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       // "(gamertag)" suffix they never asked for.
       show_gamertags: config.show_gamertags === true,
     };
+    this._lastWatchKey = "";
     this._lastHash = "";
   }
 
@@ -3325,15 +3326,9 @@ class GamingStatusRecentActivityCard extends HTMLElement {
 
     const isAchievements = this.config.event_type === "achievements";
     const trackingEnabled = isAchievements ? gamingStatusIsAchievementTrackingEnabled(hass) : true;
-    const attrKey = isAchievements ? "recent_achievements" : "recent_sessions";
-    const dateKey = isAchievements ? "unlocked_at" : "start_time";
+    const colorExtraction = gamingStatusIsColorExtractionEnabled(hass);
 
-    const hash = entityIds.map(id => {
-      const items = hass.states[id]?.attributes?.[attrKey] || [];
-      const iconFlags = isAchievements ? items.map(u => u.icon_url ? "1" : "0").join("") : "";
-      return `${id}:${items.length}:${items[0] ? items[0][dateKey] : ""}:${iconFlags}`;
-    }).join(",")
-      + "|" + this.config.event_type
+    const configKey = this.config.event_type
       + "|" + this.config.display_mode
       + "|" + trackingEnabled
       + "|" + this.config.max_sessions
@@ -3349,16 +3344,34 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       + "|" + this.config.show_header
       + "|" + [this.config.show_column_avatar, this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end, this.config.show_column_achievement, this.config.show_column_time].join(",")
       + "|" + [this.config.show_hover_player, this.config.show_hover_platform, this.config.show_hover_game, this.config.show_hover_achievement, this.config.show_hover_description, this.config.show_hover_datetime].join(",")
-      + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_playnite, this.config.show_platform_gsa, this.config.show_platform_custom, this.config.show_platform_discord].join(",");
+      + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_playnite, this.config.show_platform_gsa, this.config.show_platform_custom, this.config.show_platform_discord].join(",")
+      + "|" + trackingEnabled
+      + "|" + colorExtraction;
 
+    // Two stages, so a Home Assistant update that doesn't touch this card
+    // costs a few lookups, while any change to what it shows -- a renamed
+    // game, late-arriving artwork, a new avatar or gamertag -- re-renders.
+    // 1) Cheap: has anything this card reads been updated? That's each
+    //    player's sensor plus its per-platform siblings (rows show the
+    //    platform's own avatar from those).
+    const watchKey = entityIds.map(id => {
+      const base = id.replace(/_master$/, "");
+      const siblings = Object.keys(GAMING_STATUS_PLATFORM_LABELS)
+        .map(p => hass.states[`${base}_${p}`]?.last_updated || "").join(":");
+      return `${id}@${hass.states[id]?.last_updated || ""}:${siblings}`;
+    }).join(",") + "|" + configKey;
+    if (this._lastWatchKey === watchKey) return;
+    this._lastWatchKey = watchKey;
+
+    // 2) Exact: rebuild the rows and render only if their content differs.
+    const rows = isAchievements
+      ? (trackingEnabled ? this._processAchievements(entityIds) : [])
+      : this._processSessions(entityIds);
+    const hash = JSON.stringify(rows) + "|" + configKey;
     if (this._lastHash === hash) return;
     this._lastHash = hash;
 
-    if (isAchievements) {
-      this.render(trackingEnabled ? this._processAchievements(entityIds) : [], trackingEnabled);
-    } else {
-      this.render(this._processSessions(entityIds), true);
-    }
+    this.render(rows, isAchievements ? trackingEnabled : true);
   }
 
   _processSessions(entityIds) {
@@ -5911,11 +5924,14 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
     this._lastCheapFingerprint = cheapFingerprint;
 
     const games = stateObj ? (stateObj.attributes.games || []) : null;
-    const isComplete = this.config.filter !== "near";
+    // Hash exactly what render() will show (title, platform, console,
+    // percent, art), so late-arriving artwork or a console change re-renders
+    // too -- not just a percent or title change.
+    const rows = games === null ? null : this.processData(games);
 
     const hash = [
       targetEntityId,
-      games ? games.filter(g => isComplete ? (g.percent || 0) >= 100 : (g.percent || 0) < 100).map(g => `${g.title}:${g.platform}:${g.percent}:${g._activity_ts || ""}`).join(",") : "none",
+      JSON.stringify(rows),
       this.config.filter,
       this.config.max_games,
       this.config.display_mode,
@@ -5935,7 +5951,7 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
     if (this._lastHash === hash) return;
     this._lastHash = hash;
 
-    this.render(games === null ? null : this.processData(games));
+    this.render(rows);
   }
 
   // Unified row shape covers every display mode at once (art for
@@ -7026,10 +7042,14 @@ class GamingStatusLibraryCard extends HTMLElement {
     this._lastCheapFingerprint = cheapFingerprint;
 
     const games = stateObj ? (stateObj.attributes.games || []) : null;
+    // Hash exactly what render() is given (each platform's filtered,
+    // sorted games with their art, console and counts), so late-arriving
+    // artwork or a count change re-renders too -- not just title/percent.
+    const byPlatform = games === null ? null : this.processData(games);
 
     const hash = [
       targetEntityId,
-      games ? games.filter(g => this.config[`show_platform_${g.platform}`] !== false).map(g => `${g.title}:${g.platform}:${g.percent}`).join(",") : "none",
+      JSON.stringify(byPlatform),
       [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_epic, this.config.show_platform_ubisoft].join(","),
       this.config.exclude_zero_completion,
       this.config.show_search,
@@ -7045,7 +7065,7 @@ class GamingStatusLibraryCard extends HTMLElement {
     if (this._lastHash === hash) return;
     this._lastHash = hash;
 
-    this.render(games === null ? null : this.processData(games));
+    this.render(byPlatform);
   }
 
   // Returns {platformKey: games[]}, one entry per enabled platform, each
