@@ -100,6 +100,27 @@ function gamingStatusArtUrl(url) {
   return url.slice(idx);
 }
 
+// A CSS `url("...")` value for an image URL from entity data (artwork,
+// avatars), with gamingStatusArtUrl's same-origin rewrite applied.
+// Characters that could close the string or the url() and smuggle in more
+// CSS (quotes, backslash, parentheses, control characters) are written as
+// CSS hex escapes, which the browser decodes back to exactly the original
+// characters -- so every real URL loads just as before. HTML escaping alone
+// isn't enough inside style="...": the HTML parser decodes &#39; back to '
+// before CSS ever sees it.
+//
+// Assign the result to element.style directly; inside an HTML attribute,
+// also pass it through gamingStatusEscapeHTML (its double quotes become
+// &quot;, which the HTML parser turns back into ").
+function gamingStatusCssUrl(url) {
+  if (!url || typeof url !== "string") return "none";
+  const escaped = gamingStatusArtUrl(url).replace(
+    /[\\"'()\u0000-\u001f\u007f]/g,
+    (c) => `\\${c.charCodeAt(0).toString(16)} `
+  );
+  return `url("${escaped}")`;
+}
+
 // ====================================================================
 // SHARED: PLAYER ENTITY DROPDOWNS (Single Player mode)
 // ====================================================================
@@ -980,8 +1001,8 @@ class GamingStatusCard extends HTMLElement {
         const safeState = escapeHTML(player.state);
         const safeSecondary = escapeHTML(player.secondary);
         
-        const bgLayer1 = player.cover ? `url('${escapeHTML(gamingStatusArtUrl(player.cover))}')` : 'none';
-        const bgLayer2 = player.picture && player.picture !== player.cover ? `, url('${escapeHTML(gamingStatusArtUrl(player.picture))}')` : '';
+        const bgLayer1 = player.cover ? escapeHTML(gamingStatusCssUrl(player.cover)) : 'none';
+        const bgLayer2 = player.picture && player.picture !== player.cover ? `, ${escapeHTML(gamingStatusCssUrl(player.picture))}` : '';
         
         return `
         <div class="player-card ${statusClass}${readOnly ? " read-only" : ""}" style="--bg-url: ${bgLayer1}${bgLayer2}; --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS}; --badge-fg: ${player.badgeFgCSS};" data-entity-id="${player.entity_id}">
@@ -1474,7 +1495,7 @@ class GamingSlideshowCard extends HTMLElement {
       let html = `<div style="position: absolute; bottom: 10px; right: 10px; display: flex; z-index: 2;">`;
       players.forEach((badge) => {
         if (badge && badge.isImage && badge.content) {
-          html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-image: url('${gamingStatusEscapeHTML(gamingStatusArtUrl(badge.content))}'); background-size: cover; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;"></div>`;
+          html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-image: ${gamingStatusEscapeHTML(gamingStatusCssUrl(badge.content))}; background-size: cover; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;"></div>`;
         } else if (badge && !badge.isImage && badge.content) {
           html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-color: rgba(30, 30, 30, 0.8); color: white; font-family: sans-serif; font-size: 22px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;">${gamingStatusEscapeHTML(badge.content)}</div>`;
         }
@@ -1485,7 +1506,7 @@ class GamingSlideshowCard extends HTMLElement {
 
     if (data.length === 1) {
       this.content.innerHTML = `
-        <div style="width: 100%; height: 100%; background-image: url('${gamingStatusEscapeHTML(gamingStatusArtUrl(data[0].art))}'); background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
+        <div style="width: 100%; height: 100%; background-image: ${gamingStatusEscapeHTML(gamingStatusCssUrl(data[0].art))}; background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
         ${getAvatarHtml(data[0].players)}
       `;
       return;
@@ -1508,7 +1529,7 @@ class GamingSlideshowCard extends HTMLElement {
     const anim_name = `anim_${item_ids}`;
 
     // Eliminate first-load flash by setting the first slide as the static container background
-    this.content.style.backgroundImage = `url('${gamingStatusEscapeHTML(gamingStatusArtUrl(data[0].art))}')`;
+    this.content.style.backgroundImage = gamingStatusCssUrl(data[0].art);
     this.content.style.backgroundSize = bgSize;
     this.content.style.backgroundPosition = "center";
     this.content.style.backgroundRepeat = bgRepeat;
@@ -1529,7 +1550,7 @@ class GamingSlideshowCard extends HTMLElement {
       const delay = index * t_slide;
       html += `
         <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; z-index: 1; animation: ${anim_name} ${loop_duration}s infinite; animation-delay: ${delay}s;">
-          <div style="width: 100%; height: 100%; background-image: url('${gamingStatusEscapeHTML(gamingStatusArtUrl(g.art))}'); background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
+          <div style="width: 100%; height: 100%; background-image: ${gamingStatusEscapeHTML(gamingStatusCssUrl(g.art))}; background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
           ${getAvatarHtml(g.players)}
         </div>`;
     });
@@ -3683,7 +3704,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         return `<div class="${cls}" style="flex: ${c.flex};">${value}</div>`;
       }).join("");
 
-      return `<div class="ract-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--ract-bg-url: url('${escapeHTML(gamingStatusArtUrl(bgUrl))}');${tintStyle}` : ""}">${cellsHTML}</div>`;
+      return `<div class="ract-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--ract-bg-url: ${escapeHTML(gamingStatusCssUrl(bgUrl))};${tintStyle}` : ""}">${cellsHTML}</div>`;
     }).join("");
   }
 
@@ -3772,7 +3793,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         return `<div class="${cls}" style="flex: ${c.flex};"${extraAttrs}>${value}</div>`;
       }).join("");
 
-      return `<div class="ract-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--ract-bg-url: url('${escapeHTML(gamingStatusArtUrl(bgUrl))}');${tintStyle}` : ""}">${cellsHTML}</div>`;
+      return `<div class="ract-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--ract-bg-url: ${escapeHTML(gamingStatusCssUrl(bgUrl))};${tintStyle}` : ""}">${cellsHTML}</div>`;
     }).join("");
 
     if (hoverDescriptionEnabled) {
@@ -5537,7 +5558,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
     // #pt-content in a separate absolutely-positioned layer so the filter
     // never blurs the actual trophy icons/text on top of it).
     if (activeGame && this.config.show_active_artwork && activeGame.game_hero_art) {
-      this._bgEl.style.backgroundImage = `url("${gamingStatusEscapeHTML(activeGame.game_hero_art)}")`;
+      this._bgEl.style.backgroundImage = gamingStatusCssUrl(activeGame.game_hero_art);
       this._bgEl.style.display = "block";
     } else {
       this._bgEl.style.display = "none";
@@ -6097,7 +6118,7 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
 
     if (games.length === 1) {
       this._bodyEl.innerHTML = `
-        <div class="ct-slideshow" style="${containerStyle} background-image: url('${escapeHTML(gamingStatusArtUrl(games[0].art))}');"></div>`;
+        <div class="ct-slideshow" style="${containerStyle} background-image: ${escapeHTML(gamingStatusCssUrl(games[0].art))};"></div>`;
       return;
     }
 
@@ -6122,12 +6143,12 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
         100% { opacity: 0; z-index: 1; }
       }
     </style>
-    <div class="ct-slideshow" style="${containerStyle} background-image: url('${escapeHTML(gamingStatusArtUrl(games[0].art))}');">`;
+    <div class="ct-slideshow" style="${containerStyle} background-image: ${escapeHTML(gamingStatusCssUrl(games[0].art))};">`;
 
     games.forEach((g, index) => {
       const delay = index * t_slide;
       html += `
-        <div class="ct-slide" style="animation: ${anim_name} ${loop_duration}s infinite; animation-delay: ${delay}s; background-image: url('${escapeHTML(gamingStatusArtUrl(g.art))}');"></div>`;
+        <div class="ct-slide" style="animation: ${anim_name} ${loop_duration}s infinite; animation-delay: ${delay}s; background-image: ${escapeHTML(gamingStatusCssUrl(g.art))};"></div>`;
     });
     html += `</div>`;
 
@@ -7790,7 +7811,7 @@ class GamingStatusGamercardCard extends HTMLElement {
     // (the first of selectedGames), not a blend of all shown rows.
     const heroArt = selectedGames.length ? (selectedGames[0].game_hero_art || selectedGames[0].game_cover_art || "") : "";
     if (heroArt) {
-      this._bgEl.style.backgroundImage = `url("${gamingStatusEscapeHTML(heroArt)}")`;
+      this._bgEl.style.backgroundImage = gamingStatusCssUrl(heroArt);
       this._bgEl.style.display = "block";
       this._contentEl.classList.add("has-bg");
     } else {
