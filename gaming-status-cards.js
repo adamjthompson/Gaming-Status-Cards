@@ -7029,7 +7029,10 @@ class GamingStatusLibraryCard extends HTMLElement {
           #lb-total { font-size: 13px; color: var(--secondary-text-color); padding-bottom: 8px; }
           .lb-list { display: flex; flex-direction: column; gap: 8px; }
           .lb-list.scrollable { overflow-y: auto; }
-          .lb-row { display: flex; gap: 10px; border-radius: 4px; overflow: hidden; background: var(--secondary-background-color, rgba(120, 120, 120, 0.08)); padding: 8px; box-sizing: border-box; }
+          /* flex-shrink: 0 -- once the list is capped to scroll_after rows
+             it has a fixed height, and flex rows would otherwise shrink to
+             fit it, squashing the artwork compared with a short list. */
+          .lb-row { display: flex; gap: 10px; border-radius: 4px; overflow: hidden; background: var(--secondary-background-color, rgba(120, 120, 120, 0.08)); padding: 8px; box-sizing: border-box; flex-shrink: 0; }
           .lb-row.hero-layout { flex-direction: column; }
           .lb-art { object-fit: contain; flex-shrink: 0; display: block; }
           .lb-art-placeholder { border-radius: 4px; background: rgba(120, 120, 120, 0.12); }
