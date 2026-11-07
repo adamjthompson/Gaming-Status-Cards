@@ -6891,8 +6891,10 @@ class GamingStatusLibraryCard extends HTMLElement {
       // On unless unchecked, but its tab only appears when the library
       // actually has Epic games (see processData), so cards saved before
       // Epic existed don't grow an empty tab.
-      show_platform_epic: legacyPlatform ? false : config.show_platform_epic !== false,
-      show_platform_ubisoft: legacyPlatform ? false : config.show_platform_ubisoft !== false,
+      // A leftover single `platform` key only matters for a card saved before
+      // the checkboxes existed -- once any checkbox is saved, they win.
+      show_platform_epic: hasNewPlatformFields ? config.show_platform_epic !== false : !legacyPlatform,
+      show_platform_ubisoft: hasNewPlatformFields ? config.show_platform_ubisoft !== false : !legacyPlatform,
       exclude_zero_completion: config.exclude_zero_completion === true,
       // Opt-in -- adds a visible search box to the card, so it stays off
       // for existing cards unless explicitly turned on.
