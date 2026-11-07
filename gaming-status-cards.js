@@ -727,26 +727,64 @@ class GamingStatusCard extends HTMLElement {
         "playnite": { icon: "gaming-status:playnite", color: "255, 88, 51" },
         "gsa": { icon: "mdi:gamepad-square", color: "100, 50, 100" },
         "custom": { icon: "mdi:gamepad-square", color: "100, 50, 100" },
-        "discord": { icon: "gaming-status:discord", color: "88, 101, 242" }
+        "discord": { icon: "gaming-status:discord", color: "88, 101, 242" },
+        // Gaming Status Agent launchers with a logo of their own. `fg` is the
+        // logo color where white wouldn't show on the badge color.
+        "epic": { icon: "gaming-status:epic", color: "15, 72, 64" },
+        "ubisoft": { icon: "gaming-status:ubisoft", color: "0, 112, 255" },
+        "battlenet": { icon: "gaming-status:battlenet", color: "20, 142, 255" },
+        "gog": { icon: "gaming-status:gog", color: "134, 50, 138" },
+        "riot": { icon: "gaming-status:riot", color: "235, 0, 41" },
+        "ea": { icon: "gaming-status:ea", color: "255, 71, 71" },
+        "amazongames": { icon: "gaming-status:amazongames", color: "255, 153, 0", fg: "black" },
+        "roblox": { icon: "gaming-status:roblox", color: "51, 95, 255" },
+        "rockstar": { icon: "gaming-status:rockstar", color: "252, 175, 23", fg: "black" },
+        "lutris": { icon: "gaming-status:lutris", color: "255, 153, 0", fg: "black" },
+        "minecraft": { icon: "mdi:minecraft", color: "91, 135, 49" }
       };
+      // An Agent session's active_platform is its launcher label (lowercased
+      // here); these launchers have a badge of their own.
+      const GSA_LAUNCHER_BADGES = {
+        "epic": "epic",
+        "ubisoft": "ubisoft",
+        "battle.net": "battlenet",
+        "gog": "gog",
+        "riot games": "riot",
+        "ea": "ea",
+        "amazon games": "amazongames",
+        "roblox": "roblox",
+        "rockstar games": "rockstar",
+        "lutris": "lutris",
+        "minecraft": "minecraft",
+      };
+      const GSA_LAUNCHER_KEYS = Object.values(GSA_LAUNCHER_BADGES);
 
       let badgeIcon = "mdi:controller";
       let platformColor = "100, 50, 100";
+      let badgeFgCSS = "white";
 
-      // Find the first key that matches the platform string. A GSA game on
-      // a launcher with no badge of its own (Epic, GOG, ...) falls back to
-      // the raw platform key, so it still gets the GSA badge. A raw "gsa" key
-      // wins outright, since a GSA "Custom" launcher game is labelled "Custom"
-      // (GSA Steam/Xbox games carry "steam"/"xbox" keys instead).
+      // Find the first key that matches the platform string. A GSA game gets
+      // its launcher's badge when that launcher has one (Epic, GOG, ...), and
+      // the GSA badge otherwise (HoYoverse, Custom, ...). A raw "gsa" key
+      // otherwise wins outright, since a GSA "Custom" launcher game is
+      // labelled "Custom" (GSA Steam/Xbox games carry "steam"/"xbox" keys).
       const rawKey = entity.attributes.active_platform_key;
-      const matchedKey = (rawKey === "gsa" ? "gsa" : null)
-        || Object.keys(platformMap).find(key => platform.includes(key))
+      const gsaLabel = rawKey === "gsa"
+        ? Object.keys(GSA_LAUNCHER_BADGES).find(label => platform === label || platform.startsWith(label + " "))
+        : null;
+      const matchedKey = (gsaLabel ? GSA_LAUNCHER_BADGES[gsaLabel] : null)
+        || (rawKey === "gsa" ? "gsa" : null)
+        // Agent launchers only ever match through an Agent session (above):
+        // matching them by substring could catch a player named e.g.
+        // "epicfan" -- or, for "ea", almost anything ("steam").
+        || Object.keys(platformMap).find(key => !GSA_LAUNCHER_KEYS.includes(key) && platform.includes(key))
         || (GAMING_STATUS_GSA_LABEL_ALIASES.some(a => platform.includes(a)) ? "gsa" : null)
         || (platformMap[rawKey] ? rawKey : null);
       
       if (matchedKey) {
         badgeIcon = platformMap[matchedKey].icon;
         platformColor = platformMap[matchedKey].color;
+        badgeFgCSS = platformMap[matchedKey].fg || "white";
       }
 
       let platformColorCSS = `rgb(${platformColor})`;
@@ -822,6 +860,7 @@ class GamingStatusCard extends HTMLElement {
         filterCSS,
         platformColorCSS,
         badgeIcon,
+        badgeFgCSS,
         isOffline,
       };
     });
@@ -867,7 +906,8 @@ class GamingStatusCard extends HTMLElement {
           
           .badge { position: absolute; top: -3px; right: -3px; width: 16px; height: 16px; background: var(--platform-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: none; }
           .player-card.offline .badge { background: grey; }
-          .badge ha-icon { --mdc-icon-size: 12px; margin-top: -2px; color: white; }
+          .badge ha-icon { --mdc-icon-size: 12px; margin-top: -2px; color: var(--badge-fg, white); }
+          .player-card.offline .badge ha-icon { color: white; }
           .badge img.custom-badge { width: 14px; height: 14px; object-fit: contain; }
 
           .text-content { display: flex; flex-direction: column; flex-grow: 1; min-width: 0; }
@@ -932,7 +972,7 @@ class GamingStatusCard extends HTMLElement {
         const bgLayer2 = player.picture && player.picture !== player.cover ? `, url('${escapeHTML(gamingStatusArtUrl(player.picture))}')` : '';
         
         return `
-        <div class="player-card ${statusClass}${readOnly ? " read-only" : ""}" style="--bg-url: ${bgLayer1}${bgLayer2}; --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS};" data-entity-id="${player.entity_id}">
+        <div class="player-card ${statusClass}${readOnly ? " read-only" : ""}" style="--bg-url: ${bgLayer1}${bgLayer2}; --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS}; --badge-fg: ${player.badgeFgCSS};" data-entity-id="${player.entity_id}">
           <div class="content-wrapper">
             <div class="avatar-container">
               ${player.picture
