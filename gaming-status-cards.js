@@ -6842,8 +6842,8 @@ class GamingStatusLibraryCard extends HTMLElement {
   // before they existed don't grow empty tabs.
   static OPTIONAL_PLATFORMS = ["epic", "ubisoft"];
   static PLATFORM_ICONS = { steam: "mdi:steam", xbox: "mdi:microsoft-xbox", playstation: "mdi:sony-playstation" };
-  // Brand colors from Simple Icons (both black/white brands).
-  static PLATFORM_TINTS = { ...GAMING_STATUS_PLATFORM_TINTS, epic: "49, 49, 49", ubisoft: "0, 0, 0" };
+  // Selected-tab colors: Epic #0f4840, Ubisoft #0070FF.
+  static PLATFORM_TINTS = { ...GAMING_STATUS_PLATFORM_TINTS, epic: "15, 72, 64", ubisoft: "0, 112, 255" };
 
   static tabIconHTML(platform) {
     return GAMING_STATUS_BRAND_ICONS[platform]
@@ -7122,12 +7122,7 @@ class GamingStatusLibraryCard extends HTMLElement {
     this._tabsEl.innerHTML = enabledPlatforms.map(p => {
       const isActive = p === this._activePlatform;
       const bg = isActive ? `rgb(${GamingStatusLibraryCard.PLATFORM_TINTS[p]})` : "rgba(120, 120, 120, 0.15)";
-      // Epic's and Ubisoft's brand colors are near-black, barely different
-      // from an inactive tab on a dark theme, so their active tab also gets
-      // an outline.
-      const ring = isActive && GamingStatusLibraryCard.OPTIONAL_PLATFORMS.includes(p)
-        ? " box-shadow: 0 0 0 2px var(--primary-color);" : "";
-      return `<div class="lb-tab" data-platform="${p}" style="background: ${bg};${ring}">${GamingStatusLibraryCard.tabIconHTML(p)}</div>`;
+      return `<div class="lb-tab" data-platform="${p}" style="background: ${bg};">${GamingStatusLibraryCard.tabIconHTML(p)}</div>`;
     }).join("");
 
     this._tabsEl.querySelectorAll(".lb-tab").forEach((el) => {
