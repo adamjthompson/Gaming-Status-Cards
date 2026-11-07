@@ -100,6 +100,27 @@ function gamingStatusArtUrl(url) {
   return url.slice(idx);
 }
 
+// A CSS `url("...")` value for an image URL from entity data (artwork,
+// avatars), with gamingStatusArtUrl's same-origin rewrite applied.
+// Characters that could close the string or the url() and smuggle in more
+// CSS (quotes, backslash, parentheses, control characters) are written as
+// CSS hex escapes, which the browser decodes back to exactly the original
+// characters -- so every real URL loads just as before. HTML escaping alone
+// isn't enough inside style="...": the HTML parser decodes &#39; back to '
+// before CSS ever sees it.
+//
+// Assign the result to element.style directly; inside an HTML attribute,
+// also pass it through gamingStatusEscapeHTML (its double quotes become
+// &quot;, which the HTML parser turns back into ").
+function gamingStatusCssUrl(url) {
+  if (!url || typeof url !== "string") return "none";
+  const escaped = gamingStatusArtUrl(url).replace(
+    /[\\"'()\u0000-\u001f\u007f]/g,
+    (c) => `\\${c.charCodeAt(0).toString(16)} `
+  );
+  return `url("${escaped}")`;
+}
+
 // ====================================================================
 // SHARED: PLAYER ENTITY DROPDOWNS (Single Player mode)
 // ====================================================================
@@ -248,13 +269,25 @@ function gamingStatusWireResize(contentEl, rerender) {
   return ro;
 }
 
-// Returns contentEl's current width, or schedules a rAF retry (via
-// `rerender`) and returns 0 if the container hasn't been laid out yet (e.g.
-// a card added to a not-yet-visible tab). Callers should bail out of
+// Returns the card's chart container width, or 0 if it hasn't been laid out
+// yet (e.g. a card added to a not-yet-visible tab, a view you've navigated
+// away from, or a hidden conditional card). Callers should bail out of
 // rendering whenever this returns a falsy value.
-function gamingStatusChartWidth(contentEl, rerender) {
-  const VW = contentEl.clientWidth;
-  if (!VW) requestAnimationFrame(rerender);
+//
+// The card's ResizeObserver (wired in _ensureShell() before the first
+// render) re-renders as soon as the container gets a real width, so nothing
+// needs to poll. Only without one does this retry on the next frame, and
+// only a few times: Home Assistant keeps views you've left in memory, so a
+// card that stays hidden would otherwise re-render every frame forever.
+const GAMING_STATUS_CHART_WIDTH_RETRIES = 10;
+function gamingStatusChartWidth(card) {
+  const VW = card._contentEl.clientWidth;
+  if (VW) {
+    card._widthRetries = 0;
+  } else if (!card._ro && (card._widthRetries || 0) < GAMING_STATUS_CHART_WIDTH_RETRIES) {
+    card._widthRetries = (card._widthRetries || 0) + 1;
+    requestAnimationFrame(gamingStatusRerenderer(card));
+  }
   return VW;
 }
 
@@ -968,8 +1001,8 @@ class GamingStatusCard extends HTMLElement {
         const safeState = escapeHTML(player.state);
         const safeSecondary = escapeHTML(player.secondary);
         
-        const bgLayer1 = player.cover ? `url('${escapeHTML(gamingStatusArtUrl(player.cover))}')` : 'none';
-        const bgLayer2 = player.picture && player.picture !== player.cover ? `, url('${escapeHTML(gamingStatusArtUrl(player.picture))}')` : '';
+        const bgLayer1 = player.cover ? escapeHTML(gamingStatusCssUrl(player.cover)) : 'none';
+        const bgLayer2 = player.picture && player.picture !== player.cover ? `, ${escapeHTML(gamingStatusCssUrl(player.picture))}` : '';
         
         return `
         <div class="player-card ${statusClass}${readOnly ? " read-only" : ""}" style="--bg-url: ${bgLayer1}${bgLayer2}; --card-accent-color: ${player.accentColorCSS}; --card-gradient-color: ${player.gradientColorCSS}; --card-filter: ${player.filterCSS}; --platform-color: ${player.platformColorCSS}; --badge-fg: ${player.badgeFgCSS};" data-entity-id="${player.entity_id}">
@@ -1462,7 +1495,7 @@ class GamingSlideshowCard extends HTMLElement {
       let html = `<div style="position: absolute; bottom: 10px; right: 10px; display: flex; z-index: 2;">`;
       players.forEach((badge) => {
         if (badge && badge.isImage && badge.content) {
-          html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-image: url('${gamingStatusEscapeHTML(gamingStatusArtUrl(badge.content))}'); background-size: cover; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;"></div>`;
+          html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-image: ${gamingStatusEscapeHTML(gamingStatusCssUrl(badge.content))}; background-size: cover; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;"></div>`;
         } else if (badge && !badge.isImage && badge.content) {
           html += `<div style="width: 40px; height: 40px; border-radius: 50%; background-color: rgba(30, 30, 30, 0.8); color: white; font-family: sans-serif; font-size: 22px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-left: 5px;">${gamingStatusEscapeHTML(badge.content)}</div>`;
         }
@@ -1473,7 +1506,7 @@ class GamingSlideshowCard extends HTMLElement {
 
     if (data.length === 1) {
       this.content.innerHTML = `
-        <div style="width: 100%; height: 100%; background-image: url('${gamingStatusEscapeHTML(gamingStatusArtUrl(data[0].art))}'); background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
+        <div style="width: 100%; height: 100%; background-image: ${gamingStatusEscapeHTML(gamingStatusCssUrl(data[0].art))}; background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
         ${getAvatarHtml(data[0].players)}
       `;
       return;
@@ -1496,7 +1529,7 @@ class GamingSlideshowCard extends HTMLElement {
     const anim_name = `anim_${item_ids}`;
 
     // Eliminate first-load flash by setting the first slide as the static container background
-    this.content.style.backgroundImage = `url('${gamingStatusEscapeHTML(gamingStatusArtUrl(data[0].art))}')`;
+    this.content.style.backgroundImage = gamingStatusCssUrl(data[0].art);
     this.content.style.backgroundSize = bgSize;
     this.content.style.backgroundPosition = "center";
     this.content.style.backgroundRepeat = bgRepeat;
@@ -1517,7 +1550,7 @@ class GamingSlideshowCard extends HTMLElement {
       const delay = index * t_slide;
       html += `
         <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; z-index: 1; animation: ${anim_name} ${loop_duration}s infinite; animation-delay: ${delay}s;">
-          <div style="width: 100%; height: 100%; background-image: url('${gamingStatusEscapeHTML(gamingStatusArtUrl(g.art))}'); background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
+          <div style="width: 100%; height: 100%; background-image: ${gamingStatusEscapeHTML(gamingStatusCssUrl(g.art))}; background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
           ${getAvatarHtml(g.players)}
         </div>`;
     });
@@ -1950,7 +1983,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
   _renderChart(dailyData, groups) {
     if (!this._contentEl) return;
     this._lastRenderArgs = [dailyData, groups];
-    const VW = gamingStatusChartWidth(this._contentEl, gamingStatusRerenderer(this));
+    const VW = gamingStatusChartWidth(this);
     if (!VW) return;
 
     if (!groups.length || dailyData.every(d => !Object.keys(d.groups).length)) {
@@ -2415,7 +2448,7 @@ class GamingStatusDonutCard extends HTMLElement {
   _renderChart(platforms, platformTotals, grandTotal) {
     if (!this._contentEl) return;
     this._lastRenderArgs = [platforms, platformTotals, grandTotal];
-    const VW = gamingStatusChartWidth(this._contentEl, gamingStatusRerenderer(this));
+    const VW = gamingStatusChartWidth(this);
     if (!VW) return;
 
     if (grandTotal <= 0) {
@@ -3269,6 +3302,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       // "(gamertag)" suffix they never asked for.
       show_gamertags: config.show_gamertags === true,
     };
+    this._lastWatchKey = "";
     this._lastHash = "";
   }
 
@@ -3292,15 +3326,9 @@ class GamingStatusRecentActivityCard extends HTMLElement {
 
     const isAchievements = this.config.event_type === "achievements";
     const trackingEnabled = isAchievements ? gamingStatusIsAchievementTrackingEnabled(hass) : true;
-    const attrKey = isAchievements ? "recent_achievements" : "recent_sessions";
-    const dateKey = isAchievements ? "unlocked_at" : "start_time";
+    const colorExtraction = gamingStatusIsColorExtractionEnabled(hass);
 
-    const hash = entityIds.map(id => {
-      const items = hass.states[id]?.attributes?.[attrKey] || [];
-      const iconFlags = isAchievements ? items.map(u => u.icon_url ? "1" : "0").join("") : "";
-      return `${id}:${items.length}:${items[0] ? items[0][dateKey] : ""}:${iconFlags}`;
-    }).join(",")
-      + "|" + this.config.event_type
+    const configKey = this.config.event_type
       + "|" + this.config.display_mode
       + "|" + trackingEnabled
       + "|" + this.config.max_sessions
@@ -3316,16 +3344,34 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       + "|" + this.config.show_header
       + "|" + [this.config.show_column_avatar, this.config.show_column_player, this.config.show_column_game, this.config.show_column_platform, this.config.show_column_duration, this.config.show_column_date, this.config.show_column_start, this.config.show_column_end, this.config.show_column_achievement, this.config.show_column_time].join(",")
       + "|" + [this.config.show_hover_player, this.config.show_hover_platform, this.config.show_hover_game, this.config.show_hover_achievement, this.config.show_hover_description, this.config.show_hover_datetime].join(",")
-      + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_playnite, this.config.show_platform_gsa, this.config.show_platform_custom, this.config.show_platform_discord].join(",");
+      + "|" + [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_playnite, this.config.show_platform_gsa, this.config.show_platform_custom, this.config.show_platform_discord].join(",")
+      + "|" + trackingEnabled
+      + "|" + colorExtraction;
 
+    // Two stages, so a Home Assistant update that doesn't touch this card
+    // costs a few lookups, while any change to what it shows -- a renamed
+    // game, late-arriving artwork, a new avatar or gamertag -- re-renders.
+    // 1) Cheap: has anything this card reads been updated? That's each
+    //    player's sensor plus its per-platform siblings (rows show the
+    //    platform's own avatar from those).
+    const watchKey = entityIds.map(id => {
+      const base = id.replace(/_master$/, "");
+      const siblings = Object.keys(GAMING_STATUS_PLATFORM_LABELS)
+        .map(p => hass.states[`${base}_${p}`]?.last_updated || "").join(":");
+      return `${id}@${hass.states[id]?.last_updated || ""}:${siblings}`;
+    }).join(",") + "|" + configKey;
+    if (this._lastWatchKey === watchKey) return;
+    this._lastWatchKey = watchKey;
+
+    // 2) Exact: rebuild the rows and render only if their content differs.
+    const rows = isAchievements
+      ? (trackingEnabled ? this._processAchievements(entityIds) : [])
+      : this._processSessions(entityIds);
+    const hash = JSON.stringify(rows) + "|" + configKey;
     if (this._lastHash === hash) return;
     this._lastHash = hash;
 
-    if (isAchievements) {
-      this.render(trackingEnabled ? this._processAchievements(entityIds) : [], trackingEnabled);
-    } else {
-      this.render(this._processSessions(entityIds), true);
-    }
+    this.render(rows, isAchievements ? trackingEnabled : true);
   }
 
   _processSessions(entityIds) {
@@ -3671,7 +3717,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         return `<div class="${cls}" style="flex: ${c.flex};">${value}</div>`;
       }).join("");
 
-      return `<div class="ract-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--ract-bg-url: url('${escapeHTML(gamingStatusArtUrl(bgUrl))}');${tintStyle}` : ""}">${cellsHTML}</div>`;
+      return `<div class="ract-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--ract-bg-url: ${escapeHTML(gamingStatusCssUrl(bgUrl))};${tintStyle}` : ""}">${cellsHTML}</div>`;
     }).join("");
   }
 
@@ -3760,7 +3806,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         return `<div class="${cls}" style="flex: ${c.flex};"${extraAttrs}>${value}</div>`;
       }).join("");
 
-      return `<div class="ract-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--ract-bg-url: url('${escapeHTML(gamingStatusArtUrl(bgUrl))}');${tintStyle}` : ""}">${cellsHTML}</div>`;
+      return `<div class="ract-row ${hasBg ? "has-bg" : "no-bg"}" style="${hasBg ? `--ract-bg-url: ${escapeHTML(gamingStatusCssUrl(bgUrl))};${tintStyle}` : ""}">${cellsHTML}</div>`;
     }).join("");
 
     if (hoverDescriptionEnabled) {
@@ -5525,7 +5571,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
     // #pt-content in a separate absolutely-positioned layer so the filter
     // never blurs the actual trophy icons/text on top of it).
     if (activeGame && this.config.show_active_artwork && activeGame.game_hero_art) {
-      this._bgEl.style.backgroundImage = `url("${gamingStatusEscapeHTML(activeGame.game_hero_art)}")`;
+      this._bgEl.style.backgroundImage = gamingStatusCssUrl(activeGame.game_hero_art);
       this._bgEl.style.display = "block";
     } else {
       this._bgEl.style.display = "none";
@@ -5878,11 +5924,14 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
     this._lastCheapFingerprint = cheapFingerprint;
 
     const games = stateObj ? (stateObj.attributes.games || []) : null;
-    const isComplete = this.config.filter !== "near";
+    // Hash exactly what render() will show (title, platform, console,
+    // percent, art), so late-arriving artwork or a console change re-renders
+    // too -- not just a percent or title change.
+    const rows = games === null ? null : this.processData(games);
 
     const hash = [
       targetEntityId,
-      games ? games.filter(g => isComplete ? (g.percent || 0) >= 100 : (g.percent || 0) < 100).map(g => `${g.title}:${g.platform}:${g.percent}:${g._activity_ts || ""}`).join(",") : "none",
+      JSON.stringify(rows),
       this.config.filter,
       this.config.max_games,
       this.config.display_mode,
@@ -5902,7 +5951,7 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
     if (this._lastHash === hash) return;
     this._lastHash = hash;
 
-    this.render(games === null ? null : this.processData(games));
+    this.render(rows);
   }
 
   // Unified row shape covers every display mode at once (art for
@@ -6085,7 +6134,7 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
 
     if (games.length === 1) {
       this._bodyEl.innerHTML = `
-        <div class="ct-slideshow" style="${containerStyle} background-image: url('${escapeHTML(gamingStatusArtUrl(games[0].art))}');"></div>`;
+        <div class="ct-slideshow" style="${containerStyle} background-image: ${escapeHTML(gamingStatusCssUrl(games[0].art))};"></div>`;
       return;
     }
 
@@ -6110,12 +6159,12 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
         100% { opacity: 0; z-index: 1; }
       }
     </style>
-    <div class="ct-slideshow" style="${containerStyle} background-image: url('${escapeHTML(gamingStatusArtUrl(games[0].art))}');">`;
+    <div class="ct-slideshow" style="${containerStyle} background-image: ${escapeHTML(gamingStatusCssUrl(games[0].art))};">`;
 
     games.forEach((g, index) => {
       const delay = index * t_slide;
       html += `
-        <div class="ct-slide" style="animation: ${anim_name} ${loop_duration}s infinite; animation-delay: ${delay}s; background-image: url('${escapeHTML(gamingStatusArtUrl(g.art))}');"></div>`;
+        <div class="ct-slide" style="animation: ${anim_name} ${loop_duration}s infinite; animation-delay: ${delay}s; background-image: ${escapeHTML(gamingStatusCssUrl(g.art))};"></div>`;
     });
     html += `</div>`;
 
@@ -6993,10 +7042,14 @@ class GamingStatusLibraryCard extends HTMLElement {
     this._lastCheapFingerprint = cheapFingerprint;
 
     const games = stateObj ? (stateObj.attributes.games || []) : null;
+    // Hash exactly what render() is given (each platform's filtered,
+    // sorted games with their art, console and counts), so late-arriving
+    // artwork or a count change re-renders too -- not just title/percent.
+    const byPlatform = games === null ? null : this.processData(games);
 
     const hash = [
       targetEntityId,
-      games ? games.filter(g => this.config[`show_platform_${g.platform}`] !== false).map(g => `${g.title}:${g.platform}:${g.percent}`).join(",") : "none",
+      JSON.stringify(byPlatform),
       [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_epic, this.config.show_platform_ubisoft].join(","),
       this.config.exclude_zero_completion,
       this.config.show_search,
@@ -7012,7 +7065,7 @@ class GamingStatusLibraryCard extends HTMLElement {
     if (this._lastHash === hash) return;
     this._lastHash = hash;
 
-    this.render(games === null ? null : this.processData(games));
+    this.render(byPlatform);
   }
 
   // Returns {platformKey: games[]}, one entry per enabled platform, each
@@ -7778,7 +7831,7 @@ class GamingStatusGamercardCard extends HTMLElement {
     // (the first of selectedGames), not a blend of all shown rows.
     const heroArt = selectedGames.length ? (selectedGames[0].game_hero_art || selectedGames[0].game_cover_art || "") : "";
     if (heroArt) {
-      this._bgEl.style.backgroundImage = `url("${gamingStatusEscapeHTML(heroArt)}")`;
+      this._bgEl.style.backgroundImage = gamingStatusCssUrl(heroArt);
       this._bgEl.style.display = "block";
       this._contentEl.classList.add("has-bg");
     } else {
