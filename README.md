@@ -258,10 +258,10 @@ A scrollable, artwork-and-stats browser of a single player's full game library f
 **UI Configuration Options:**
 * **Card Title:** Optional title displayed above the list.
 * **Player:** A single player dropdown.
-* **Platforms:** Steam, Xbox, PlayStation, and/or Epic Games — independently check/uncheck which to include. With more than one enabled, icon tabs appear so you can switch between them live (each game row's available stat fields depend on whichever tab is currently active). Epic Games is offered once a player has an Epic library sensor (an Epic account set in Gaming Status), and its tab only appears when that player's library actually has Epic games. The Epic library lists the games on the player's public Epic profile, which are the games with at least one Epic achievement unlocked.
+* **Platforms:** Steam, Xbox, PlayStation, Epic Games, and/or Ubisoft — independently check/uncheck which to include. With more than one enabled, icon tabs appear so you can switch between them live (each game row's available stat fields depend on whichever tab is currently active). Epic Games is offered once a player has an Epic library sensor (an Epic account set in Gaming Status), and Ubisoft once a player has a Ubisoft library sensor (sent by Gaming Status Agent); each tab only appears when that player's library actually has games on it. The Epic library lists the games on the player's public Epic profile (those with at least one Epic achievement unlocked); the Ubisoft library lists the games with achievement data on the player's gaming PC.
 * **Exclude Games With Zero Completion:** Hide games with no progress at all (unchecked by default — shows everything).
 * **Show Search Box:** Adds a search field next to the platform tabs (unchecked by default) that filters the current tab's list live as you type a partial title — it doesn't require opening the editor, and switching tabs keeps whatever you've typed.
-* **Sort By:** **Title (A-Z)** (default), **Completion %** (highest first), or **Recently Played**. "Recently Played" uses Xbox's true last-played time, but PlayStation/Steam's last-achievement-earned time, since that's the only recency signal those platforms' library data provides. Epic's library data has no recency signal, so Epic games keep their library order.
+* **Sort By:** **Title (A-Z)** (default), **Completion %** (highest first), or **Recently Played**. "Recently Played" uses Xbox's true last-played time, but PlayStation/Steam's last-achievement-earned time, since that's the only recency signal those platforms' library data provides. Ubisoft uses each game's last unlock. Epic's library data has no recency signal, so Epic games keep their library order.
 * **Artwork:** Same **Cover/Grid (Vertical Portrait)** (default) / **Hero (Horizontal Landscape)** / **Logo (Transparent Title)** / **Icon (Small Square)** options as the Completion Tracker card's Grid/Slideshow modes (Logo/Icon remain available here, since this card is a static list, not a crossfading slideshow). Cover/Logo/Icon display to the left of each game's data, boxed to a fixed size with square corners; Hero displays above it instead, scaled to the row's full width at its own natural aspect ratio, since a wide banner doesn't suit a narrow side thumbnail.
 * **Scroll After (Entries):** How many games show before the list scrolls instead of growing taller (default: 4, 1–50).
 * **Show Total:** Toggle a "`N` games" count above the list.
@@ -522,6 +522,7 @@ show_platform_steam: true # Independently toggle which platforms to include -- t
 show_platform_xbox: true
 show_platform_playstation: true
 show_platform_epic: true # The Epic tab only appears when the player's library has Epic games
+show_platform_ubisoft: true # Likewise for Ubisoft
 exclude_zero_completion: false # Set to true to hide games with no progress at all
 show_search: false # Set to true to add a live title-search field next to the platform tabs
 sort_by: title # Options: title, completion, recent
@@ -530,7 +531,7 @@ scroll_after: 4 # Number of entries before the list scrolls (editor: 1-50)
 show_total: true # Set to false to hide the "N games" count above the list
 show_field_title: true
 show_field_percent: true
-show_field_counts: true # Trophy Counts (PlayStation) or Achievement Count (Steam/Xbox/Epic), depending on the active tab
+show_field_counts: true # Trophy Counts (PlayStation) or Achievement Count (Steam/Xbox/Epic/Ubisoft), depending on the active tab
 ```
 
 **Gamercard:**
