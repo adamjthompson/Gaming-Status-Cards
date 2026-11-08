@@ -7149,9 +7149,14 @@ class GamingStatusLibraryCard extends HTMLElement {
       // state, then re-render the active tab's list directly -- never
       // touches hass/processData, so typing can't lose focus/cursor
       // position to an unrelated state update mid-keystroke.
+      // Debounced: rebuilding every row (and its artwork) per keystroke
+      // makes typing lag in a library of a thousand-plus games.
       this._searchInputEl.addEventListener("input", (ev) => {
         this._searchQuery = ev.target.value.trim().toLowerCase();
-        this._renderList(this._byPlatform[this._activePlatform]);
+        clearTimeout(this._searchTimer);
+        this._searchTimer = setTimeout(() => {
+          if (this._byPlatform) this._renderList(this._byPlatform[this._activePlatform]);
+        }, 120);
       });
       this.content = this._bodyEl;
     }
@@ -8155,88 +8160,99 @@ class GamingStatusGamercardEditor extends HTMLElement {
 // ====================================================================
 
 // Card 1
-customElements.define("gaming-status-card", GamingStatusCard);
-customElements.define("gaming-status-card-editor", GamingStatusCardEditor);
+// Registration is skipped for anything already defined, so loading this
+// script twice (a duplicate dashboard resource, or the public page picking
+// up a new cards URL) doesn't throw on the first define and abort the rest.
+function gamingStatusDefine(name, cls) {
+  if (!customElements.get(name)) customElements.define(name, cls);
+}
+function gamingStatusAddCustomCard(info) {
+  window.customCards = window.customCards || [];
+  if (!window.customCards.some(c => c.type === info.type)) window.customCards.push(info);
+}
+
+gamingStatusDefine("gaming-status-card", GamingStatusCard);
+gamingStatusDefine("gaming-status-card-editor", GamingStatusCardEditor);
 
 // Card 2
-customElements.define("gaming-slideshow-card", GamingSlideshowCard);
-customElements.define(
+gamingStatusDefine("gaming-slideshow-card", GamingSlideshowCard);
+gamingStatusDefine(
   "gaming-slideshow-card-editor",
   GamingSlideshowCardEditor
 );
 
 // Card 3
-customElements.define("gaming-status-chart-card", GamingStatusChartCard);
-customElements.define("gaming-status-chart-editor", GamingStatusChartEditor);
+gamingStatusDefine("gaming-status-chart-card", GamingStatusChartCard);
+gamingStatusDefine("gaming-status-chart-editor", GamingStatusChartEditor);
 
 // Card 4
-customElements.define("gaming-status-donut-card", GamingStatusDonutCard);
-customElements.define("gaming-status-donut-editor", GamingStatusDonutEditor);
+gamingStatusDefine("gaming-status-donut-card", GamingStatusDonutCard);
+gamingStatusDefine("gaming-status-donut-editor", GamingStatusDonutEditor);
 
 // Card 5
-customElements.define("gaming-status-leaderboard-card", GamingStatusLeaderboardCard);
-customElements.define("gaming-status-leaderboard-editor", GamingStatusLeaderboardEditor);
+gamingStatusDefine("gaming-status-leaderboard-card", GamingStatusLeaderboardCard);
+gamingStatusDefine("gaming-status-leaderboard-editor", GamingStatusLeaderboardEditor);
 
 // Card 6
-customElements.define("gaming-status-game-chart-card", GamingStatusGameChartCard);
-customElements.define("gaming-status-game-chart-editor", GamingStatusGameChartEditor);
+gamingStatusDefine("gaming-status-game-chart-card", GamingStatusGameChartCard);
+gamingStatusDefine("gaming-status-game-chart-editor", GamingStatusGameChartEditor);
 
 // Card 7
-customElements.define("gaming-status-recent-sessions-card", GamingStatusRecentSessionsCard);
-customElements.define("gaming-status-recent-sessions-editor", GamingStatusRecentSessionsEditor);
+gamingStatusDefine("gaming-status-recent-sessions-card", GamingStatusRecentSessionsCard);
+gamingStatusDefine("gaming-status-recent-sessions-editor", GamingStatusRecentSessionsEditor);
 
 // Card 7B
-customElements.define("gaming-status-recent-achievements-card", GamingStatusRecentAchievementsCard);
-customElements.define("gaming-status-recent-achievements-editor", GamingStatusRecentAchievementsEditor);
+gamingStatusDefine("gaming-status-recent-achievements-card", GamingStatusRecentAchievementsCard);
+gamingStatusDefine("gaming-status-recent-achievements-editor", GamingStatusRecentAchievementsEditor);
 
 // Card 8
-customElements.define("gaming-status-game-management-card", GamingStatusGameManagementCard);
-customElements.define("gaming-status-game-management-editor", GamingStatusGameManagementEditor);
+gamingStatusDefine("gaming-status-game-management-card", GamingStatusGameManagementCard);
+gamingStatusDefine("gaming-status-game-management-editor", GamingStatusGameManagementEditor);
 
 // Card 9
-customElements.define("gaming-status-achievement-icons-card", GamingStatusAchievementIconsCard);
-customElements.define("gaming-status-achievement-icons-editor", GamingStatusAchievementIconsEditor);
+gamingStatusDefine("gaming-status-achievement-icons-card", GamingStatusAchievementIconsCard);
+gamingStatusDefine("gaming-status-achievement-icons-editor", GamingStatusAchievementIconsEditor);
 
 // Card 10
-customElements.define("gaming-status-playstation-trophies-card", GamingStatusPlaystationTrophiesCard);
-customElements.define("gaming-status-playstation-trophies-editor", GamingStatusPlaystationTrophiesEditor);
+gamingStatusDefine("gaming-status-playstation-trophies-card", GamingStatusPlaystationTrophiesCard);
+gamingStatusDefine("gaming-status-playstation-trophies-editor", GamingStatusPlaystationTrophiesEditor);
 
 // Card 11
-customElements.define("gaming-status-completion-card", GamingStatusCompletionCard);
-customElements.define("gaming-status-completion-editor", GamingStatusCompletionEditor);
+gamingStatusDefine("gaming-status-completion-card", GamingStatusCompletionCard);
+gamingStatusDefine("gaming-status-completion-editor", GamingStatusCompletionEditor);
 
 // Card 12
-customElements.define("gaming-status-near-completion-card", GamingStatusNearCompletionCard);
-customElements.define("gaming-status-near-completion-editor", GamingStatusNearCompletionEditor);
+gamingStatusDefine("gaming-status-near-completion-card", GamingStatusNearCompletionCard);
+gamingStatusDefine("gaming-status-near-completion-editor", GamingStatusNearCompletionEditor);
 
 // Card 13
-customElements.define("gaming-status-stats-card", GamingStatusStatsCard);
-customElements.define("gaming-status-stats-editor", GamingStatusStatsEditor);
+gamingStatusDefine("gaming-status-stats-card", GamingStatusStatsCard);
+gamingStatusDefine("gaming-status-stats-editor", GamingStatusStatsEditor);
 
 // Card 14
-customElements.define("gaming-status-library-card", GamingStatusLibraryCard);
-customElements.define("gaming-status-library-editor", GamingStatusLibraryEditor);
+gamingStatusDefine("gaming-status-library-card", GamingStatusLibraryCard);
+gamingStatusDefine("gaming-status-library-editor", GamingStatusLibraryEditor);
 
 // Card 15
-customElements.define("gaming-status-gamercard-card", GamingStatusGamercardCard);
-customElements.define("gaming-status-gamercard-editor", GamingStatusGamercardEditor);
+gamingStatusDefine("gaming-status-gamercard-card", GamingStatusGamercardCard);
+gamingStatusDefine("gaming-status-gamercard-editor", GamingStatusGamercardEditor);
 
 // Card 3 (merged: Weekly Hours + Weekly Games)
-customElements.define("gaming-status-weekly-activity-card", GamingStatusWeeklyActivityCard);
-customElements.define("gaming-status-weekly-activity-editor", GamingStatusWeeklyActivityEditor);
+gamingStatusDefine("gaming-status-weekly-activity-card", GamingStatusWeeklyActivityCard);
+gamingStatusDefine("gaming-status-weekly-activity-editor", GamingStatusWeeklyActivityEditor);
 
 // Card 7 (merged: Recent Sessions + Recent Achievements + Achievement Icons)
-customElements.define("gaming-status-recent-activity-card", GamingStatusRecentActivityCard);
-customElements.define("gaming-status-recent-activity-editor", GamingStatusRecentActivityEditor);
+gamingStatusDefine("gaming-status-recent-activity-card", GamingStatusRecentActivityCard);
+gamingStatusDefine("gaming-status-recent-activity-editor", GamingStatusRecentActivityEditor);
 
 // Card 11 (merged: 100% Completion + Near Completion)
-customElements.define("gaming-status-completion-tracker-card", GamingStatusCompletionTrackerCard);
-customElements.define("gaming-status-completion-tracker-editor", GamingStatusCompletionTrackerEditor);
+gamingStatusDefine("gaming-status-completion-tracker-card", GamingStatusCompletionTrackerCard);
+gamingStatusDefine("gaming-status-completion-tracker-editor", GamingStatusCompletionTrackerEditor);
 
 // Inject into UI
 window.customCards = window.customCards || [];
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-card",
   name: "Gaming Status - List",
   preview: true,
@@ -8244,14 +8260,14 @@ window.customCards.push({
     "A dependency-free unified dashboard list card for gaming status.",
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-slideshow-card",
   name: "Gaming Status - Slideshow",
   preview: true,
   description: "A dynamic CSS-animated slideshow of active game hero images.",
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-weekly-activity-card",
   name: "Gaming Status - Weekly Activity",
   preview: true,
@@ -8259,63 +8275,63 @@ window.customCards.push({
     "A stacked bar chart of daily gaming hours, stacked by player or by game.",
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-donut-card",
   name: "Gaming Status - Platforms",
   preview: true,
   description: "Aggregate platform split bar chart (Xbox / PlayStation / PC) across all players."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-leaderboard-card",
   name: "Gaming Status - Leaderboard",
   preview: true,
   description: "A dynamic standalone bar graph ranking the top players across chosen metrics."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-recent-activity-card",
   name: "Gaming Status - Recent Activity",
   preview: true,
   description: "A configurable table (or icon grid) of recently completed sessions or unlocked achievements/trophies, with optional blurred artwork backgrounds."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-game-management-card",
   name: "Gaming Status - Game Management",
   preview: true,
   description: "Add a session, or rename, reassign, or permanently delete a game in a player's stored play history."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-playstation-trophies-card",
   name: "Gaming Status - PlayStation Trophies",
   preview: true,
   description: "A single player's lifetime Bronze/Silver/Gold/Platinum trophy totals."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-completion-tracker-card",
   name: "Gaming Status - Completion Tracker",
   preview: true,
   description: "A single player's 100%-complete or near-complete games, as a grid, slideshow, or ranked list."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-stats-card",
   name: "Gaming Status - Stats",
   preview: true,
   description: "A configurable two-column summary of a single player's completion/trophy/achievement stats."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-library-card",
   name: "Gaming Status - Library",
   preview: true,
   description: "A scrollable, artwork-and-stats list of a single player's game library for one platform."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-gamercard-card",
   name: "Gaming Status - Gamercard",
   preview: true,
