@@ -28,9 +28,21 @@ function gamingStatusNormalizePalette(config) {
   return config.custom_colors && String(config.custom_colors).trim() ? "custom" : "vivid";
 }
 
+// Splits on commas outside parentheses, so "rgb(255,190,11), #3a86ff" (the
+// format the editors' placeholders show) stays two colors, and keeps only
+// entries the browser accepts as a color -- these are written straight into
+// SVG fill and style attributes.
+function gamingStatusParseCustomColors(raw) {
+  const canCheck = typeof CSS !== "undefined" && typeof CSS.supports === "function";
+  return String(raw || "")
+    .split(/,(?![^(]*\))/)
+    .map(c => c.trim())
+    .filter(c => c && (canCheck ? CSS.supports("color", c) : /^[#\w\s.,%()\/-]+$/.test(c)));
+}
+
 function gamingStatusResolvePalette(config) {
   if (config.color_palette === "custom") {
-    const custom = (config.custom_colors || "").split(",").map(c => c.trim()).filter(Boolean);
+    const custom = gamingStatusParseCustomColors(config.custom_colors);
     return custom.length ? custom : GAMING_STATUS_PALETTES.vivid.colors;
   }
   const preset = GAMING_STATUS_PALETTES[config.color_palette];
@@ -527,8 +539,18 @@ function gamingStatusParseGameColor(rawColor) {
     }
     return null;
   }
-  if (str.startsWith('rgb')) return str;
+  // Integration colors are always #rrggbb; an rgb()/rgba() value (manual or
+  // legacy) is only passed through if it's digits and separators, since it
+  // lands in style attributes.
+  if (/^rgba?\([\d\s.,%\/]+\)$/.test(str)) return str;
   return null;
+}
+
+// A count or percentage from entity data as a plain number (0 if missing or
+// not numeric), for values written straight into card HTML.
+function gamingStatusNum(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
 // Same pattern as gamingStatusIsColorExtractionEnabled, for the global
@@ -828,24 +850,8 @@ class GamingStatusCard extends HTMLElement {
       const useGameColor = colorExtractionEnabled && this.config.color_mode !== "platform";
       const rawColor = entity.attributes.game_dominant_color;
 
-      let parsedGameColor = null;
-      if (rawColor && String(rawColor).toLowerCase() !== "null" && String(rawColor).toLowerCase() !== "none") {
-          let str = String(rawColor).trim().toLowerCase();
-          if (str.startsWith('#')) {
-              let h = str.replace('#', '');
-              if (h.length === 3) h = [...h].map(x => x + x).join('');
-              if (h.length === 6) {
-                  const r = parseInt(h.substring(0,2), 16);
-                  const g = parseInt(h.substring(2,4), 16);
-                  const b = parseInt(h.substring(4,6), 16);
-                  if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
-                      parsedGameColor = `rgb(${r}, ${g}, ${b})`;
-                  }
-              }
-          } else if (str.startsWith('rgb')) {
-              parsedGameColor = str;
-          }
-      }
+      // Same parsing (and rgb() validation) as every other card.
+      const parsedGameColor = gamingStatusParseGameColor(rawColor);
 
       const isOffline = ["offline", "unavailable", "unknown", "idle"].includes(entity.state.toLowerCase());
 
@@ -2693,12 +2699,17 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     if (!this.content) {
       this.shadowRoot.innerHTML = `
         <ha-card style="padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e));">
-          <div id="card-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: ${this.config.title ? "block" : "none"};">${this.config.title}</div>
+          <div id="card-title" style="font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none;"></div>
           <div id="chart-container" style="width: 100%;"></div>
         </ha-card>
       `;
       this.content = this.shadowRoot.getElementById("chart-container");
+      this._titleEl = this.shadowRoot.getElementById("card-title");
     }
+    // Set as text (never parsed as HTML) on every update, so editing the
+    // title shows straight away like the other cards' titles.
+    this._titleEl.textContent = this.config.title || "";
+    this._titleEl.style.display = this.config.title ? "block" : "none";
 
     let entityIdsToProcess = gamingStatusLeaderboardEntityIds(hass, this.config);
 
@@ -5614,8 +5625,8 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
               ${imageHtml}
             </div>
             ${this.config.show_labels ? `<div class="pt-tier-label">${t.label}</div>` : ""}
-            <div class="pt-count">${earned != null ? earned : 0}</div>
-            ${this.config.show_total ? `<div class="pt-total">of ${total != null ? total : 0}</div>` : ""}
+            <div class="pt-count">${gamingStatusNum(earned)}</div>
+            ${this.config.show_total ? `<div class="pt-total">of ${gamingStatusNum(total)}</div>` : ""}
           </div>`;
       }).join("") +
       `</div>`;
@@ -6197,7 +6208,7 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
       } else {
         color = palette[index % palette.length];
       }
-      const pct = Math.max(row.percent, 2);
+      const pct = Math.max(gamingStatusNum(row.percent), 2);
       html += `
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;">
           <div style="width: 140px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 500; color: var(--primary-text-color);">
@@ -6207,7 +6218,7 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
             <div style="width: ${pct}%; height: 100%; background: ${color}; border-radius: 0; transition: width 0.5s ease-out;"></div>
           </div>
           <div style="min-width: 40px; flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap;">
-            ${row.percent}%
+            ${gamingStatusNum(row.percent)}%
           </div>
         </div>
       `;
@@ -7149,9 +7160,14 @@ class GamingStatusLibraryCard extends HTMLElement {
       // state, then re-render the active tab's list directly -- never
       // touches hass/processData, so typing can't lose focus/cursor
       // position to an unrelated state update mid-keystroke.
+      // Debounced: rebuilding every row (and its artwork) per keystroke
+      // makes typing lag in a library of a thousand-plus games.
       this._searchInputEl.addEventListener("input", (ev) => {
         this._searchQuery = ev.target.value.trim().toLowerCase();
-        this._renderList(this._byPlatform[this._activePlatform]);
+        clearTimeout(this._searchTimer);
+        this._searchTimer = setTimeout(() => {
+          if (this._byPlatform) this._renderList(this._byPlatform[this._activePlatform]);
+        }, 120);
       });
       this.content = this._bodyEl;
     }
@@ -7295,13 +7311,13 @@ class GamingStatusLibraryCard extends HTMLElement {
             // All 4 tiers on one line -- unlike Steam/Xbox, which only ever
             // have a single "Achievements: X / Y" line to show here.
             const tierText = ["bronze", "silver", "gold", "platinum"]
-              .map(tier => `${tier.charAt(0).toUpperCase() + tier.slice(1)}: ${earned[tier] || 0}/${total[tier] || 0}`)
+              .map(tier => `${tier.charAt(0).toUpperCase() + tier.slice(1)}: ${gamingStatusNum(earned[tier])}/${gamingStatusNum(total[tier])}`)
               .join(" | ");
             lines.push(`<div class="lb-line">${tierText}</div>`);
           } else if (g.achievements_earned == null) {
             lines.push(`<div class="lb-line">Achievements: data unavailable</div>`);
           } else {
-            lines.push(`<div class="lb-line">Achievements: ${g.achievements_earned || 0} / ${g.achievements_total || 0}</div>`);
+            lines.push(`<div class="lb-line">Achievements: ${gamingStatusNum(g.achievements_earned)} / ${gamingStatusNum(g.achievements_total)}</div>`);
           }
         }
 
@@ -7955,7 +7971,7 @@ class GamingStatusGamercardCard extends HTMLElement {
               <ha-icon icon="mdi:trophy" style="width: 22px; height: 22px; --mdc-icon-size: 22px; color: rgb(${t.color}); ${imageHtml ? "display: none;" : ""}"></ha-icon>
               ${imageHtml}
             </div>
-            <span class="gc-tier-count">${earned != null ? earned : 0}</span>
+            <span class="gc-tier-count">${gamingStatusNum(earned)}</span>
           </div>`;
       }).join("") + `</div>`;
     }
@@ -8155,88 +8171,99 @@ class GamingStatusGamercardEditor extends HTMLElement {
 // ====================================================================
 
 // Card 1
-customElements.define("gaming-status-card", GamingStatusCard);
-customElements.define("gaming-status-card-editor", GamingStatusCardEditor);
+// Registration is skipped for anything already defined, so loading this
+// script twice (a duplicate dashboard resource, or the public page picking
+// up a new cards URL) doesn't throw on the first define and abort the rest.
+function gamingStatusDefine(name, cls) {
+  if (!customElements.get(name)) customElements.define(name, cls);
+}
+function gamingStatusAddCustomCard(info) {
+  window.customCards = window.customCards || [];
+  if (!window.customCards.some(c => c.type === info.type)) window.customCards.push(info);
+}
+
+gamingStatusDefine("gaming-status-card", GamingStatusCard);
+gamingStatusDefine("gaming-status-card-editor", GamingStatusCardEditor);
 
 // Card 2
-customElements.define("gaming-slideshow-card", GamingSlideshowCard);
-customElements.define(
+gamingStatusDefine("gaming-slideshow-card", GamingSlideshowCard);
+gamingStatusDefine(
   "gaming-slideshow-card-editor",
   GamingSlideshowCardEditor
 );
 
 // Card 3
-customElements.define("gaming-status-chart-card", GamingStatusChartCard);
-customElements.define("gaming-status-chart-editor", GamingStatusChartEditor);
+gamingStatusDefine("gaming-status-chart-card", GamingStatusChartCard);
+gamingStatusDefine("gaming-status-chart-editor", GamingStatusChartEditor);
 
 // Card 4
-customElements.define("gaming-status-donut-card", GamingStatusDonutCard);
-customElements.define("gaming-status-donut-editor", GamingStatusDonutEditor);
+gamingStatusDefine("gaming-status-donut-card", GamingStatusDonutCard);
+gamingStatusDefine("gaming-status-donut-editor", GamingStatusDonutEditor);
 
 // Card 5
-customElements.define("gaming-status-leaderboard-card", GamingStatusLeaderboardCard);
-customElements.define("gaming-status-leaderboard-editor", GamingStatusLeaderboardEditor);
+gamingStatusDefine("gaming-status-leaderboard-card", GamingStatusLeaderboardCard);
+gamingStatusDefine("gaming-status-leaderboard-editor", GamingStatusLeaderboardEditor);
 
 // Card 6
-customElements.define("gaming-status-game-chart-card", GamingStatusGameChartCard);
-customElements.define("gaming-status-game-chart-editor", GamingStatusGameChartEditor);
+gamingStatusDefine("gaming-status-game-chart-card", GamingStatusGameChartCard);
+gamingStatusDefine("gaming-status-game-chart-editor", GamingStatusGameChartEditor);
 
 // Card 7
-customElements.define("gaming-status-recent-sessions-card", GamingStatusRecentSessionsCard);
-customElements.define("gaming-status-recent-sessions-editor", GamingStatusRecentSessionsEditor);
+gamingStatusDefine("gaming-status-recent-sessions-card", GamingStatusRecentSessionsCard);
+gamingStatusDefine("gaming-status-recent-sessions-editor", GamingStatusRecentSessionsEditor);
 
 // Card 7B
-customElements.define("gaming-status-recent-achievements-card", GamingStatusRecentAchievementsCard);
-customElements.define("gaming-status-recent-achievements-editor", GamingStatusRecentAchievementsEditor);
+gamingStatusDefine("gaming-status-recent-achievements-card", GamingStatusRecentAchievementsCard);
+gamingStatusDefine("gaming-status-recent-achievements-editor", GamingStatusRecentAchievementsEditor);
 
 // Card 8
-customElements.define("gaming-status-game-management-card", GamingStatusGameManagementCard);
-customElements.define("gaming-status-game-management-editor", GamingStatusGameManagementEditor);
+gamingStatusDefine("gaming-status-game-management-card", GamingStatusGameManagementCard);
+gamingStatusDefine("gaming-status-game-management-editor", GamingStatusGameManagementEditor);
 
 // Card 9
-customElements.define("gaming-status-achievement-icons-card", GamingStatusAchievementIconsCard);
-customElements.define("gaming-status-achievement-icons-editor", GamingStatusAchievementIconsEditor);
+gamingStatusDefine("gaming-status-achievement-icons-card", GamingStatusAchievementIconsCard);
+gamingStatusDefine("gaming-status-achievement-icons-editor", GamingStatusAchievementIconsEditor);
 
 // Card 10
-customElements.define("gaming-status-playstation-trophies-card", GamingStatusPlaystationTrophiesCard);
-customElements.define("gaming-status-playstation-trophies-editor", GamingStatusPlaystationTrophiesEditor);
+gamingStatusDefine("gaming-status-playstation-trophies-card", GamingStatusPlaystationTrophiesCard);
+gamingStatusDefine("gaming-status-playstation-trophies-editor", GamingStatusPlaystationTrophiesEditor);
 
 // Card 11
-customElements.define("gaming-status-completion-card", GamingStatusCompletionCard);
-customElements.define("gaming-status-completion-editor", GamingStatusCompletionEditor);
+gamingStatusDefine("gaming-status-completion-card", GamingStatusCompletionCard);
+gamingStatusDefine("gaming-status-completion-editor", GamingStatusCompletionEditor);
 
 // Card 12
-customElements.define("gaming-status-near-completion-card", GamingStatusNearCompletionCard);
-customElements.define("gaming-status-near-completion-editor", GamingStatusNearCompletionEditor);
+gamingStatusDefine("gaming-status-near-completion-card", GamingStatusNearCompletionCard);
+gamingStatusDefine("gaming-status-near-completion-editor", GamingStatusNearCompletionEditor);
 
 // Card 13
-customElements.define("gaming-status-stats-card", GamingStatusStatsCard);
-customElements.define("gaming-status-stats-editor", GamingStatusStatsEditor);
+gamingStatusDefine("gaming-status-stats-card", GamingStatusStatsCard);
+gamingStatusDefine("gaming-status-stats-editor", GamingStatusStatsEditor);
 
 // Card 14
-customElements.define("gaming-status-library-card", GamingStatusLibraryCard);
-customElements.define("gaming-status-library-editor", GamingStatusLibraryEditor);
+gamingStatusDefine("gaming-status-library-card", GamingStatusLibraryCard);
+gamingStatusDefine("gaming-status-library-editor", GamingStatusLibraryEditor);
 
 // Card 15
-customElements.define("gaming-status-gamercard-card", GamingStatusGamercardCard);
-customElements.define("gaming-status-gamercard-editor", GamingStatusGamercardEditor);
+gamingStatusDefine("gaming-status-gamercard-card", GamingStatusGamercardCard);
+gamingStatusDefine("gaming-status-gamercard-editor", GamingStatusGamercardEditor);
 
 // Card 3 (merged: Weekly Hours + Weekly Games)
-customElements.define("gaming-status-weekly-activity-card", GamingStatusWeeklyActivityCard);
-customElements.define("gaming-status-weekly-activity-editor", GamingStatusWeeklyActivityEditor);
+gamingStatusDefine("gaming-status-weekly-activity-card", GamingStatusWeeklyActivityCard);
+gamingStatusDefine("gaming-status-weekly-activity-editor", GamingStatusWeeklyActivityEditor);
 
 // Card 7 (merged: Recent Sessions + Recent Achievements + Achievement Icons)
-customElements.define("gaming-status-recent-activity-card", GamingStatusRecentActivityCard);
-customElements.define("gaming-status-recent-activity-editor", GamingStatusRecentActivityEditor);
+gamingStatusDefine("gaming-status-recent-activity-card", GamingStatusRecentActivityCard);
+gamingStatusDefine("gaming-status-recent-activity-editor", GamingStatusRecentActivityEditor);
 
 // Card 11 (merged: 100% Completion + Near Completion)
-customElements.define("gaming-status-completion-tracker-card", GamingStatusCompletionTrackerCard);
-customElements.define("gaming-status-completion-tracker-editor", GamingStatusCompletionTrackerEditor);
+gamingStatusDefine("gaming-status-completion-tracker-card", GamingStatusCompletionTrackerCard);
+gamingStatusDefine("gaming-status-completion-tracker-editor", GamingStatusCompletionTrackerEditor);
 
 // Inject into UI
 window.customCards = window.customCards || [];
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-card",
   name: "Gaming Status - List",
   preview: true,
@@ -8244,14 +8271,14 @@ window.customCards.push({
     "A dependency-free unified dashboard list card for gaming status.",
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-slideshow-card",
   name: "Gaming Status - Slideshow",
   preview: true,
   description: "A dynamic CSS-animated slideshow of active game hero images.",
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-weekly-activity-card",
   name: "Gaming Status - Weekly Activity",
   preview: true,
@@ -8259,63 +8286,63 @@ window.customCards.push({
     "A stacked bar chart of daily gaming hours, stacked by player or by game.",
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-donut-card",
   name: "Gaming Status - Platforms",
   preview: true,
   description: "Aggregate platform split bar chart (Xbox / PlayStation / PC) across all players."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-leaderboard-card",
   name: "Gaming Status - Leaderboard",
   preview: true,
   description: "A dynamic standalone bar graph ranking the top players across chosen metrics."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-recent-activity-card",
   name: "Gaming Status - Recent Activity",
   preview: true,
   description: "A configurable table (or icon grid) of recently completed sessions or unlocked achievements/trophies, with optional blurred artwork backgrounds."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-game-management-card",
   name: "Gaming Status - Game Management",
   preview: true,
   description: "Add a session, or rename, reassign, or permanently delete a game in a player's stored play history."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-playstation-trophies-card",
   name: "Gaming Status - PlayStation Trophies",
   preview: true,
   description: "A single player's lifetime Bronze/Silver/Gold/Platinum trophy totals."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-completion-tracker-card",
   name: "Gaming Status - Completion Tracker",
   preview: true,
   description: "A single player's 100%-complete or near-complete games, as a grid, slideshow, or ranked list."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-stats-card",
   name: "Gaming Status - Stats",
   preview: true,
   description: "A configurable two-column summary of a single player's completion/trophy/achievement stats."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-library-card",
   name: "Gaming Status - Library",
   preview: true,
   description: "A scrollable, artwork-and-stats list of a single player's game library for one platform."
 });
 
-window.customCards.push({
+gamingStatusAddCustomCard({
   type: "gaming-status-gamercard-card",
   name: "Gaming Status - Gamercard",
   preview: true,
