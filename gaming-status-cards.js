@@ -7312,7 +7312,8 @@ class GamingStatusLibraryCard extends HTMLElement {
         this._searchQuery = ev.target.value.trim().toLowerCase();
         clearTimeout(this._searchTimer);
         this._searchTimer = setTimeout(() => {
-          if (this._byPlatform) this._renderList(this._byPlatform[this._activePlatform]);
+          const games = this._byPlatform && this._byPlatform[this._activePlatform];
+          if (games) this._renderList(games);
         }, 120);
       });
       this.content = this._bodyEl;
@@ -7341,6 +7342,11 @@ class GamingStatusLibraryCard extends HTMLElement {
     }
 
     this._searchWrapEl.style.display = this.config.show_search ? "flex" : "none";
+    if (!this.config.show_search && this._searchQuery) {
+      // A hidden search box mustn't keep filtering the list.
+      this._searchQuery = "";
+      this._searchInputEl.value = "";
+    }
 
     // Persist the active tab across renders (data refreshes, config
     // tweaks) -- only fall back to the first enabled platform if there's
@@ -7514,6 +7520,20 @@ class GamingStatusLibraryCard extends HTMLElement {
 
     if ((measured <= 0 || measured !== lastApplied) && attempt < 8) {
       requestAnimationFrame(() => this._capListHeight(listEl, maxEntries, measured, attempt + 1));
+    } else if (measured <= 0 && typeof ResizeObserver !== "undefined") {
+      // Still not laid out after the retries (a hidden tab, conditional card
+      // or collapsed section): measure once it actually gets a size, instead
+      // of giving up and showing the whole library uncapped later.
+      if (this._capObserver) this._capObserver.disconnect();
+      const observer = new ResizeObserver(() => {
+        if (!listEl.isConnected || listEl.getBoundingClientRect().height > 0) {
+          observer.disconnect();
+          if (this._capObserver === observer) this._capObserver = null;
+          if (listEl.isConnected) this._capListHeight(listEl, maxEntries, 0, 0);
+        }
+      });
+      this._capObserver = observer;
+      observer.observe(listEl);
     }
   }
 }
