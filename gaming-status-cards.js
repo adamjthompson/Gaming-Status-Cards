@@ -31,13 +31,20 @@ function gamingStatusNormalizePalette(config) {
 // Splits on commas outside parentheses, so "rgb(255,190,11), #3a86ff" (the
 // format the editors' placeholders show) stays two colors, and keeps only
 // entries the browser accepts as a color -- these are written straight into
-// SVG fill and style attributes.
+// SVG fill and style attributes. They must also use only the characters a
+// color needs (hex, names, rgb()/hsl()/var() with numbers, %, /, -):
+// CSS.supports() alone also accepts e.g. var(--x,"...") or url(), whose
+// quotes and brackets could break out of those attributes.
+const GAMING_STATUS_COLOR_CHARS_RE = /^[#\w\s.,%()\/-]+$/;
 function gamingStatusParseCustomColors(raw) {
   const canCheck = typeof CSS !== "undefined" && typeof CSS.supports === "function";
   return String(raw || "")
     .split(/,(?![^(]*\))/)
     .map(c => c.trim())
-    .filter(c => c && (canCheck ? CSS.supports("color", c) : /^[#\w\s.,%()\/-]+$/.test(c)));
+    .filter(c => c
+      && GAMING_STATUS_COLOR_CHARS_RE.test(c)
+      && !/url\(/i.test(c)
+      && (!canCheck || CSS.supports("color", c)));
 }
 
 function gamingStatusResolvePalette(config) {
@@ -2072,7 +2079,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
         const h = d.groups[groups[gi].name] || 0;
         if (h <= 0) continue;
         const bh = (h / niceMax) * areaH;
-        svg += `<rect x="${bx}" y="${(yBase - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="${colorOf(gi)}" data-${dataKey}="${this._esc(groups[gi].name)}" data-hours="${h.toFixed(4)}" style="transition:opacity 0.2s ease"/>`;
+        svg += `<rect x="${bx}" y="${(yBase - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="${gamingStatusEscapeHTML(colorOf(gi))}" data-${dataKey}="${this._esc(groups[gi].name)}" data-hours="${h.toFixed(4)}" style="transition:opacity 0.2s ease"/>`;
         yBase -= bh;
       }
 
@@ -2096,7 +2103,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
           const row = Math.floor(i / legendCols);
           const lx = padL + col * colW;
           const ly = legY0 + row * legendRowH;
-          svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2" style="transition:opacity 0.2s ease" data-swatch-${dataKey}="${this._esc(g.name)}"/>`;
+          svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${gamingStatusEscapeHTML(colorOf(i))}" rx="2" style="transition:opacity 0.2s ease" data-swatch-${dataKey}="${this._esc(g.name)}"/>`;
           const hoursStr = isPlayerMode && g.totalHours > 0 ? ` (${g.totalHours.toFixed(2)}h)` : "";
           const gamertagStr = isPlayerMode && this.config.show_gamertags && g.gamertag ? ` (${g.gamertag})` : "";
           const fullLabel = g.name + gamertagStr + hoursStr;
@@ -2497,7 +2504,7 @@ class GamingStatusDonutCard extends HTMLElement {
     for (const p of platforms) {
       const segW = (platformTotals[p.key] / grandTotal) * barAreaW;
       if (segW < 0.5) continue;
-      svg += `<rect x="${xCursor.toFixed(1)}" y="${padT}" width="${segW.toFixed(1)}" height="${barH}" fill="${p.color}" data-platform="${this._esc(p.name)}" data-hours="${platformTotals[p.key].toFixed(4)}"/>`;
+      svg += `<rect x="${xCursor.toFixed(1)}" y="${padT}" width="${segW.toFixed(1)}" height="${barH}" fill="${gamingStatusEscapeHTML(p.color)}" data-platform="${this._esc(p.name)}" data-hours="${platformTotals[p.key].toFixed(4)}"/>`;
       xCursor += segW;
     }
 
@@ -2512,7 +2519,7 @@ class GamingStatusDonutCard extends HTMLElement {
         const maxCh = Math.floor(platColW / 7) - 2;
         const fullLabel = `${p.name} (${fmt(platformTotals[p.key])})`;
         const label = fullLabel.length > maxCh ? fullLabel.slice(0, maxCh - 1) + "…" : fullLabel;
-        svg += `<rect x="${lx}" y="${ly + 1}" width="12" height="12" fill="${p.color}" rx="2"/>`;
+        svg += `<rect x="${lx}" y="${ly + 1}" width="12" height="12" fill="${gamingStatusEscapeHTML(p.color)}" rx="2"/>`;
         svg += `<text x="${lx + 17}" y="${ly + 13}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(label)}</text>`;
       });
     }
@@ -2866,7 +2873,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
             ${safeName}
           </div>
           <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
-            <div style="width: ${pct}%; height: 100%; background: ${color}; border-radius: 0; transition: width 0.5s ease-out;">
+            <div style="width: ${pct}%; height: 100%; background: ${gamingStatusEscapeHTML(color)}; border-radius: 0; transition: width 0.5s ease-out;">
             </div>
           </div>
           <div style="min-width: 40px; flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap;">
@@ -3002,7 +3009,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
 
       if (this.config.metric === "longest") {
         html += `
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border-left: 4px solid ${color}; padding-left: 8px; box-sizing: border-box;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border-left: 4px solid ${gamingStatusEscapeHTML(color)}; padding-left: 8px; box-sizing: border-box;">
             <div style="flex-grow: 1; font-size: 14px; font-weight: 500; color: var(--primary-text-color); word-break: break-word;">
               ${safeName}
             </div>
@@ -3019,7 +3026,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
               ${safeName}
             </div>
             <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
-              <div style="width: ${pct}%; height: 100%; background: ${color}; border-radius: 0; transition: width 0.5s ease-out;">
+              <div style="width: ${pct}%; height: 100%; background: ${gamingStatusEscapeHTML(color)}; border-radius: 0; transition: width 0.5s ease-out;">
               </div>
             </div>
             <div style="min-width: 40px; flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap;">
@@ -6234,7 +6241,7 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
             ${escapeHTML(row.title)}
           </div>
           <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
-            <div style="width: ${pct}%; height: 100%; background: ${color}; border-radius: 0; transition: width 0.5s ease-out;"></div>
+            <div style="width: ${pct}%; height: 100%; background: ${gamingStatusEscapeHTML(color)}; border-radius: 0; transition: width 0.5s ease-out;"></div>
           </div>
           <div style="min-width: 40px; flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap;">
             ${gamingStatusNum(row.percent)}%
