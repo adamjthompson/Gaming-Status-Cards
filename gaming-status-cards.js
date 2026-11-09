@@ -634,7 +634,7 @@ class GamingStatusCard extends HTMLElement {
       max_visible_players: config.max_visible_players || "",
       manual_entities: config.manual_entities || "",
     };
-    this._lastHash = ""; 
+    this._lastHash = null;
   }
 
   set hass(hass) {
@@ -1852,7 +1852,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
       hide_empty: config.hide_empty === true || config.hide_empty === "true",
       max_games: parseInt(config.max_games) || 6,
     };
-    this._lastHash = "";
+    this._lastHash = null;
   }
 
   set hass(hass) {
@@ -2350,7 +2350,7 @@ class GamingStatusDonutCard extends HTMLElement {
       entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       ...config,
     };
-    this._lastHash = "";
+    this._lastHash = null;
   }
 
   set hass(hass) {
@@ -2700,7 +2700,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       // or the editor's own select-based "true"/"false" string.
       show_gamertags: config.show_gamertags === true || config.show_gamertags === "true",
     };
-    this._lastHash = "";
+    this._lastHash = null;
   }
 
   set hass(hass) {
@@ -3327,7 +3327,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       show_gamertags: config.show_gamertags === true,
     };
     this._lastWatchKey = "";
-    this._lastHash = "";
+    this._lastHash = null;
   }
 
   set hass(hass) {
@@ -4443,7 +4443,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
       mode: config.mode || "all",
       single_entity: config.single_entity || "",
     };
-    this._lastHash = "";
+    this._lastHash = null;
     this._lastCheapFingerprint = "";
   }
 
@@ -5408,7 +5408,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       show_active_artwork: config.show_active_artwork === true,
       image_style: config.image_style === "icons" ? "icons" : "official",
     };
-    this._lastHash = "";
+    this._lastHash = null;
     this._lastCheapFingerprint = "";
   }
 
@@ -5876,7 +5876,7 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
       color_palette: config.color_palette || "platform",
       custom_colors: config.custom_colors || "",
     };
-    this._lastHash = "";
+    this._lastHash = null;
     this._lastCheapFingerprint = "";
   }
 
@@ -6676,7 +6676,7 @@ class GamingStatusStatsCard extends HTMLElement {
     GAMING_STATUS_STAT_KEYS.forEach(key => {
       this.config[`show_stat_${key}`] = config[`show_stat_${key}`] !== false;
     });
-    this._lastHash = "";
+    this._lastHash = null;
   }
 
   // Derives sensor.gaming_status_<owner>_library_summary -- same technique
@@ -7022,7 +7022,7 @@ class GamingStatusLibraryCard extends HTMLElement {
       show_field_percent: config.show_field_percent !== false,
       show_field_counts: config.show_field_counts !== false,
     };
-    this._lastHash = "";
+    this._lastHash = null;
     this._lastCheapFingerprint = "";
   }
 
@@ -7632,7 +7632,7 @@ class GamingStatusGamercardCard extends HTMLElement {
       // "(gamertag)" suffix they never asked for.
       show_gamertags: config.show_gamertags === true,
     };
-    this._lastHash = "";
+    this._lastHash = null;
   }
 
   _resolvePlayerId(hass) {
