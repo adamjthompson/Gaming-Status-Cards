@@ -223,20 +223,23 @@ function gamingStatusPlayerOptionsHTML(entities, selected, escapeFn) {
 
 // If "Single Player" mode has no selection yet, defaults to the first
 // available player (alphabetically) instead of leaving the dropdown on the
-// dead-end "Select a player…" placeholder. Mutates `config` in place and
-// returns true if a default was just applied, so the caller can persist it.
+// dead-end "Select a player…" placeholder. Returns a NEW config with the
+// default applied, for the caller to adopt and persist, or null if none is
+// needed. Never modifies `config`: an editor's config is Home Assistant's own
+// object, which its card editor dialog deep-freezes, and writing to a frozen
+// object throws in this (module, so strict-mode) script -- that broke the
+// visual editor when switching to Single Player.
 function gamingStatusDefaultSingleEntity(config, entities, field) {
   const key = field || "single_entity";
   if (config.mode === "single" && !config[key] && entities.length) {
-    config[key] = entities[0].id;
-    return true;
+    return { ...config, [key]: entities[0].id };
   }
-  return false;
+  return null;
 }
 
 // For always-single-player cards/editors (Game Management, PlayStation
 // Trophies, 100% Completion, Near Completion, Stats, Library): there's a
-// window where gamingStatusDefaultSingleEntity's mutation hasn't actually
+// window where gamingStatusDefaultSingleEntity's default hasn't actually
 // been persisted back through Home Assistant's own editor lifecycle yet
 // (e.g. the very first render, before `hass` -- and therefore the real
 // player list -- is available at all), during which the CARD itself
@@ -2145,7 +2148,9 @@ class GamingStatusWeeklyActivityEditor extends HTMLElement {
     const colorPalette = gamingStatusNormalizePalette(this._config);
     const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
@@ -2552,7 +2557,9 @@ class GamingStatusDonutEditor extends HTMLElement {
 
     const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
 
@@ -3047,7 +3054,9 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
     const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
@@ -3930,7 +3939,9 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
     const isTableMode = !isIconMode;
     const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
@@ -5276,7 +5287,9 @@ class GamingStatusGameManagementEditor extends HTMLElement {
     if (!this._config) return;
     const mode = this._config.mode || "all";
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
@@ -5657,7 +5670,9 @@ class GamingStatusPlaystationTrophiesEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
@@ -6254,7 +6269,9 @@ class GamingStatusCompletionTrackerEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
@@ -6816,7 +6833,9 @@ class GamingStatusStatsEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
@@ -7396,7 +7415,9 @@ class GamingStatusLibraryEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
@@ -8018,7 +8039,9 @@ class GamingStatusGamercardEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
