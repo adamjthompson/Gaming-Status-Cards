@@ -88,8 +88,12 @@ const GAMING_STATUS_DEFAULT_ENTITIES_PATTERN = "_master";
 // player's name (e.g. "Player1 Gaming Status Master" -> "Player1"). Includes the
 // platform words (Steam/Xbox/...) too, not just "Master", so this stays
 // correct for any entities_pattern, not only the default "_master" suffix.
+// Only words at the END are stripped: matching them anywhere also cut them
+// out of the middle of a name ("Joe Steamer" -> "Joeer", "Al Masterson" ->
+// "Alson"), and Game Management sends this name to the history services.
+const GAMING_STATUS_NAME_SUFFIX_RE = /(?:\s+(?:Gaming Status Agent|Gaming Status|Master|GSA|Chart|Steam|Xbox|PlayStation|PC|Custom|Discord|Playnite))+\s*$/i;
 function gamingStatusCleanPlayerName(rawName) {
-  return String(rawName).replace(/ Gaming Status Agent| Gaming Status| Master| GSA| Chart| Steam| Xbox| PlayStation| PC| Custom| Discord| Playnite/gi, "").trim();
+  return String(rawName).replace(GAMING_STATUS_NAME_SUFFIX_RE, "").trim();
 }
 
 function gamingStatusEscapeHTML(str) {
