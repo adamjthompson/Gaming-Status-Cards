@@ -1602,6 +1602,9 @@ class GamingSlideshowCard extends HTMLElement {
           this.content = this.shadowRoot.getElementById("slideshow-container");
         }
         this.content.style.aspectRatio = activeAspectRatio;
+        // The multi-game slideshow paints the first slide on the container
+        // itself; clear it so the last game's art doesn't show through.
+        this.content.style.backgroundImage = "none";
         this.content.innerHTML = `
           <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.2); color: var(--secondary-text-color, #888);">
             <ha-icon icon="mdi:gamepad-variant-outline" style="width: 48px; height: 48px; opacity: 0.5; margin-bottom: 8px;"></ha-icon>
@@ -1644,6 +1647,9 @@ class GamingSlideshowCard extends HTMLElement {
     };
 
     if (data.length === 1) {
+      // This game's art is drawn by the inner div; clear any slide left on
+      // the container (it showed around "contain"-fit logos and icons).
+      this.content.style.backgroundImage = "none";
       this.content.innerHTML = `
         <div style="width: 100%; height: 100%; background-image: ${gamingStatusEscapeHTML(gamingStatusCssUrl(data[0].art))}; background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
         ${getAvatarHtml(data[0].players)}
@@ -1651,8 +1657,14 @@ class GamingSlideshowCard extends HTMLElement {
       return;
     }
 
-    const t_slide = parseFloat(this.config.time_per_slide);
-    const t_trans = parseFloat(this.config.transition_time);
+    // Saved configs can hold a blank, zero or negative value (the editor
+    // used to save a cleared field as NaN), which made the keyframe
+    // percentages NaN/Infinity and broke the animation: fall back to the
+    // defaults (5s per slide, 1s fade). An explicit 0s fade is kept.
+    const slideSecs = parseFloat(this.config.time_per_slide);
+    const fadeSecs = parseFloat(this.config.transition_time);
+    const t_slide = slideSecs > 0 ? slideSecs : 5;
+    const t_trans = fadeSecs >= 0 ? fadeSecs : 1;
     const loop_duration = data.length * t_slide;
     
     // Advanced Crossfade Math with Z-Index Swapping to fix the loop wrap "pop"
@@ -1822,10 +1834,15 @@ class GamingSlideshowCardEditor extends HTMLElement {
     });
 
     const timeInput = this.shadowRoot.getElementById("time-input");
+    // A cleared field is saved as "not set" (so the default applies), not NaN.
+    const numberOrUnset = (value) => {
+      const n = parseFloat(value);
+      return Number.isFinite(n) ? n : undefined;
+    };
     timeInput.addEventListener("change", (ev) => {
       this._config = {
         ...this._config,
-        time_per_slide: parseFloat(ev.target.value),
+        time_per_slide: numberOrUnset(ev.target.value),
       };
       this.dispatchEvent(
         new CustomEvent("config-changed", {
@@ -1840,7 +1857,7 @@ class GamingSlideshowCardEditor extends HTMLElement {
     transInput.addEventListener("change", (ev) => {
       this._config = {
         ...this._config,
-        transition_time: parseFloat(ev.target.value),
+        transition_time: numberOrUnset(ev.target.value),
       };
       this.dispatchEvent(
         new CustomEvent("config-changed", {
@@ -5970,8 +5987,9 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
       display_mode: displayMode,
       grid_columns: [1, 2, 3, 4].includes(parseInt(config.grid_columns)) ? parseInt(config.grid_columns) : 3,
       grid_max_rows: config.grid_max_rows !== undefined ? Math.max(1, parseInt(config.grid_max_rows) || 3) : 3,
-      time_per_slide: config.time_per_slide !== undefined ? parseFloat(config.time_per_slide) || 5 : 5,
-      transition_time: config.transition_time !== undefined ? parseFloat(config.transition_time) || 1 : 1,
+      // Positive only: a negative value broke the slideshow's keyframes.
+      time_per_slide: parseFloat(config.time_per_slide) > 0 ? parseFloat(config.time_per_slide) : 5,
+      transition_time: config.transition_time !== undefined ? Math.max(0, parseFloat(config.transition_time) || 1) : 1,
       artwork_mode: artworkMode,
       scroll_after: config.scroll_after !== undefined ? Math.max(1, parseInt(config.scroll_after) || 10) : 10,
       // "platform" (per-game platform tint, not an index-cycled array) is
