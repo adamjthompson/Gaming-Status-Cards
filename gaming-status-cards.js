@@ -56,15 +56,106 @@ function gamingStatusResolvePalette(config) {
   return preset ? preset.colors : GAMING_STATUS_PALETTES.vivid.colors;
 }
 
-// Start-of-window timestamp (ms) for the selected reporting window.
-// Rolling = past 7 days (today + 6 prior days); Calendar = since the most recent
-// Sunday. Uses local-midnight day boundaries to stay consistent with the
-// play_history day windowing used elsewhere in these cards.
-function gamingStatusWindowStart(isCalendar, now) {
+// ====================================================================
+// SHARED: DAYS IN HOME ASSISTANT'S TIME ZONE
+// ====================================================================
+// play_history and the weekly totals are keyed by Home Assistant's own
+// local dates, so the charts bucket days by its time zone (hass.config
+// .time_zone) rather than the viewer's browser clock -- otherwise a viewer
+// in another time zone (a public-page visitor, or travelling) saw every bar
+// shifted by a day. Falls back to the browser's zone when the time zone is
+// unknown (e.g. an older integration's public page) or not recognized.
+const GAMING_STATUS_ZONE_FORMATS = new Map();
+function gamingStatusZoneFormat(timeZone) {
+  let fmt = GAMING_STATUS_ZONE_FORMATS.get(timeZone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone, hourCycle: "h23",
+      year: "numeric", month: "numeric", day: "numeric",
+      hour: "numeric", minute: "numeric", second: "numeric",
+    });
+    GAMING_STATUS_ZONE_FORMATS.set(timeZone, fmt);
+  }
+  return fmt;
+}
+
+function gamingStatusZoneParts(timeZone, ms) {
+  const out = {};
+  for (const p of gamingStatusZoneFormat(timeZone).formatToParts(new Date(ms))) out[p.type] = p.value;
+  return {
+    y: +out.year, m: +out.month, d: +out.day,
+    h: (+out.hour) % 24, min: +out.minute, s: +out.second,
+  };
+}
+
+function gamingStatusTimeZone(hass) {
+  return (hass && hass.config && hass.config.time_zone) || null;
+}
+
+// {y, m, d, weekday} of today, in Home Assistant's time zone.
+function gamingStatusToday(hass, now) {
   const ref = now || new Date();
-  const startOfToday = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
-  const daysBack = isCalendar ? ref.getDay() : 6;
-  return startOfToday.getTime() - daysBack * 86400000;
+  const tz = gamingStatusTimeZone(hass);
+  if (tz) {
+    try {
+      const p = gamingStatusZoneParts(tz, ref.getTime());
+      if (p.y && p.m && p.d) {
+        return { y: p.y, m: p.m, d: p.d, weekday: new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay() };
+      }
+    } catch (e) { /* unrecognized time zone -- use the browser's */ }
+  }
+  return { y: ref.getFullYear(), m: ref.getMonth() + 1, d: ref.getDate(), weekday: ref.getDay() };
+}
+
+// "YYYY-MM-DD" keys of the reporting window, oldest first. Rolling = past 7
+// days (today + 6 prior days); Calendar = since the most recent Sunday.
+// Steps whole calendar days (not 24-hour blocks), so a daylight-saving
+// change inside the window can't skip or repeat a day.
+function gamingStatusWindowDays(hass, isCalendar, now) {
+  const t = gamingStatusToday(hass, now);
+  const daysBack = isCalendar ? t.weekday : 6;
+  const days = [];
+  for (let i = daysBack; i >= 0; i--) {
+    const d = new Date(Date.UTC(t.y, t.m - 1, t.d - i));
+    days.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`);
+  }
+  return days;
+}
+
+// Timestamp (ms) of midnight starting the given "YYYY-MM-DD" day, in Home
+// Assistant's time zone.
+function gamingStatusDayStart(hass, dayKey) {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const tz = gamingStatusTimeZone(hass);
+  if (tz) {
+    try {
+      // Midnight UTC, shifted by the zone's offset; re-checked once in case
+      // the first shift lands on the other side of a daylight-saving change.
+      const utcMidnight = Date.UTC(y, m - 1, d);
+      let ts = utcMidnight;
+      for (let k = 0; k < 2; k++) {
+        const p = gamingStatusZoneParts(tz, ts);
+        const offset = Date.UTC(p.y, p.m - 1, p.d, p.h, p.min, p.s) - Math.floor(ts / 1000) * 1000;
+        ts = utcMidnight - offset;
+      }
+      if (!isNaN(ts)) return ts;
+    } catch (e) { /* unrecognized time zone -- use the browser's */ }
+  }
+  return new Date(y, m - 1, d).getTime();
+}
+
+// Start-of-window timestamp (ms) for the selected reporting window: midnight,
+// in Home Assistant's time zone, at the start of its first day.
+function gamingStatusWindowStart(isCalendar, hass, now) {
+  return gamingStatusDayStart(hass, gamingStatusWindowDays(hass, isCalendar, now)[0]);
+}
+
+// Today's "YYYY-MM-DD" in Home Assistant's time zone. Part of the charts'
+// change hashes, so they move on to the new day at midnight even when no
+// tracked entity has changed since.
+function gamingStatusTodayKey(hass) {
+  const t = gamingStatusToday(hass);
+  return `${t.y}-${String(t.m).padStart(2, "0")}-${String(t.d).padStart(2, "0")}`;
 }
 
 // Buckets a session's platform string into the three groups the Platforms card
@@ -1887,7 +1978,8 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
       + "|" + this.config.hide_empty
       + "|" + this.config.color_palette
       + "|" + this.config.custom_colors
-      + "|" + this.config.show_legend;
+      + "|" + this.config.show_legend
+      + "|" + gamingStatusTodayKey(hass);
 
     if (this._lastHash === hash) return;
     this._lastHash = hash;
@@ -1919,13 +2011,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
     this._ensureShell();
 
     const isCal = this.config.window === "calendar";
-    const now = new Date();
-    const days = [];
-    const daysBack = isCal ? now.getDay() : 6;
-    for (let i = daysBack; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 86400000);
-      days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-    }
+    const days = gamingStatusWindowDays(this._hass, isCal);
 
     if (this.config.stack_by === "game") {
       // Aggregate play_history (seconds -> hours) across all entities, keyed by game.
@@ -2388,7 +2474,8 @@ class GamingStatusDonutCard extends HTMLElement {
     const hash = gamingStatusEntityHash(hass, entityIds)
       + "|" + this.config.window
       + "|" + this.config.color_palette
-      + "|" + this.config.custom_colors;
+      + "|" + this.config.custom_colors
+      + "|" + gamingStatusTodayKey(hass);
 
     if (this._lastHash === hash) return;
     this._lastHash = hash;
@@ -2421,7 +2508,7 @@ class GamingStatusDonutCard extends HTMLElement {
 
     const isCal = this.config.window === "calendar";
     const weeklyAttr = isCal ? "total_weekly_hours" : "rolling_weekly_hours";
-    const windowStart = gamingStatusWindowStart(isCal);
+    const windowStart = gamingStatusWindowStart(isCal, this._hass);
     const isPlatformPalette = this.config.color_palette === "platform" || !this.config.color_palette;
     const palette = isPlatformPalette ? null : gamingStatusResolvePalette(this.config);
 
@@ -2746,6 +2833,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
         currentHash += "|steam_lib:" + hass.states[libId].last_updated;
       }
     }
+    currentHash += "|" + gamingStatusTodayKey(hass);
 
     if (this._lastHash === currentHash) return;
     this._lastHash = currentHash;
@@ -2755,12 +2843,8 @@ class GamingStatusLeaderboardCard extends HTMLElement {
 
   _getPlayHistoryBreakdown(attrs, isCalendar) {
     const playHistory = attrs.play_history || {};
-    const now = new Date();
     const result = {};
-    const daysBack = isCalendar ? now.getDay() : 6;
-    for (let i = daysBack; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 86400000);
-      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    for (const key of gamingStatusWindowDays(this._hass, isCalendar)) {
       for (const [game, seconds] of Object.entries(playHistory[key] || {})) {
         result[game] = (result[game] || 0) + (parseFloat(seconds) || 0);
       }
@@ -2900,7 +2984,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     let finalData = [];
 
     const isCal = this.config.window === "calendar";
-    const windowStart = gamingStatusWindowStart(isCal);
+    const windowStart = gamingStatusWindowStart(isCal, this._hass);
 
     const getBreakdown = (attrs) => isCal
       ? (attrs.calendar_weekly_breakdown || attrs.total_weekly_breakdown || attrs.weekly_breakdown || attrs.weekly_game_breakdown || {})
