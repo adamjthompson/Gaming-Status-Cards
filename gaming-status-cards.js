@@ -236,6 +236,45 @@ function gamingStatusCssUrl(url) {
 }
 
 // ====================================================================
+// SHARED: PER-UPDATE SCAN CACHE
+// ====================================================================
+// Home Assistant hands every card the same hass.states object for one
+// update (and a new object for the next), so scans over all of hass.states
+// are cached against that object: a dashboard of many cards does each scan
+// once per update instead of once or more per card. A new update means a
+// new object, so a cached result is never stale.
+const GAMING_STATUS_SCAN_CACHE = new WeakMap();
+function gamingStatusMemoScan(hass, key, compute) {
+  const states = hass && hass.states;
+  if (!states || typeof states !== "object") return compute();
+  let cache = GAMING_STATUS_SCAN_CACHE.get(states);
+  if (!cache) {
+    cache = new Map();
+    GAMING_STATUS_SCAN_CACHE.set(states, cache);
+  }
+  if (!cache.has(key)) cache.set(key, compute());
+  return cache.get(key);
+}
+
+// Every gaming_status player entity whose id ends with `suffix` (the "All
+// Tracked Players" set), in hass.states order -- plus the "anyone gaming"
+// hub entity when withHub is set (the player list and slideshow show it).
+// A fresh array each call, so callers may sort or extend it.
+function gamingStatusTrackedEntityIds(hass, suffix, withHub) {
+  return gamingStatusMemoScan(hass, `tracked|${suffix}|${withHub ? 1 : 0}`, () => {
+    const ids = [];
+    for (const key in hass.states) {
+      if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) &&
+          (key.endsWith(suffix) || (withHub && key.includes("anyone_gaming"))) &&
+          hass.states[key].attributes.secondary !== undefined) {
+        ids.push(key);
+      }
+    }
+    return ids;
+  }).slice();
+}
+
+// ====================================================================
 // SHARED: PLAYER ENTITY DROPDOWNS (Single Player mode)
 // ====================================================================
 
@@ -244,13 +283,13 @@ function gamingStatusCssUrl(url) {
 // deterministic and matches what the dropdown actually shows.
 function gamingStatusGetPlayerEntities(hass, targetSuffix) {
   if (!hass) return [];
-  return Object.keys(hass.states)
+  return gamingStatusMemoScan(hass, `players|${targetSuffix}`, () => Object.keys(hass.states)
     .filter(k => k.endsWith(targetSuffix) && hass.states[k].attributes.secondary !== undefined)
     .map(k => ({
       id: k,
       name: gamingStatusCleanPlayerName(hass.states[k].attributes.friendly_name || k),
     }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name))).slice();
 }
 
 // Resolves a "Selected Entities" config string into real entity IDs. Each
@@ -309,13 +348,7 @@ function gamingStatusLeaderboardEntityIds(hass, config) {
     return gamingStatusResolveSelectedEntities(hass, config.selected_entities, config.entities_pattern);
   }
   const targetSuffix = config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
-  const result = [];
-  for (const key in hass.states) {
-    if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) && key.endsWith(targetSuffix) && hass.states[key].attributes.secondary !== undefined) {
-      result.push(key);
-    }
-  }
-  return result;
+  return gamingStatusTrackedEntityIds(hass, targetSuffix);
 }
 
 function gamingStatusPlayerOptionsHTML(entities, selected, escapeFn) {
@@ -616,14 +649,16 @@ function gamingStatusGetSessionPlatforms(hass) {
 // convention of not hiding options before hass data has loaded.
 function gamingStatusIsColorExtractionEnabled(hass) {
   if (!hass) return true;
-  for (const key of Object.keys(hass.states)) {
-    if (!key.startsWith("sensor.gaming_status_")) continue;
-    const attrs = hass.states[key].attributes;
-    if (attrs && attrs.color_extraction_enabled !== undefined) {
-      return attrs.color_extraction_enabled !== false;
+  return gamingStatusMemoScan(hass, "colorExtraction", () => {
+    for (const key of Object.keys(hass.states)) {
+      if (!key.startsWith("sensor.gaming_status_")) continue;
+      const attrs = hass.states[key].attributes;
+      if (attrs && attrs.color_extraction_enabled !== undefined) {
+        return attrs.color_extraction_enabled !== false;
+      }
     }
-  }
-  return true;
+    return true;
+  });
 }
 
 // Same hex/rgb parsing the List card's "Game Artwork" color mode uses,
@@ -667,14 +702,16 @@ function gamingStatusNum(value) {
 // check the real value.
 function gamingStatusIsAchievementTrackingEnabled(hass) {
   if (!hass) return true;
-  for (const key of Object.keys(hass.states)) {
-    if (!key.startsWith("sensor.gaming_status_")) continue;
-    const attrs = hass.states[key].attributes;
-    if (attrs && attrs.achievement_tracking_enabled !== undefined) {
-      return attrs.achievement_tracking_enabled !== false;
+  return gamingStatusMemoScan(hass, "achievementTracking", () => {
+    for (const key of Object.keys(hass.states)) {
+      if (!key.startsWith("sensor.gaming_status_")) continue;
+      const attrs = hass.states[key].attributes;
+      if (attrs && attrs.achievement_tracking_enabled !== undefined) {
+        return attrs.achievement_tracking_enabled !== false;
+      }
     }
-  }
-  return true;
+    return true;
+  });
 }
 
 // Joins display labels the way natural English lists read: "A", "A & B",
@@ -756,14 +793,11 @@ class GamingStatusCard extends HTMLElement {
         }
       }
     } else {
-      for (const entityId in hass.states) {
-        if ((entityId.startsWith("sensor.gaming_status_") || entityId.startsWith("binary_sensor.gaming_status_")) && (entityId.endsWith(targetSuffix) || entityId.includes("anyone_gaming"))) {
-          // Bulletproof check: Ensure it belongs to the integration by verifying a unique attribute
-          if (hass.states[entityId].attributes.secondary !== undefined) {
-            rawEntities.push(hass.states[entityId]);
-            currentHash += hass.states[entityId].state + hass.states[entityId].last_updated;
-          }
-        }
+      // Only entities with the integration's own "secondary" attribute count
+      // (see gamingStatusTrackedEntityIds).
+      for (const entityId of gamingStatusTrackedEntityIds(hass, targetSuffix, true)) {
+        rawEntities.push(hass.states[entityId]);
+        currentHash += hass.states[entityId].state + hass.states[entityId].last_updated;
       }
     }
 
@@ -1380,14 +1414,8 @@ class GamingSlideshowCard extends HTMLElement {
         }
       }
     } else {
-      for (const entityId in hass.states) {
-        if (
-          (entityId.startsWith("sensor.gaming_status_") || entityId.startsWith("binary_sensor.gaming_status_")) &&
-          (entityId.endsWith(this.config.entities_pattern) || entityId.includes("anyone_gaming")) &&
-          hass.states[entityId].attributes.secondary !== undefined
-        ) {
-          rawEntities.push(hass.states[entityId]);
-        }
+      for (const entityId of gamingStatusTrackedEntityIds(hass, this.config.entities_pattern, true)) {
+        rawEntities.push(hass.states[entityId]);
       }
     }
 
@@ -1963,11 +1991,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
       entityIds = gamingStatusResolveSelectedEntities(hass, this.config.selected_entities, this.config.entities_pattern);
     } else {
-      entityIds = Object.keys(hass.states).filter(
-        k => (k.startsWith("sensor.gaming_status_") || k.startsWith("binary_sensor.gaming_status_")) &&
-             k.endsWith(this.config.entities_pattern) &&
-             hass.states[k].attributes.secondary !== undefined
-      );
+      entityIds = gamingStatusTrackedEntityIds(hass, this.config.entities_pattern);
     }
     entityIds.sort();
 
@@ -2460,13 +2484,7 @@ class GamingStatusDonutCard extends HTMLElement {
       if (manualStr) {
         entityIds = gamingStatusResolveSelectedEntities(hass, manualStr, this.config.entities_pattern);
       } else {
-        for (const key in hass.states) {
-          if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) &&
-              key.endsWith(this.config.entities_pattern) &&
-              hass.states[key].attributes.secondary !== undefined) {
-            entityIds.push(key);
-          }
-        }
+        entityIds = gamingStatusTrackedEntityIds(hass, this.config.entities_pattern);
       }
     }
     entityIds.sort();
@@ -3431,11 +3449,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
       entityIds = gamingStatusResolveSelectedEntities(hass, this.config.selected_entities, this.config.entities_pattern);
     } else {
-      entityIds = Object.keys(hass.states).filter(
-        k => (k.startsWith("sensor.gaming_status_") || k.startsWith("binary_sensor.gaming_status_")) &&
-             k.endsWith(this.config.entities_pattern) &&
-             hass.states[k].attributes.secondary !== undefined
-      );
+      entityIds = gamingStatusTrackedEntityIds(hass, this.config.entities_pattern);
     }
     entityIds.sort();
 
