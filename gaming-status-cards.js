@@ -31,13 +31,20 @@ function gamingStatusNormalizePalette(config) {
 // Splits on commas outside parentheses, so "rgb(255,190,11), #3a86ff" (the
 // format the editors' placeholders show) stays two colors, and keeps only
 // entries the browser accepts as a color -- these are written straight into
-// SVG fill and style attributes.
+// SVG fill and style attributes. They must also use only the characters a
+// color needs (hex, names, rgb()/hsl()/var() with numbers, %, /, -):
+// CSS.supports() alone also accepts e.g. var(--x,"...") or url(), whose
+// quotes and brackets could break out of those attributes.
+const GAMING_STATUS_COLOR_CHARS_RE = /^[#\w\s.,%()\/-]+$/;
 function gamingStatusParseCustomColors(raw) {
   const canCheck = typeof CSS !== "undefined" && typeof CSS.supports === "function";
   return String(raw || "")
     .split(/,(?![^(]*\))/)
     .map(c => c.trim())
-    .filter(c => c && (canCheck ? CSS.supports("color", c) : /^[#\w\s.,%()\/-]+$/.test(c)));
+    .filter(c => c
+      && GAMING_STATUS_COLOR_CHARS_RE.test(c)
+      && !/url\(/i.test(c)
+      && (!canCheck || CSS.supports("color", c)));
 }
 
 function gamingStatusResolvePalette(config) {
@@ -49,15 +56,106 @@ function gamingStatusResolvePalette(config) {
   return preset ? preset.colors : GAMING_STATUS_PALETTES.vivid.colors;
 }
 
-// Start-of-window timestamp (ms) for the selected reporting window.
-// Rolling = past 7 days (today + 6 prior days); Calendar = since the most recent
-// Sunday. Uses local-midnight day boundaries to stay consistent with the
-// play_history day windowing used elsewhere in these cards.
-function gamingStatusWindowStart(isCalendar, now) {
+// ====================================================================
+// SHARED: DAYS IN HOME ASSISTANT'S TIME ZONE
+// ====================================================================
+// play_history and the weekly totals are keyed by Home Assistant's own
+// local dates, so the charts bucket days by its time zone (hass.config
+// .time_zone) rather than the viewer's browser clock -- otherwise a viewer
+// in another time zone (a public-page visitor, or travelling) saw every bar
+// shifted by a day. Falls back to the browser's zone when the time zone is
+// unknown (e.g. an older integration's public page) or not recognized.
+const GAMING_STATUS_ZONE_FORMATS = new Map();
+function gamingStatusZoneFormat(timeZone) {
+  let fmt = GAMING_STATUS_ZONE_FORMATS.get(timeZone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone, hourCycle: "h23",
+      year: "numeric", month: "numeric", day: "numeric",
+      hour: "numeric", minute: "numeric", second: "numeric",
+    });
+    GAMING_STATUS_ZONE_FORMATS.set(timeZone, fmt);
+  }
+  return fmt;
+}
+
+function gamingStatusZoneParts(timeZone, ms) {
+  const out = {};
+  for (const p of gamingStatusZoneFormat(timeZone).formatToParts(new Date(ms))) out[p.type] = p.value;
+  return {
+    y: +out.year, m: +out.month, d: +out.day,
+    h: (+out.hour) % 24, min: +out.minute, s: +out.second,
+  };
+}
+
+function gamingStatusTimeZone(hass) {
+  return (hass && hass.config && hass.config.time_zone) || null;
+}
+
+// {y, m, d, weekday} of today, in Home Assistant's time zone.
+function gamingStatusToday(hass, now) {
   const ref = now || new Date();
-  const startOfToday = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
-  const daysBack = isCalendar ? ref.getDay() : 6;
-  return startOfToday.getTime() - daysBack * 86400000;
+  const tz = gamingStatusTimeZone(hass);
+  if (tz) {
+    try {
+      const p = gamingStatusZoneParts(tz, ref.getTime());
+      if (p.y && p.m && p.d) {
+        return { y: p.y, m: p.m, d: p.d, weekday: new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay() };
+      }
+    } catch (e) { /* unrecognized time zone -- use the browser's */ }
+  }
+  return { y: ref.getFullYear(), m: ref.getMonth() + 1, d: ref.getDate(), weekday: ref.getDay() };
+}
+
+// "YYYY-MM-DD" keys of the reporting window, oldest first. Rolling = past 7
+// days (today + 6 prior days); Calendar = since the most recent Sunday.
+// Steps whole calendar days (not 24-hour blocks), so a daylight-saving
+// change inside the window can't skip or repeat a day.
+function gamingStatusWindowDays(hass, isCalendar, now) {
+  const t = gamingStatusToday(hass, now);
+  const daysBack = isCalendar ? t.weekday : 6;
+  const days = [];
+  for (let i = daysBack; i >= 0; i--) {
+    const d = new Date(Date.UTC(t.y, t.m - 1, t.d - i));
+    days.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`);
+  }
+  return days;
+}
+
+// Timestamp (ms) of midnight starting the given "YYYY-MM-DD" day, in Home
+// Assistant's time zone.
+function gamingStatusDayStart(hass, dayKey) {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const tz = gamingStatusTimeZone(hass);
+  if (tz) {
+    try {
+      // Midnight UTC, shifted by the zone's offset; re-checked once in case
+      // the first shift lands on the other side of a daylight-saving change.
+      const utcMidnight = Date.UTC(y, m - 1, d);
+      let ts = utcMidnight;
+      for (let k = 0; k < 2; k++) {
+        const p = gamingStatusZoneParts(tz, ts);
+        const offset = Date.UTC(p.y, p.m - 1, p.d, p.h, p.min, p.s) - Math.floor(ts / 1000) * 1000;
+        ts = utcMidnight - offset;
+      }
+      if (!isNaN(ts)) return ts;
+    } catch (e) { /* unrecognized time zone -- use the browser's */ }
+  }
+  return new Date(y, m - 1, d).getTime();
+}
+
+// Start-of-window timestamp (ms) for the selected reporting window: midnight,
+// in Home Assistant's time zone, at the start of its first day.
+function gamingStatusWindowStart(isCalendar, hass, now) {
+  return gamingStatusDayStart(hass, gamingStatusWindowDays(hass, isCalendar, now)[0]);
+}
+
+// Today's "YYYY-MM-DD" in Home Assistant's time zone. Part of the charts'
+// change hashes, so they move on to the new day at midnight even when no
+// tracked entity has changed since.
+function gamingStatusTodayKey(hass) {
+  const t = gamingStatusToday(hass);
+  return `${t.y}-${String(t.m).padStart(2, "0")}-${String(t.d).padStart(2, "0")}`;
 }
 
 // Buckets a session's platform string into the three groups the Platforms card
@@ -88,8 +186,12 @@ const GAMING_STATUS_DEFAULT_ENTITIES_PATTERN = "_master";
 // player's name (e.g. "Player1 Gaming Status Master" -> "Player1"). Includes the
 // platform words (Steam/Xbox/...) too, not just "Master", so this stays
 // correct for any entities_pattern, not only the default "_master" suffix.
+// Only words at the END are stripped: matching them anywhere also cut them
+// out of the middle of a name ("Joe Steamer" -> "Joeer", "Al Masterson" ->
+// "Alson"), and Game Management sends this name to the history services.
+const GAMING_STATUS_NAME_SUFFIX_RE = /(?:\s+(?:Gaming Status Agent|Gaming Status|Master|GSA|Chart|Steam|Xbox|PlayStation|PC|Custom|Discord|Playnite))+\s*$/i;
 function gamingStatusCleanPlayerName(rawName) {
-  return String(rawName).replace(/ Gaming Status Agent| Gaming Status| Master| GSA| Chart| Steam| Xbox| PlayStation| PC| Custom| Discord| Playnite/gi, "").trim();
+  return String(rawName).replace(GAMING_STATUS_NAME_SUFFIX_RE, "").trim();
 }
 
 function gamingStatusEscapeHTML(str) {
@@ -134,6 +236,45 @@ function gamingStatusCssUrl(url) {
 }
 
 // ====================================================================
+// SHARED: PER-UPDATE SCAN CACHE
+// ====================================================================
+// Home Assistant hands every card the same hass.states object for one
+// update (and a new object for the next), so scans over all of hass.states
+// are cached against that object: a dashboard of many cards does each scan
+// once per update instead of once or more per card. A new update means a
+// new object, so a cached result is never stale.
+const GAMING_STATUS_SCAN_CACHE = new WeakMap();
+function gamingStatusMemoScan(hass, key, compute) {
+  const states = hass && hass.states;
+  if (!states || typeof states !== "object") return compute();
+  let cache = GAMING_STATUS_SCAN_CACHE.get(states);
+  if (!cache) {
+    cache = new Map();
+    GAMING_STATUS_SCAN_CACHE.set(states, cache);
+  }
+  if (!cache.has(key)) cache.set(key, compute());
+  return cache.get(key);
+}
+
+// Every gaming_status player entity whose id ends with `suffix` (the "All
+// Tracked Players" set), in hass.states order -- plus the "anyone gaming"
+// hub entity when withHub is set (the player list and slideshow show it).
+// A fresh array each call, so callers may sort or extend it.
+function gamingStatusTrackedEntityIds(hass, suffix, withHub) {
+  return gamingStatusMemoScan(hass, `tracked|${suffix}|${withHub ? 1 : 0}`, () => {
+    const ids = [];
+    for (const key in hass.states) {
+      if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) &&
+          (key.endsWith(suffix) || (withHub && key.includes("anyone_gaming"))) &&
+          hass.states[key].attributes.secondary !== undefined) {
+        ids.push(key);
+      }
+    }
+    return ids;
+  }).slice();
+}
+
+// ====================================================================
 // SHARED: PLAYER ENTITY DROPDOWNS (Single Player mode)
 // ====================================================================
 
@@ -142,13 +283,13 @@ function gamingStatusCssUrl(url) {
 // deterministic and matches what the dropdown actually shows.
 function gamingStatusGetPlayerEntities(hass, targetSuffix) {
   if (!hass) return [];
-  return Object.keys(hass.states)
+  return gamingStatusMemoScan(hass, `players|${targetSuffix}`, () => Object.keys(hass.states)
     .filter(k => k.endsWith(targetSuffix) && hass.states[k].attributes.secondary !== undefined)
     .map(k => ({
       id: k,
       name: gamingStatusCleanPlayerName(hass.states[k].attributes.friendly_name || k),
     }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name))).slice();
 }
 
 // Resolves a "Selected Entities" config string into real entity IDs. Each
@@ -207,13 +348,7 @@ function gamingStatusLeaderboardEntityIds(hass, config) {
     return gamingStatusResolveSelectedEntities(hass, config.selected_entities, config.entities_pattern);
   }
   const targetSuffix = config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
-  const result = [];
-  for (const key in hass.states) {
-    if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) && key.endsWith(targetSuffix) && hass.states[key].attributes.secondary !== undefined) {
-      result.push(key);
-    }
-  }
-  return result;
+  return gamingStatusTrackedEntityIds(hass, targetSuffix);
 }
 
 function gamingStatusPlayerOptionsHTML(entities, selected, escapeFn) {
@@ -223,20 +358,23 @@ function gamingStatusPlayerOptionsHTML(entities, selected, escapeFn) {
 
 // If "Single Player" mode has no selection yet, defaults to the first
 // available player (alphabetically) instead of leaving the dropdown on the
-// dead-end "Select a player…" placeholder. Mutates `config` in place and
-// returns true if a default was just applied, so the caller can persist it.
+// dead-end "Select a player…" placeholder. Returns a NEW config with the
+// default applied, for the caller to adopt and persist, or null if none is
+// needed. Never modifies `config`: an editor's config is Home Assistant's own
+// object, which its card editor dialog deep-freezes, and writing to a frozen
+// object throws in this (module, so strict-mode) script -- that broke the
+// visual editor when switching to Single Player.
 function gamingStatusDefaultSingleEntity(config, entities, field) {
   const key = field || "single_entity";
   if (config.mode === "single" && !config[key] && entities.length) {
-    config[key] = entities[0].id;
-    return true;
+    return { ...config, [key]: entities[0].id };
   }
-  return false;
+  return null;
 }
 
 // For always-single-player cards/editors (Game Management, PlayStation
 // Trophies, 100% Completion, Near Completion, Stats, Library): there's a
-// window where gamingStatusDefaultSingleEntity's mutation hasn't actually
+// window where gamingStatusDefaultSingleEntity's default hasn't actually
 // been persisted back through Home Assistant's own editor lifecycle yet
 // (e.g. the very first render, before `hass` -- and therefore the real
 // player list -- is available at all), during which the CARD itself
@@ -511,14 +649,16 @@ function gamingStatusGetSessionPlatforms(hass) {
 // convention of not hiding options before hass data has loaded.
 function gamingStatusIsColorExtractionEnabled(hass) {
   if (!hass) return true;
-  for (const key of Object.keys(hass.states)) {
-    if (!key.startsWith("sensor.gaming_status_")) continue;
-    const attrs = hass.states[key].attributes;
-    if (attrs && attrs.color_extraction_enabled !== undefined) {
-      return attrs.color_extraction_enabled !== false;
+  return gamingStatusMemoScan(hass, "colorExtraction", () => {
+    for (const key of Object.keys(hass.states)) {
+      if (!key.startsWith("sensor.gaming_status_")) continue;
+      const attrs = hass.states[key].attributes;
+      if (attrs && attrs.color_extraction_enabled !== undefined) {
+        return attrs.color_extraction_enabled !== false;
+      }
     }
-  }
-  return true;
+    return true;
+  });
 }
 
 // Same hex/rgb parsing the List card's "Game Artwork" color mode uses,
@@ -562,14 +702,16 @@ function gamingStatusNum(value) {
 // check the real value.
 function gamingStatusIsAchievementTrackingEnabled(hass) {
   if (!hass) return true;
-  for (const key of Object.keys(hass.states)) {
-    if (!key.startsWith("sensor.gaming_status_")) continue;
-    const attrs = hass.states[key].attributes;
-    if (attrs && attrs.achievement_tracking_enabled !== undefined) {
-      return attrs.achievement_tracking_enabled !== false;
+  return gamingStatusMemoScan(hass, "achievementTracking", () => {
+    for (const key of Object.keys(hass.states)) {
+      if (!key.startsWith("sensor.gaming_status_")) continue;
+      const attrs = hass.states[key].attributes;
+      if (attrs && attrs.achievement_tracking_enabled !== undefined) {
+        return attrs.achievement_tracking_enabled !== false;
+      }
     }
-  }
-  return true;
+    return true;
+  });
 }
 
 // Joins display labels the way natural English lists read: "A", "A & B",
@@ -627,7 +769,7 @@ class GamingStatusCard extends HTMLElement {
       max_visible_players: config.max_visible_players || "",
       manual_entities: config.manual_entities || "",
     };
-    this._lastHash = ""; 
+    this._lastHash = null;
   }
 
   set hass(hass) {
@@ -651,14 +793,11 @@ class GamingStatusCard extends HTMLElement {
         }
       }
     } else {
-      for (const entityId in hass.states) {
-        if ((entityId.startsWith("sensor.gaming_status_") || entityId.startsWith("binary_sensor.gaming_status_")) && (entityId.endsWith(targetSuffix) || entityId.includes("anyone_gaming"))) {
-          // Bulletproof check: Ensure it belongs to the integration by verifying a unique attribute
-          if (hass.states[entityId].attributes.secondary !== undefined) {
-            rawEntities.push(hass.states[entityId]);
-            currentHash += hass.states[entityId].state + hass.states[entityId].last_updated;
-          }
-        }
+      // Only entities with the integration's own "secondary" attribute count
+      // (see gamingStatusTrackedEntityIds).
+      for (const entityId of gamingStatusTrackedEntityIds(hass, targetSuffix, true)) {
+        rawEntities.push(hass.states[entityId]);
+        currentHash += hass.states[entityId].state + hass.states[entityId].last_updated;
       }
     }
 
@@ -1058,7 +1197,13 @@ class GamingStatusCard extends HTMLElement {
   }
   
   getCardSize() {
-    return Object.keys(this._hass.states).length > 0 ? 3 : 1;
+    // 3 once any entity is loaded, else 1 -- without listing every entity
+    // id, and without throwing if called before hass is set.
+    const states = this._hass && this._hass.states;
+    if (states) {
+      for (const _ in states) return 3;
+    }
+    return 1;
   }
 }
 
@@ -1275,14 +1420,8 @@ class GamingSlideshowCard extends HTMLElement {
         }
       }
     } else {
-      for (const entityId in hass.states) {
-        if (
-          (entityId.startsWith("sensor.gaming_status_") || entityId.startsWith("binary_sensor.gaming_status_")) &&
-          (entityId.endsWith(this.config.entities_pattern) || entityId.includes("anyone_gaming")) &&
-          hass.states[entityId].attributes.secondary !== undefined
-        ) {
-          rawEntities.push(hass.states[entityId]);
-        }
+      for (const entityId of gamingStatusTrackedEntityIds(hass, this.config.entities_pattern, true)) {
+        rawEntities.push(hass.states[entityId]);
       }
     }
 
@@ -1469,6 +1608,9 @@ class GamingSlideshowCard extends HTMLElement {
           this.content = this.shadowRoot.getElementById("slideshow-container");
         }
         this.content.style.aspectRatio = activeAspectRatio;
+        // The multi-game slideshow paints the first slide on the container
+        // itself; clear it so the last game's art doesn't show through.
+        this.content.style.backgroundImage = "none";
         this.content.innerHTML = `
           <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.2); color: var(--secondary-text-color, #888);">
             <ha-icon icon="mdi:gamepad-variant-outline" style="width: 48px; height: 48px; opacity: 0.5; margin-bottom: 8px;"></ha-icon>
@@ -1511,6 +1653,9 @@ class GamingSlideshowCard extends HTMLElement {
     };
 
     if (data.length === 1) {
+      // This game's art is drawn by the inner div; clear any slide left on
+      // the container (it showed around "contain"-fit logos and icons).
+      this.content.style.backgroundImage = "none";
       this.content.innerHTML = `
         <div style="width: 100%; height: 100%; background-image: ${gamingStatusEscapeHTML(gamingStatusCssUrl(data[0].art))}; background-size: ${bgSize}; background-repeat: ${bgRepeat}; background-position: center;"></div>
         ${getAvatarHtml(data[0].players)}
@@ -1518,8 +1663,14 @@ class GamingSlideshowCard extends HTMLElement {
       return;
     }
 
-    const t_slide = parseFloat(this.config.time_per_slide);
-    const t_trans = parseFloat(this.config.transition_time);
+    // Saved configs can hold a blank, zero or negative value (the editor
+    // used to save a cleared field as NaN), which made the keyframe
+    // percentages NaN/Infinity and broke the animation: fall back to the
+    // defaults (5s per slide, 1s fade). An explicit 0s fade is kept.
+    const slideSecs = parseFloat(this.config.time_per_slide);
+    const fadeSecs = parseFloat(this.config.transition_time);
+    const t_slide = slideSecs > 0 ? slideSecs : 5;
+    const t_trans = fadeSecs >= 0 ? fadeSecs : 1;
     const loop_duration = data.length * t_slide;
     
     // Advanced Crossfade Math with Z-Index Swapping to fix the loop wrap "pop"
@@ -1616,14 +1767,10 @@ class GamingSlideshowCardEditor extends HTMLElement {
         </div>
 
         <div><div class="section-title">Time Per Slide (Seconds)</div><input type="number" id="time-input" .configValue="time_per_slide" value="${
-          this._config.time_per_slide !== undefined
-            ? this._config.time_per_slide
-            : 5
+          this._esc(this._config.time_per_slide ?? 5)
         }" min="1"></div>
         <div><div class="section-title">Transition Fade Time (Seconds)</div><input type="number" id="transition-input" .configValue="transition_time" value="${
-          this._config.transition_time !== undefined
-            ? this._config.transition_time
-            : 1
+          this._esc(this._config.transition_time ?? 1)
         }" min="0"></div>
         <hr>
         <div>
@@ -1689,10 +1836,15 @@ class GamingSlideshowCardEditor extends HTMLElement {
     });
 
     const timeInput = this.shadowRoot.getElementById("time-input");
+    // A cleared field is saved as "not set" (so the default applies), not NaN.
+    const numberOrUnset = (value) => {
+      const n = parseFloat(value);
+      return Number.isFinite(n) ? n : undefined;
+    };
     timeInput.addEventListener("change", (ev) => {
       this._config = {
         ...this._config,
-        time_per_slide: parseFloat(ev.target.value),
+        time_per_slide: numberOrUnset(ev.target.value),
       };
       this.dispatchEvent(
         new CustomEvent("config-changed", {
@@ -1707,7 +1859,7 @@ class GamingSlideshowCardEditor extends HTMLElement {
     transInput.addEventListener("change", (ev) => {
       this._config = {
         ...this._config,
-        transition_time: parseFloat(ev.target.value),
+        transition_time: numberOrUnset(ev.target.value),
       };
       this.dispatchEvent(
         new CustomEvent("config-changed", {
@@ -1845,7 +1997,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
       hide_empty: config.hide_empty === true || config.hide_empty === "true",
       max_games: parseInt(config.max_games) || 6,
     };
-    this._lastHash = "";
+    this._lastHash = null;
   }
 
   set hass(hass) {
@@ -1858,11 +2010,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
       entityIds = gamingStatusResolveSelectedEntities(hass, this.config.selected_entities, this.config.entities_pattern);
     } else {
-      entityIds = Object.keys(hass.states).filter(
-        k => (k.startsWith("sensor.gaming_status_") || k.startsWith("binary_sensor.gaming_status_")) &&
-             k.endsWith(this.config.entities_pattern) &&
-             hass.states[k].attributes.secondary !== undefined
-      );
+      entityIds = gamingStatusTrackedEntityIds(hass, this.config.entities_pattern);
     }
     entityIds.sort();
 
@@ -1873,7 +2021,8 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
       + "|" + this.config.hide_empty
       + "|" + this.config.color_palette
       + "|" + this.config.custom_colors
-      + "|" + this.config.show_legend;
+      + "|" + this.config.show_legend
+      + "|" + gamingStatusTodayKey(hass);
 
     if (this._lastHash === hash) return;
     this._lastHash = hash;
@@ -1905,13 +2054,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
     this._ensureShell();
 
     const isCal = this.config.window === "calendar";
-    const now = new Date();
-    const days = [];
-    const daysBack = isCal ? now.getDay() : 6;
-    for (let i = daysBack; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 86400000);
-      days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-    }
+    const days = gamingStatusWindowDays(this._hass, isCal);
 
     if (this.config.stack_by === "game") {
       // Aggregate play_history (seconds -> hours) across all entities, keyed by game.
@@ -2065,7 +2208,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
         const h = d.groups[groups[gi].name] || 0;
         if (h <= 0) continue;
         const bh = (h / niceMax) * areaH;
-        svg += `<rect x="${bx}" y="${(yBase - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="${colorOf(gi)}" data-${dataKey}="${this._esc(groups[gi].name)}" data-hours="${h.toFixed(4)}" style="transition:opacity 0.2s ease"/>`;
+        svg += `<rect x="${bx}" y="${(yBase - bh).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" fill="${gamingStatusEscapeHTML(colorOf(gi))}" data-${dataKey}="${this._esc(groups[gi].name)}" data-hours="${h.toFixed(4)}" style="transition:opacity 0.2s ease"/>`;
         yBase -= bh;
       }
 
@@ -2089,7 +2232,7 @@ class GamingStatusWeeklyActivityCard extends HTMLElement {
           const row = Math.floor(i / legendCols);
           const lx = padL + col * colW;
           const ly = legY0 + row * legendRowH;
-          svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${colorOf(i)}" rx="2" style="transition:opacity 0.2s ease" data-swatch-${dataKey}="${this._esc(g.name)}"/>`;
+          svg += `<rect x="${lx}" y="${ly}" width="12" height="12" fill="${gamingStatusEscapeHTML(colorOf(i))}" rx="2" style="transition:opacity 0.2s ease" data-swatch-${dataKey}="${this._esc(g.name)}"/>`;
           const hoursStr = isPlayerMode && g.totalHours > 0 ? ` (${g.totalHours.toFixed(2)}h)` : "";
           const gamertagStr = isPlayerMode && this.config.show_gamertags && g.gamertag ? ` (${g.gamertag})` : "";
           const fullLabel = g.name + gamertagStr + hoursStr;
@@ -2145,7 +2288,9 @@ class GamingStatusWeeklyActivityEditor extends HTMLElement {
     const colorPalette = gamingStatusNormalizePalette(this._config);
     const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
@@ -2341,7 +2486,7 @@ class GamingStatusDonutCard extends HTMLElement {
       entities_pattern: config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN,
       ...config,
     };
-    this._lastHash = "";
+    this._lastHash = null;
   }
 
   set hass(hass) {
@@ -2358,13 +2503,7 @@ class GamingStatusDonutCard extends HTMLElement {
       if (manualStr) {
         entityIds = gamingStatusResolveSelectedEntities(hass, manualStr, this.config.entities_pattern);
       } else {
-        for (const key in hass.states) {
-          if ((key.startsWith("sensor.gaming_status_") || key.startsWith("binary_sensor.gaming_status_")) &&
-              key.endsWith(this.config.entities_pattern) &&
-              hass.states[key].attributes.secondary !== undefined) {
-            entityIds.push(key);
-          }
-        }
+        entityIds = gamingStatusTrackedEntityIds(hass, this.config.entities_pattern);
       }
     }
     entityIds.sort();
@@ -2372,7 +2511,8 @@ class GamingStatusDonutCard extends HTMLElement {
     const hash = gamingStatusEntityHash(hass, entityIds)
       + "|" + this.config.window
       + "|" + this.config.color_palette
-      + "|" + this.config.custom_colors;
+      + "|" + this.config.custom_colors
+      + "|" + gamingStatusTodayKey(hass);
 
     if (this._lastHash === hash) return;
     this._lastHash = hash;
@@ -2405,7 +2545,7 @@ class GamingStatusDonutCard extends HTMLElement {
 
     const isCal = this.config.window === "calendar";
     const weeklyAttr = isCal ? "total_weekly_hours" : "rolling_weekly_hours";
-    const windowStart = gamingStatusWindowStart(isCal);
+    const windowStart = gamingStatusWindowStart(isCal, this._hass);
     const isPlatformPalette = this.config.color_palette === "platform" || !this.config.color_palette;
     const palette = isPlatformPalette ? null : gamingStatusResolvePalette(this.config);
 
@@ -2488,7 +2628,7 @@ class GamingStatusDonutCard extends HTMLElement {
     for (const p of platforms) {
       const segW = (platformTotals[p.key] / grandTotal) * barAreaW;
       if (segW < 0.5) continue;
-      svg += `<rect x="${xCursor.toFixed(1)}" y="${padT}" width="${segW.toFixed(1)}" height="${barH}" fill="${p.color}" data-platform="${this._esc(p.name)}" data-hours="${platformTotals[p.key].toFixed(4)}"/>`;
+      svg += `<rect x="${xCursor.toFixed(1)}" y="${padT}" width="${segW.toFixed(1)}" height="${barH}" fill="${gamingStatusEscapeHTML(p.color)}" data-platform="${this._esc(p.name)}" data-hours="${platformTotals[p.key].toFixed(4)}"/>`;
       xCursor += segW;
     }
 
@@ -2503,7 +2643,7 @@ class GamingStatusDonutCard extends HTMLElement {
         const maxCh = Math.floor(platColW / 7) - 2;
         const fullLabel = `${p.name} (${fmt(platformTotals[p.key])})`;
         const label = fullLabel.length > maxCh ? fullLabel.slice(0, maxCh - 1) + "…" : fullLabel;
-        svg += `<rect x="${lx}" y="${ly + 1}" width="12" height="12" fill="${p.color}" rx="2"/>`;
+        svg += `<rect x="${lx}" y="${ly + 1}" width="12" height="12" fill="${gamingStatusEscapeHTML(p.color)}" rx="2"/>`;
         svg += `<text x="${lx + 17}" y="${ly + 13}" font-size="14" fill="var(--primary-text-color,#ddd)">${this._esc(label)}</text>`;
       });
     }
@@ -2552,7 +2692,9 @@ class GamingStatusDonutEditor extends HTMLElement {
 
     const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
 
@@ -2689,7 +2831,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
       // or the editor's own select-based "true"/"false" string.
       show_gamertags: config.show_gamertags === true || config.show_gamertags === "true",
     };
-    this._lastHash = "";
+    this._lastHash = null;
   }
 
   set hass(hass) {
@@ -2728,6 +2870,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
         currentHash += "|steam_lib:" + hass.states[libId].last_updated;
       }
     }
+    currentHash += "|" + gamingStatusTodayKey(hass);
 
     if (this._lastHash === currentHash) return;
     this._lastHash = currentHash;
@@ -2737,12 +2880,8 @@ class GamingStatusLeaderboardCard extends HTMLElement {
 
   _getPlayHistoryBreakdown(attrs, isCalendar) {
     const playHistory = attrs.play_history || {};
-    const now = new Date();
     const result = {};
-    const daysBack = isCalendar ? now.getDay() : 6;
-    for (let i = daysBack; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 86400000);
-      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    for (const key of gamingStatusWindowDays(this._hass, isCalendar)) {
       for (const [game, seconds] of Object.entries(playHistory[key] || {})) {
         result[game] = (result[game] || 0) + (parseFloat(seconds) || 0);
       }
@@ -2855,7 +2994,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
             ${safeName}
           </div>
           <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
-            <div style="width: ${pct}%; height: 100%; background: ${color}; border-radius: 0; transition: width 0.5s ease-out;">
+            <div style="width: ${pct}%; height: 100%; background: ${gamingStatusEscapeHTML(color)}; border-radius: 0; transition: width 0.5s ease-out;">
             </div>
           </div>
           <div style="min-width: 40px; flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap;">
@@ -2882,7 +3021,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
     let finalData = [];
 
     const isCal = this.config.window === "calendar";
-    const windowStart = gamingStatusWindowStart(isCal);
+    const windowStart = gamingStatusWindowStart(isCal, this._hass);
 
     const getBreakdown = (attrs) => isCal
       ? (attrs.calendar_weekly_breakdown || attrs.total_weekly_breakdown || attrs.weekly_breakdown || attrs.weekly_game_breakdown || {})
@@ -2991,7 +3130,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
 
       if (this.config.metric === "longest") {
         html += `
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border-left: 4px solid ${color}; padding-left: 8px; box-sizing: border-box;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border-left: 4px solid ${gamingStatusEscapeHTML(color)}; padding-left: 8px; box-sizing: border-box;">
             <div style="flex-grow: 1; font-size: 14px; font-weight: 500; color: var(--primary-text-color); word-break: break-word;">
               ${safeName}
             </div>
@@ -3008,7 +3147,7 @@ class GamingStatusLeaderboardCard extends HTMLElement {
               ${safeName}
             </div>
             <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
-              <div style="width: ${pct}%; height: 100%; background: ${color}; border-radius: 0; transition: width 0.5s ease-out;">
+              <div style="width: ${pct}%; height: 100%; background: ${gamingStatusEscapeHTML(color)}; border-radius: 0; transition: width 0.5s ease-out;">
               </div>
             </div>
             <div style="min-width: 40px; flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap;">
@@ -3047,7 +3186,9 @@ class GamingStatusLeaderboardEditor extends HTMLElement {
 
     const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
@@ -3314,7 +3455,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
       show_gamertags: config.show_gamertags === true,
     };
     this._lastWatchKey = "";
-    this._lastHash = "";
+    this._lastHash = null;
   }
 
   set hass(hass) {
@@ -3327,11 +3468,7 @@ class GamingStatusRecentActivityCard extends HTMLElement {
     } else if (this.config.mode === "selected" && this.config.selected_entities) {
       entityIds = gamingStatusResolveSelectedEntities(hass, this.config.selected_entities, this.config.entities_pattern);
     } else {
-      entityIds = Object.keys(hass.states).filter(
-        k => (k.startsWith("sensor.gaming_status_") || k.startsWith("binary_sensor.gaming_status_")) &&
-             k.endsWith(this.config.entities_pattern) &&
-             hass.states[k].attributes.secondary !== undefined
-      );
+      entityIds = gamingStatusTrackedEntityIds(hass, this.config.entities_pattern);
     }
     entityIds.sort();
 
@@ -3549,7 +3686,8 @@ class GamingStatusRecentActivityCard extends HTMLElement {
   }
 
   _formatDuration(seconds) {
-    const totalMins = Math.round(seconds / 60);
+    // A missing/unreadable duration shows as "0m" rather than "NaNm".
+    const totalMins = Math.round((Number(seconds) || 0) / 60);
     const h = Math.floor(totalMins / 60);
     const m = totalMins % 60;
     if (h > 0 && m > 0) return `${h}h ${m}m`;
@@ -3930,7 +4068,9 @@ class GamingStatusRecentActivityEditor extends HTMLElement {
     const isTableMode = !isIconMode;
     const targetSuffix = this._config.entities_pattern || GAMING_STATUS_DEFAULT_ENTITIES_PATTERN;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, targetSuffix);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, this._config.single_entity, (s) => this._esc(s));
@@ -4428,7 +4568,7 @@ class GamingStatusGameManagementCard extends HTMLElement {
       mode: config.mode || "all",
       single_entity: config.single_entity || "",
     };
-    this._lastHash = "";
+    this._lastHash = null;
     this._lastCheapFingerprint = "";
   }
 
@@ -4599,7 +4739,8 @@ class GamingStatusGameManagementCard extends HTMLElement {
   }
 
   _formatDuration(seconds) {
-    const totalMins = Math.round(seconds / 60);
+    // A missing/unreadable duration shows as "0m" rather than "NaNm".
+    const totalMins = Math.round((Number(seconds) || 0) / 60);
     const h = Math.floor(totalMins / 60);
     const m = totalMins % 60;
     if (h > 0 && m > 0) return `${h}h ${m}m`;
@@ -5276,7 +5417,9 @@ class GamingStatusGameManagementEditor extends HTMLElement {
     if (!this._config) return;
     const mode = this._config.mode || "all";
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
@@ -5391,7 +5534,7 @@ class GamingStatusPlaystationTrophiesCard extends HTMLElement {
       show_active_artwork: config.show_active_artwork === true,
       image_style: config.image_style === "icons" ? "icons" : "official",
     };
-    this._lastHash = "";
+    this._lastHash = null;
     this._lastCheapFingerprint = "";
   }
 
@@ -5657,7 +5800,9 @@ class GamingStatusPlaystationTrophiesEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
@@ -5846,8 +5991,9 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
       display_mode: displayMode,
       grid_columns: [1, 2, 3, 4].includes(parseInt(config.grid_columns)) ? parseInt(config.grid_columns) : 3,
       grid_max_rows: config.grid_max_rows !== undefined ? Math.max(1, parseInt(config.grid_max_rows) || 3) : 3,
-      time_per_slide: config.time_per_slide !== undefined ? parseFloat(config.time_per_slide) || 5 : 5,
-      transition_time: config.transition_time !== undefined ? parseFloat(config.transition_time) || 1 : 1,
+      // Positive only: a negative value broke the slideshow's keyframes.
+      time_per_slide: parseFloat(config.time_per_slide) > 0 ? parseFloat(config.time_per_slide) : 5,
+      transition_time: config.transition_time !== undefined ? Math.max(0, parseFloat(config.transition_time) || 1) : 1,
       artwork_mode: artworkMode,
       scroll_after: config.scroll_after !== undefined ? Math.max(1, parseInt(config.scroll_after) || 10) : 10,
       // "platform" (per-game platform tint, not an index-cycled array) is
@@ -5857,7 +6003,7 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
       color_palette: config.color_palette || "platform",
       custom_colors: config.custom_colors || "",
     };
-    this._lastHash = "";
+    this._lastHash = null;
     this._lastCheapFingerprint = "";
   }
 
@@ -6215,7 +6361,7 @@ class GamingStatusCompletionTrackerCard extends HTMLElement {
             ${escapeHTML(row.title)}
           </div>
           <div style="flex-grow: 1; height: 24px; background: var(--secondary-background-color, rgba(120,120,120,0.2)); position: relative; overflow: hidden; border-radius: 0;">
-            <div style="width: ${pct}%; height: 100%; background: ${color}; border-radius: 0; transition: width 0.5s ease-out;"></div>
+            <div style="width: ${pct}%; height: 100%; background: ${gamingStatusEscapeHTML(color)}; border-radius: 0; transition: width 0.5s ease-out;"></div>
           </div>
           <div style="min-width: 40px; flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600; color: var(--primary-text-color); white-space: nowrap;">
             ${gamingStatusNum(row.percent)}%
@@ -6254,7 +6400,9 @@ class GamingStatusCompletionTrackerEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
@@ -6385,11 +6533,11 @@ class GamingStatusCompletionTrackerEditor extends HTMLElement {
         <hr>
         <div>
           <div class="section-title">Time Per Slide (Seconds)</div>
-          <input type="number" id="time_per_slide" value="${this._esc(this._config.time_per_slide)}" min="1" step="0.5">
+          <input type="number" id="time_per_slide" value="${this._esc(this._config.time_per_slide ?? 5)}" min="1" step="0.5">
         </div>
         <div>
           <div class="section-title">Transition Fade Time (Seconds)</div>
-          <input type="number" id="transition_time" value="${this._esc(this._config.transition_time)}" min="0.1" step="0.1">
+          <input type="number" id="transition_time" value="${this._esc(this._config.transition_time ?? 1)}" min="0.1" step="0.1">
         </div>` : ""}
         ${displayMode === "list" ? `
         <hr>
@@ -6655,7 +6803,7 @@ class GamingStatusStatsCard extends HTMLElement {
     GAMING_STATUS_STAT_KEYS.forEach(key => {
       this.config[`show_stat_${key}`] = config[`show_stat_${key}`] !== false;
     });
-    this._lastHash = "";
+    this._lastHash = null;
   }
 
   // Derives sensor.gaming_status_<owner>_library_summary -- same technique
@@ -6816,7 +6964,9 @@ class GamingStatusStatsEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
@@ -6999,7 +7149,7 @@ class GamingStatusLibraryCard extends HTMLElement {
       show_field_percent: config.show_field_percent !== false,
       show_field_counts: config.show_field_counts !== false,
     };
-    this._lastHash = "";
+    this._lastHash = null;
     this._lastCheapFingerprint = "";
   }
 
@@ -7166,7 +7316,8 @@ class GamingStatusLibraryCard extends HTMLElement {
         this._searchQuery = ev.target.value.trim().toLowerCase();
         clearTimeout(this._searchTimer);
         this._searchTimer = setTimeout(() => {
-          if (this._byPlatform) this._renderList(this._byPlatform[this._activePlatform]);
+          const games = this._byPlatform && this._byPlatform[this._activePlatform];
+          if (games) this._renderList(games);
         }, 120);
       });
       this.content = this._bodyEl;
@@ -7195,6 +7346,11 @@ class GamingStatusLibraryCard extends HTMLElement {
     }
 
     this._searchWrapEl.style.display = this.config.show_search ? "flex" : "none";
+    if (!this.config.show_search && this._searchQuery) {
+      // A hidden search box mustn't keep filtering the list.
+      this._searchQuery = "";
+      this._searchInputEl.value = "";
+    }
 
     // Persist the active tab across renders (data refreshes, config
     // tweaks) -- only fall back to the first enabled platform if there's
@@ -7368,6 +7524,20 @@ class GamingStatusLibraryCard extends HTMLElement {
 
     if ((measured <= 0 || measured !== lastApplied) && attempt < 8) {
       requestAnimationFrame(() => this._capListHeight(listEl, maxEntries, measured, attempt + 1));
+    } else if (measured <= 0 && typeof ResizeObserver !== "undefined") {
+      // Still not laid out after the retries (a hidden tab, conditional card
+      // or collapsed section): measure once it actually gets a size, instead
+      // of giving up and showing the whole library uncapped later.
+      if (this._capObserver) this._capObserver.disconnect();
+      const observer = new ResizeObserver(() => {
+        if (!listEl.isConnected || listEl.getBoundingClientRect().height > 0) {
+          observer.disconnect();
+          if (this._capObserver === observer) this._capObserver = null;
+          if (listEl.isConnected) this._capListHeight(listEl, maxEntries, 0, 0);
+        }
+      });
+      this._capObserver = observer;
+      observer.observe(listEl);
     }
   }
 }
@@ -7396,7 +7566,9 @@ class GamingStatusLibraryEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
@@ -7607,7 +7779,7 @@ class GamingStatusGamercardCard extends HTMLElement {
       // "(gamertag)" suffix they never asked for.
       show_gamertags: config.show_gamertags === true,
     };
-    this._lastHash = "";
+    this._lastHash = null;
   }
 
   _resolvePlayerId(hass) {
@@ -8018,7 +8190,9 @@ class GamingStatusGamercardEditor extends HTMLElement {
   render() {
     if (!this._config) return;
     const playerEntities = gamingStatusGetPlayerEntities(this._hass, GAMING_STATUS_DEFAULT_ENTITIES_PATTERN);
-    if (gamingStatusDefaultSingleEntity(this._config, playerEntities)) {
+    const defaulted = gamingStatusDefaultSingleEntity(this._config, playerEntities);
+    if (defaulted) {
+      this._config = defaulted;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
