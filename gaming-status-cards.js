@@ -1197,7 +1197,13 @@ class GamingStatusCard extends HTMLElement {
   }
   
   getCardSize() {
-    return Object.keys(this._hass.states).length > 0 ? 3 : 1;
+    // 3 once any entity is loaded, else 1 -- without listing every entity
+    // id, and without throwing if called before hass is set.
+    const states = this._hass && this._hass.states;
+    if (states) {
+      for (const _ in states) return 3;
+    }
+    return 1;
   }
 }
 
@@ -1761,14 +1767,10 @@ class GamingSlideshowCardEditor extends HTMLElement {
         </div>
 
         <div><div class="section-title">Time Per Slide (Seconds)</div><input type="number" id="time-input" .configValue="time_per_slide" value="${
-          this._config.time_per_slide !== undefined
-            ? this._config.time_per_slide
-            : 5
+          this._esc(this._config.time_per_slide ?? 5)
         }" min="1"></div>
         <div><div class="section-title">Transition Fade Time (Seconds)</div><input type="number" id="transition-input" .configValue="transition_time" value="${
-          this._config.transition_time !== undefined
-            ? this._config.transition_time
-            : 1
+          this._esc(this._config.transition_time ?? 1)
         }" min="0"></div>
         <hr>
         <div>
@@ -3684,7 +3686,8 @@ class GamingStatusRecentActivityCard extends HTMLElement {
   }
 
   _formatDuration(seconds) {
-    const totalMins = Math.round(seconds / 60);
+    // A missing/unreadable duration shows as "0m" rather than "NaNm".
+    const totalMins = Math.round((Number(seconds) || 0) / 60);
     const h = Math.floor(totalMins / 60);
     const m = totalMins % 60;
     if (h > 0 && m > 0) return `${h}h ${m}m`;
@@ -4736,7 +4739,8 @@ class GamingStatusGameManagementCard extends HTMLElement {
   }
 
   _formatDuration(seconds) {
-    const totalMins = Math.round(seconds / 60);
+    // A missing/unreadable duration shows as "0m" rather than "NaNm".
+    const totalMins = Math.round((Number(seconds) || 0) / 60);
     const h = Math.floor(totalMins / 60);
     const m = totalMins % 60;
     if (h > 0 && m > 0) return `${h}h ${m}m`;
@@ -6529,11 +6533,11 @@ class GamingStatusCompletionTrackerEditor extends HTMLElement {
         <hr>
         <div>
           <div class="section-title">Time Per Slide (Seconds)</div>
-          <input type="number" id="time_per_slide" value="${this._esc(this._config.time_per_slide)}" min="1" step="0.5">
+          <input type="number" id="time_per_slide" value="${this._esc(this._config.time_per_slide ?? 5)}" min="1" step="0.5">
         </div>
         <div>
           <div class="section-title">Transition Fade Time (Seconds)</div>
-          <input type="number" id="transition_time" value="${this._esc(this._config.transition_time)}" min="0.1" step="0.1">
+          <input type="number" id="transition_time" value="${this._esc(this._config.transition_time ?? 1)}" min="0.1" step="0.1">
         </div>` : ""}
         ${displayMode === "list" ? `
         <hr>
