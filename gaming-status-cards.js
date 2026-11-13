@@ -3538,8 +3538,13 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         // This row's own platform's avatar/gamertag, not the player's
         // overall active-or-recent identity -- a Steam session shows their
         // Steam avatar/gamertag even if they're currently active on Xbox.
+        // The session's own recorded gamertag wins: a Gaming Status Agent
+        // sensor's gamertag changes with the launcher, so the current value
+        // can belong to a different account than the one this session used.
+        // Sessions recorded before Gaming Status stored it fall back.
         const gamertagAttr = platformKey && GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM[platformKey];
-        const rowGamertag = gamertagAttr ? (stateObj.attributes[gamertagAttr] || "") : "";
+        const rowGamertag = s.gamertag
+          || (gamertagAttr ? (stateObj.attributes[gamertagAttr] || "") : "");
         const platformEntityId = platformKey ? entityId.replace(/_master$/, `_${platformKey}`) : "";
         const platformStateObj = platformEntityId ? this._hass.states[platformEntityId] : null;
         // Only the player's overall picture when the row's platform is
