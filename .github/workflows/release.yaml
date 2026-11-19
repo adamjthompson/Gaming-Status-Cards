@@ -1,0 +1,95 @@
+name: Release Asset
+
+# Attaches gaming-status-cards.js to a release as a release asset.
+# When the latest release has an asset whose name matches "filename" in
+# hacs.json, HACS installs the card from that asset instead of the repository
+# files. GitHub counts each asset download, which is what HACS shows as the
+# download count.
+#
+# Dashboard plugins can't use "zip_release": HACS would register the .zip
+# itself as the dashboard resource. The .js file is attached directly instead.
+#
+# - Runs automatically when a release is published.
+# - Run it by hand (Actions > Release Asset > Run workflow) with a tag to
+#   re-attach one release's file, or with "all" to add the file to every
+#   release that is missing it.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to attach the file to, or "all" to backfill every release missing it'
+        required: true
+        default: "all"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-asset
+  cancel-in-progress: false
+
+jobs:
+  asset:
+    name: Attach gaming-status-cards.js
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Attach and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          ASSET="gaming-status-cards.js"
+
+          git fetch --force --tags origin
+
+          has_asset() {
+            gh release view "$1" --json assets --jq '.assets[].name' | grep -qx "$ASSET"
+          }
+
+          attach() {
+            local tag="$1"
+            if ! git cat-file -e "refs/tags/${tag}:${ASSET}" 2>/dev/null; then
+              echo "::warning::${tag} has no ${ASSET}; skipping"
+              return 0
+            fi
+            rm -rf dist && mkdir dist
+            # Use the file exactly as committed at the release's tag.
+            git show "refs/tags/${tag}:${ASSET}" > "dist/${ASSET}"
+            if [ ! -s "dist/${ASSET}" ]; then
+              echo "::error::${ASSET} for ${tag} is empty"
+              return 1
+            fi
+            gh release upload "$tag" "dist/${ASSET}" --clobber
+            if ! has_asset "$tag"; then
+              echo "::error::${ASSET} did not appear on release ${tag}"
+              return 1
+            fi
+            echo "Attached ${ASSET} to ${tag}"
+          }
+
+          if [ -n "${EVENT_TAG}" ]; then
+            attach "${EVENT_TAG}"
+          elif [ "${INPUT_TAG}" = "all" ]; then
+            gh release list --limit 1000 --json tagName,isDraft \
+              --jq '.[] | select(.isDraft | not) | .tagName' > tags.txt
+            echo "Found $(wc -l < tags.txt) releases"
+            while read -r tag; do
+              if has_asset "$tag"; then
+                echo "${tag} already has ${ASSET}"
+              else
+                attach "$tag"
+              fi
+            done < tags.txt
+          else
+            attach "${INPUT_TAG}"
+          fi
