@@ -563,16 +563,28 @@ function gamingStatusLabelMatchesLauncher(label, key) {
   return lower === key || lower.startsWith(key + " ");
 }
 
+// The library-only platform key ("epic"/"ubisoft"/"gog") an Agent session's
+// or unlock's launcher label belongs to, or null for any other label.
+function gamingStatusLibraryLauncherKey(label) {
+  return Object.keys(GAMING_STATUS_LIBRARY_ONLY_LABELS).find(key => gamingStatusLabelMatchesLauncher(label, key)) || null;
+}
+
 // Maps a platform key to the master sensor's per-platform gamertag
 // attribute name (see sensor.py's MasterGamingSensor -- steam_gamertag/
-// xbox_gamertag/psn_gamertag). Only the three platforms that have a real
-// gamertag concept; playnite intentionally has no entry.
+// xbox_gamertag/psn_gamertag). Only platforms that have a real gamertag
+// concept; playnite intentionally has no entry. Epic, GOG and Ubisoft are
+// looked up by launcher label (gamingStatusLibraryLauncherKey), since their
+// sessions and unlocks come from the Agent; their names come from the
+// player's library scan.
 const GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM = {
   steam: "steam_gamertag",
   xbox: "xbox_gamertag",
   playstation: "psn_gamertag",
   discord: "discord_gamertag",
   gsa: "gsa_gamertag",
+  epic: "epic_gamertag",
+  gog: "gog_gamertag",
+  ubisoft: "ubisoft_gamertag",
 };
 
 const GAMING_STATUS_PLATFORM_LABELS = {
@@ -3550,7 +3562,11 @@ class GamingStatusRecentActivityCard extends HTMLElement {
         // sensor's gamertag changes with the launcher, so the current value
         // can belong to a different account than the one this session used.
         // Sessions recorded before Gaming Status stored it fall back.
-        const gamertagAttr = platformKey && GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM[platformKey];
+        // An Agent session from Epic/GOG/Ubisoft falls back to that
+        // launcher's library-scan account name rather than whatever the
+        // Agent sensor is showing now.
+        const launcherKey = platformKey === "gsa" ? gamingStatusLibraryLauncherKey(s.platform) : null;
+        const gamertagAttr = GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM[launcherKey || platformKey];
         const rowGamertag = s.gamertag
           || (gamertagAttr ? (stateObj.attributes[gamertagAttr] || "") : "");
         const platformEntityId = platformKey ? entityId.replace(/_master$/, `_${platformKey}`) : "";
@@ -3618,7 +3634,8 @@ class GamingStatusRecentActivityCard extends HTMLElement {
 
         // This row's own platform's avatar/gamertag, not the player's
         // overall active-or-recent identity -- see _processSessions for why.
-        const gamertagAttr = platformKey && GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM[platformKey];
+        // Epic/GOG/Ubisoft unlocks carry their launcher's label ("Epic").
+        const gamertagAttr = GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM[platformKey || gamingStatusLibraryLauncherKey(u.platform)];
         const rowGamertag = gamertagAttr ? (stateObj.attributes[gamertagAttr] || "") : "";
         const platformEntityId = platformKey ? entityId.replace(/_master$/, `_${platformKey}`) : "";
         const platformStateObj = platformEntityId ? this._hass.states[platformEntityId] : null;
@@ -8097,10 +8114,15 @@ class GamingStatusGamercardCard extends HTMLElement {
     // this card is actually configured for, not master's cross-platform
     // merged value.
     // An Agent sensor's gamertag changes with the launcher it last saw, so
-    // for Epic/Ubisoft/GOG use the account recorded on the player's latest
-    // session from that launcher instead (none if they have no session).
+    // for Epic/Ubisoft/GOG use the account name the library scan found
+    // (Epic display name, GOG username, or the Agent's Ubisoft gamertag),
+    // falling back to the one recorded on the player's latest session from
+    // that launcher (older Gaming Status, or an Agent with no Ubisoft name).
     const gamertag = isAgentPlatform
-      ? ((sortedSessions.find(s => s.gamertag) || {}).gamertag || "")
+      ? (libraryState.attributes.gamertag
+          || (masterState && masterState.attributes[GAMING_STATUS_GAMERTAG_ATTR_BY_PLATFORM[platformKey]])
+          || (sortedSessions.find(s => s.gamertag) || {}).gamertag
+          || "")
       : (realtimeState ? (realtimeState.attributes.gamertag || "") : (masterState ? (masterState.attributes.gamertag || "") : ""));
 
     // Averaged across the platform's WHOLE library, not just the rows shown
