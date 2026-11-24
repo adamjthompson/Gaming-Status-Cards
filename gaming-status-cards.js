@@ -548,12 +548,12 @@ const GAMING_STATUS_PLATFORM_TINTS = {
 // Epic Games, Ubisoft, Discord and Playnite logos come from the Gaming Status
 // integration's "gaming-status:" icon set (registered on every Home Assistant
 // page, and on its public page), used through <ha-icon> exactly like MDI
-// icons, so they follow the theme's colors. Epic and Ubisoft are library-only
-// platforms (their live status comes from Gaming Status Agent), so they're
-// kept out of the shared platform maps above -- adding them there would make
-// the label fallback in gamingStatusResolvePlatformKey classify old Agent
-// sessions labelled "Epic"/"Ubisoft" as their own platform.
-const GAMING_STATUS_LIBRARY_ONLY_LABELS = { epic: "Epic Games", ubisoft: "Ubisoft" };
+// icons, so they follow the theme's colors. Epic, Ubisoft and GOG are
+// library-only platforms (their live status comes from Gaming Status Agent),
+// so they're kept out of the shared platform maps above -- adding them there
+// would make the label fallback in gamingStatusResolvePlatformKey classify old
+// Agent sessions labelled "Epic"/"Ubisoft"/"GOG" as their own platform.
+const GAMING_STATUS_LIBRARY_ONLY_LABELS = { epic: "Epic Games", ubisoft: "Ubisoft", gog: "GOG" };
 
 // Maps a platform key to the master sensor's per-platform gamertag
 // attribute name (see sensor.py's MasterGamingSensor -- steam_gamertag/
@@ -7079,20 +7079,21 @@ class GamingStatusLibraryCard extends HTMLElement {
   };
 
   // Same brand icons already used for platform badges in the List card.
-  // Epic and Ubisoft use the integration's "gaming-status:" icon set.
-  static PLATFORMS = ["steam", "xbox", "playstation", "epic", "ubisoft"];
+  // Epic, Ubisoft and GOG use the integration's "gaming-status:" icon set.
+  static PLATFORMS = ["steam", "xbox", "playstation", "epic", "ubisoft", "gog"];
   // Shown only when the library actually has games on them, so cards saved
   // before they existed don't grow empty tabs.
-  static OPTIONAL_PLATFORMS = ["epic", "ubisoft"];
+  static OPTIONAL_PLATFORMS = ["epic", "ubisoft", "gog"];
   static PLATFORM_ICONS = {
     steam: "mdi:steam",
     xbox: "mdi:microsoft-xbox",
     playstation: "mdi:sony-playstation",
     epic: "gaming-status:epic",
     ubisoft: "gaming-status:ubisoft",
+    gog: "gaming-status:gog",
   };
-  // Selected-tab colors: Epic #0f4840, Ubisoft #0070FF.
-  static PLATFORM_TINTS = { ...GAMING_STATUS_PLATFORM_TINTS, epic: "15, 72, 64", ubisoft: "0, 112, 255" };
+  // Selected-tab colors: Epic #0f4840, Ubisoft #0070FF, GOG #86328A.
+  static PLATFORM_TINTS = { ...GAMING_STATUS_PLATFORM_TINTS, epic: "15, 72, 64", ubisoft: "0, 112, 255", gog: "134, 50, 138" };
 
   static tabIconHTML(platform) {
     return `<ha-icon icon="${GamingStatusLibraryCard.PLATFORM_ICONS[platform]}"></ha-icon>`;
@@ -7107,6 +7108,7 @@ class GamingStatusLibraryCard extends HTMLElement {
       show_platform_playstation: true,
       show_platform_epic: true,
       show_platform_ubisoft: true,
+      show_platform_gog: true,
       exclude_zero_completion: false,
       show_search: false,
       sort_by: "title",
@@ -7120,7 +7122,7 @@ class GamingStatusLibraryCard extends HTMLElement {
   }
 
   setConfig(config) {
-    const hasNewPlatformFields = config.show_platform_steam !== undefined || config.show_platform_xbox !== undefined || config.show_platform_playstation !== undefined || config.show_platform_epic !== undefined || config.show_platform_ubisoft !== undefined;
+    const hasNewPlatformFields = config.show_platform_steam !== undefined || config.show_platform_xbox !== undefined || config.show_platform_playstation !== undefined || config.show_platform_epic !== undefined || config.show_platform_ubisoft !== undefined || config.show_platform_gog !== undefined;
     const legacyPlatform = ["steam", "xbox", "playstation"].includes(config.platform) ? config.platform : null;
     this.config = {
       ...config,
@@ -7142,6 +7144,7 @@ class GamingStatusLibraryCard extends HTMLElement {
       // the checkboxes existed -- once any checkbox is saved, they win.
       show_platform_epic: hasNewPlatformFields ? config.show_platform_epic !== false : !legacyPlatform,
       show_platform_ubisoft: hasNewPlatformFields ? config.show_platform_ubisoft !== false : !legacyPlatform,
+      show_platform_gog: hasNewPlatformFields ? config.show_platform_gog !== false : !legacyPlatform,
       exclude_zero_completion: config.exclude_zero_completion === true,
       // Opt-in -- adds a visible search box to the card, so it stays off
       // for existing cards unless explicitly turned on.
@@ -7194,6 +7197,7 @@ class GamingStatusLibraryCard extends HTMLElement {
       this.config.show_platform_playstation,
       this.config.show_platform_epic,
       this.config.show_platform_ubisoft,
+      this.config.show_platform_gog,
       this.config.exclude_zero_completion,
       this.config.show_search,
       this.config.sort_by,
@@ -7216,7 +7220,7 @@ class GamingStatusLibraryCard extends HTMLElement {
     const hash = [
       targetEntityId,
       JSON.stringify(byPlatform),
-      [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_epic, this.config.show_platform_ubisoft].join(","),
+      [this.config.show_platform_steam, this.config.show_platform_xbox, this.config.show_platform_playstation, this.config.show_platform_epic, this.config.show_platform_ubisoft, this.config.show_platform_gog].join(","),
       this.config.exclude_zero_completion,
       this.config.show_search,
       this.config.sort_by,
@@ -7580,7 +7584,7 @@ class GamingStatusLibraryEditor extends HTMLElement {
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, effectiveSingleEntity, (s) => this._esc(s));
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
     const libraryPlatforms = GamingStatusLibraryCard.PLATFORMS;
-    // Epic and Ubisoft have no status sensor, so they're "available" when
+    // Epic, Ubisoft and GOG have no status sensor, so they're "available" when
     // any player has their library sensor rather than a platform sensor.
     const hasLibrary = (key) => !this._hass || Object.keys(this._hass.states).some(k =>
       k.startsWith("sensor.gaming_status_") && k.endsWith(`_library_${key}`));
@@ -7640,7 +7644,7 @@ class GamingStatusLibraryEditor extends HTMLElement {
             <option value="completion" ${this._config.sort_by === "completion" ? "selected" : ""}>Completion %</option>
             <option value="recent" ${this._config.sort_by === "recent" ? "selected" : ""}>Recently Played</option>
           </select>
-          <div class="helper-text">"Recently Played" uses Xbox's true last-played time, but PlayStation/Steam's last-achievement-earned time, since that's the only recency signal those platforms' library data provides. Ubisoft uses each game's last unlock. Epic's library data has no recency signal, so Epic games keep their library order.</div>
+          <div class="helper-text">"Recently Played" uses Xbox's true last-played time, but PlayStation/Steam's last-achievement-earned time, since that's the only recency signal those platforms' library data provides. Ubisoft uses each game's last unlock and GOG its true last-played time. Epic's library data has no recency signal, so Epic games keep their library order.</div>
         </div>
         <hr>
         <div>
