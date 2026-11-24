@@ -7272,13 +7272,20 @@ class GamingStatusLibraryCard extends HTMLElement {
           :host { display: block; }
           ha-card { padding: 16px; border-radius: var(--ha-card-border-radius, 12px); background: var(--ha-card-background, var(--card-background-color, #1e1e1e)); box-sizing: border-box; }
           #lb-title { font-size: 20px; font-weight: 400; letter-spacing: -0.012em; line-height: 32px; color: var(--ha-card-header-color, var(--primary-text-color)); padding-bottom: 12px; display: none; }
-          #lb-toolbar { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; }
-          #lb-tabs { display: flex; gap: 8px; }
+          /* Wraps when the tabs and search box don't fit side by side. With
+             tabs showing, the tabs take nearly all spare room (a grow ratio
+             of 1000 to the search box's 1), so beside them the search box
+             keeps its own width; wrapped onto a row of its own, it's the
+             only item there and fills the card's width. */
+          #lb-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-bottom: 12px; }
+          #lb-tabs { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+          #lb-toolbar.with-tabs #lb-tabs { flex: 1000 1 auto; }
+          #lb-toolbar.with-tabs #lb-search-wrap { flex: 1 0 auto; }
           .lb-tab { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.2s ease; }
           .lb-tab ha-icon { color: #ffffff; --mdc-icon-size: 20px; position: relative; top: -1px; }
           #lb-search-wrap { display: flex; align-items: center; gap: 6px; margin-left: auto; background: rgba(120, 120, 120, 0.15); border-radius: 18px; padding: 0 12px; height: 36px; box-sizing: border-box; flex-shrink: 0; }
           #lb-search-wrap ha-icon { color: var(--secondary-text-color); --mdc-icon-size: 18px; flex-shrink: 0; }
-          #lb-search { border: none; background: transparent; color: var(--primary-text-color); font-size: 13px; outline: none; width: 130px; min-width: 0; }
+          #lb-search { border: none; background: transparent; color: var(--primary-text-color); font-size: 13px; outline: none; width: 130px; min-width: 0; flex: 1 1 auto; }
           #lb-search::placeholder { color: var(--secondary-text-color); }
           #lb-total { font-size: 13px; color: var(--secondary-text-color); padding-bottom: 8px; }
           .lb-list { display: flex; flex-direction: column; gap: 8px; }
@@ -7310,6 +7317,7 @@ class GamingStatusLibraryCard extends HTMLElement {
       `;
       this._titleEl = this.shadowRoot.getElementById("lb-title");
       this._tabsEl = this.shadowRoot.getElementById("lb-tabs");
+      this._toolbarEl = this.shadowRoot.getElementById("lb-toolbar");
       this._totalEl = this.shadowRoot.getElementById("lb-total");
       this._bodyEl = this.shadowRoot.getElementById("lb-body");
       this._searchWrapEl = this.shadowRoot.getElementById("lb-search-wrap");
@@ -7378,6 +7386,7 @@ class GamingStatusLibraryCard extends HTMLElement {
   // inactive tabs a muted neutral one. Hidden entirely when there's only
   // one enabled platform, since there's nothing to switch between.
   _renderTabs(enabledPlatforms) {
+    this._toolbarEl.classList.toggle("with-tabs", enabledPlatforms.length >= 2);
     if (enabledPlatforms.length < 2) {
       this._tabsEl.style.display = "none";
       this._tabsEl.innerHTML = "";
@@ -7634,7 +7643,7 @@ class GamingStatusLibraryEditor extends HTMLElement {
         <hr>
         <div>
           <label><input type="checkbox" data-field="show_search" ${this._config.show_search ? "checked" : ""}> Show Search Box</label>
-          <div class="helper-text">Adds a search field next to the platform tabs to filter the list by title as you type.</div>
+          <div class="helper-text">Adds a search field next to the platform tabs to filter the list by title as you type. It moves below the tabs when the card is too narrow for both.</div>
         </div>
         <hr>
         <div>
