@@ -555,6 +555,14 @@ const GAMING_STATUS_PLATFORM_TINTS = {
 // Agent sessions labelled "Epic"/"Ubisoft"/"GOG" as their own platform.
 const GAMING_STATUS_LIBRARY_ONLY_LABELS = { epic: "Epic Games", ubisoft: "Ubisoft", gog: "GOG" };
 
+// Whether a Gaming Status Agent session's or unlock's platform label (its
+// launcher, e.g. "Epic") belongs to a library-only platform key ("epic").
+// Same rule as the List card's GSA_LAUNCHER_BADGES lookup.
+function gamingStatusLabelMatchesLauncher(label, key) {
+  const lower = String(label || "").trim().toLowerCase();
+  return lower === key || lower.startsWith(key + " ");
+}
+
 // Maps a platform key to the master sensor's per-platform gamertag
 // attribute name (see sensor.py's MasterGamingSensor -- steam_gamertag/
 // xbox_gamertag/psn_gamertag). Only the three platforms that have a real
@@ -7754,6 +7762,7 @@ class GamingStatusGamercardCard extends HTMLElement {
       show_completion_percent: true,
       show_game_completion: true,
       show_gamerscore: true,
+      show_xp: true,
       show_total_trophies: true,
       show_total_playtime: true,
       show_trophy_breakdown: true,
@@ -7765,18 +7774,29 @@ class GamingStatusGamercardCard extends HTMLElement {
     };
   }
 
+  // Epic, Ubisoft and GOG have no status sensor of their own: their live
+  // sessions and unlocks come from the player's Gaming Status Agent sensor.
+  static isAgentPlatform(platform) {
+    return GamingStatusLibraryCard.OPTIONAL_PLATFORMS.includes(platform);
+  }
+
+  static platformLabel(platform) {
+    return GAMING_STATUS_LIBRARY_ONLY_LABELS[platform] || GAMING_STATUS_PLATFORM_LABELS[platform] || platform;
+  }
+
   setConfig(config) {
     this.config = {
       ...config,
       mode: "single", // see GamingStatusPlaystationTrophiesCard.setConfig for why
       title: config.title || "",
       single_entity: config.single_entity || "",
-      platform: ["steam", "xbox", "playstation"].includes(config.platform) ? config.platform : "playstation",
+      platform: GamingStatusLibraryCard.PLATFORMS.includes(config.platform) ? config.platform : "playstation",
       recent_games_count: Math.min(10, Math.max(1, parseInt(config.recent_games_count) || 2)),
       show_game_count: config.show_game_count !== false,
       show_completion_percent: config.show_completion_percent !== false,
       show_game_completion: config.show_game_completion !== false,
       show_gamerscore: config.show_gamerscore !== false,
+      show_xp: config.show_xp !== false,
       show_total_trophies: config.show_total_trophies !== false,
       show_total_playtime: config.show_total_playtime !== false,
       show_trophy_breakdown: config.show_trophy_breakdown !== false,
@@ -7824,9 +7844,12 @@ class GamingStatusGamercardCard extends HTMLElement {
   // Derives sensor.gaming_status_<owner>_<platform> -- the real-time
   // sensor, needed only for its recent_achievements (the library sensor
   // above has no per-unlock history, only lifetime tier/count totals).
+  // Epic/Ubisoft/GOG unlocks live on the player's Gaming Status Agent
+  // sensor (_gsa) instead, mixed with its other launchers' unlocks.
   _resolveRealtimeEntityId(hass, playerId) {
     if (!playerId) return "";
-    const realtimeEntityId = playerId.replace(/_master$/, `_${this.config.platform}`);
+    const suffix = GamingStatusGamercardCard.isAgentPlatform(this.config.platform) ? "gsa" : this.config.platform;
+    const realtimeEntityId = playerId.replace(/_master$/, `_${suffix}`);
     return hass.states[realtimeEntityId] ? realtimeEntityId : "";
   }
 
@@ -7862,6 +7885,7 @@ class GamingStatusGamercardCard extends HTMLElement {
       this.config.show_completion_percent,
       this.config.show_game_completion,
       this.config.show_gamerscore,
+      this.config.show_xp,
       this.config.show_total_trophies,
       this.config.show_total_playtime,
       this.config.show_trophy_breakdown,
@@ -7969,10 +7993,19 @@ class GamingStatusGamercardCard extends HTMLElement {
     this._titleEl.textContent = this.config.title || "";
     this._titleEl.style.display = this.config.title ? "block" : "none";
 
+    const platformKey = this.config.platform;
+    const isAgentPlatform = GamingStatusGamercardCard.isAgentPlatform(platformKey);
+
     if (!libraryState) {
       this._bgEl.style.display = "none";
       this._contentEl.classList.remove("has-bg");
-      this._bodyEl.innerHTML = `<div class="gc-empty">Gamercard requires Full Game Library Scan to be enabled for ${gamingStatusEscapeHTML(GAMING_STATUS_PLATFORM_LABELS[this.config.platform])}.</div>`;
+      const label = gamingStatusEscapeHTML(GamingStatusGamercardCard.platformLabel(platformKey));
+      // Ubisoft's library comes entirely from Gaming Status Agent, so say so
+      // rather than pointing only at the scan setting.
+      const agentNote = platformKey === "ubisoft"
+        ? " Ubisoft data comes from Gaming Status Agent, with its Ubisoft achievements option turned on."
+        : "";
+      this._bodyEl.innerHTML = `<div class="gc-empty">Gamercard requires Full Game Library Scan to be enabled for ${label}.${agentNote}</div>`;
       return;
     }
 
@@ -7984,7 +8017,11 @@ class GamingStatusGamercardCard extends HTMLElement {
     }
 
     const escapeHTML = gamingStatusEscapeHTML;
-    const recentAchievements = realtimeState ? (realtimeState.attributes.recent_achievements || []) : [];
+    let recentAchievements = realtimeState ? (realtimeState.attributes.recent_achievements || []) : [];
+    // The Agent sensor holds every launcher's unlocks; keep this platform's.
+    if (isAgentPlatform) {
+      recentAchievements = recentAchievements.filter(u => gamingStatusLabelMatchesLauncher(u.platform, platformKey));
+    }
 
     // Only affects which games are eligible for the "recently played" rows
     // below -- header stats (game count, average completion) still use the
@@ -8007,8 +8044,11 @@ class GamingStatusGamercardCard extends HTMLElement {
     // ghost-awareness at all. Falls back to the _activity_ts sort above
     // whenever there's nothing usable to prefer instead.
     const recentSessions = masterState ? (masterState.attributes.recent_sessions || []) : [];
-    const platformSessions = recentSessions.filter(
-      (s) => (s.platform || "").toLowerCase() === this.config.platform
+    // An Agent session's platform label is its launcher ("Epic", "GOG",
+    // "Ubisoft"), matched the same way as the unlocks above.
+    const platformSessions = recentSessions.filter((s) => isAgentPlatform
+      ? gamingStatusLabelMatchesLauncher(s.platform, platformKey)
+      : (s.platform || "").toLowerCase() === platformKey
     );
     const sortedSessions = [...platformSessions].sort(
       (a, b) => (Date.parse(b.start_time) || 0) - (Date.parse(a.start_time) || 0)
@@ -8056,7 +8096,12 @@ class GamingStatusGamercardCard extends HTMLElement {
     // Same reasoning as the avatar above -- the platform-specific gamertag
     // this card is actually configured for, not master's cross-platform
     // merged value.
-    const gamertag = realtimeState ? (realtimeState.attributes.gamertag || "") : (masterState ? (masterState.attributes.gamertag || "") : "");
+    // An Agent sensor's gamertag changes with the launcher it last saw, so
+    // for Epic/Ubisoft/GOG use the account recorded on the player's latest
+    // session from that launcher instead (none if they have no session).
+    const gamertag = isAgentPlatform
+      ? ((sortedSessions.find(s => s.gamertag) || {}).gamertag || "")
+      : (realtimeState ? (realtimeState.attributes.gamertag || "") : (masterState ? (masterState.attributes.gamertag || "") : ""));
 
     // Averaged across the platform's WHOLE library, not just the rows shown
     // below -- same formula as GamingStatusStatsCard.computeStats' avgCompletion,
@@ -8077,12 +8122,16 @@ class GamingStatusGamercardCard extends HTMLElement {
     // PlayStation/Steam show their earned trophy/achievement count instead
     // of a gamerscore they don't have -- deliberately mutually exclusive
     // per platform, not a missing option.
-    if (this.config.platform === "xbox" && this.config.show_gamerscore) {
+    if (platformKey === "xbox" && this.config.show_gamerscore) {
       statCells.push({ label: "Gamerscore", value: `${libraryState.attributes.gamerscore_earned || 0}` });
-    } else if ((this.config.platform === "playstation" || this.config.platform === "steam") && this.config.show_total_trophies) {
+    } else if (platformKey !== "xbox" && this.config.show_total_trophies) {
       // libraryState.state (native_value) IS achievements_earned for this
       // platform -- see library_sensor.py's TrophyLibraryPlatformSensor.
-      statCells.push({ label: this.config.platform === "steam" ? "Achievements" : "Trophies", value: `${libraryState.state || 0}` });
+      statCells.push({ label: platformKey === "playstation" ? "Trophies" : "Achievements", value: `${libraryState.state || 0}` });
+    }
+    // Epic's own XP total, from the public Epic profile.
+    if (platformKey === "epic" && this.config.show_xp) {
+      statCells.push({ label: "XP", value: `${libraryState.attributes.xp_earned || 0}` });
     }
 
     const headerHTML = `
@@ -8128,11 +8177,11 @@ class GamingStatusGamercardCard extends HTMLElement {
         </div>`;
     }).join("");
 
-    // Steam's playtime and PlayStation's tier breakdown occupy the same
+    // Steam/GOG playtime and PlayStation's tier breakdown occupy the same
     // "secondary detail" slot -- Xbox has nothing here since Gamerscore
     // already lives in the header's stat cluster above.
     let bottomHTML = "";
-    if (this.config.platform === "steam" && this.config.show_total_playtime) {
+    if ((platformKey === "steam" || platformKey === "gog") && this.config.show_total_playtime) {
       const hours = libraryState.attributes.playtime_hours || 0;
       if (hours > 0) {
         bottomHTML = `<div class="gc-bottom-bar"><div class="gc-bottom-stat"><span class="gc-bottom-value">${escapeHTML(Math.round(hours * 10) / 10)}h</span><span class="gc-bottom-label">Playtime</span></div></div>`;
@@ -8216,8 +8265,17 @@ class GamingStatusGamercardEditor extends HTMLElement {
     const effectiveSingleEntity = gamingStatusEffectiveSingleEntity(this._config, playerEntities);
     const entityOptions = gamingStatusPlayerOptionsHTML(playerEntities, effectiveSingleEntity, (s) => this._esc(s));
     const availablePlatforms = gamingStatusGetAvailablePlatforms(this._hass);
-    const gamercardPlatforms = ["steam", "xbox", "playstation"];
-    const platform = ["steam", "xbox", "playstation"].includes(this._config.platform) ? this._config.platform : "playstation";
+    const gamercardPlatforms = GamingStatusLibraryCard.PLATFORMS;
+    // Same availability rule as the Library card's editor: Epic, Ubisoft and
+    // GOG have no status sensor, so they're offered once any player has
+    // their library sensor.
+    const hasLibrary = (key) => !this._hass || Object.keys(this._hass.states).some(k =>
+      k.startsWith("sensor.gaming_status_") && k.endsWith(`_library_${key}`));
+    const isAvailable = (key) => GamingStatusGamercardCard.isAgentPlatform(key)
+      ? hasLibrary(key)
+      : (!availablePlatforms || availablePlatforms.has(key));
+    const platform = gamercardPlatforms.includes(this._config.platform) ? this._config.platform : "playstation";
+    const isAgentPlatform = GamingStatusGamercardCard.isAgentPlatform(platform);
     const showTrophyBreakdown = this._config.show_trophy_breakdown !== false;
 
     this.shadowRoot.innerHTML = `
@@ -8249,9 +8307,14 @@ class GamingStatusGamercardEditor extends HTMLElement {
           <div class="section-title">Platform</div>
           <div class="radio-group">
             ${gamercardPlatforms
-              .filter(key => !availablePlatforms || availablePlatforms.has(key))
-              .map(key => `<label><input type="radio" name="platform" data-field="platform" value="${key}" ${platform === key ? "checked" : ""}> ${gamingStatusPlatformEditorLabel(key)}</label>`).join("")}
+              .filter(key => isAvailable(key))
+              .map(key => `<label><input type="radio" name="platform" data-field="platform" value="${key}" ${platform === key ? "checked" : ""}> ${GAMING_STATUS_LIBRARY_ONLY_LABELS[key] || gamingStatusPlatformEditorLabel(key)}</label>`).join("")}
           </div>
+          ${isAgentPlatform ? `<div class="helper-text">${platform === "ubisoft"
+            ? "Ubisoft's library and unlocks both come from Gaming Status Agent."
+            : platform === "epic"
+              ? "The library comes from the player's public Epic profile. Achievement icons and recently-played order need Gaming Status Agent."
+              : "The library comes from the player's public GOG profile. Achievement icons need Gaming Status Agent."}</div>` : ""}
         </div>
         <hr>
         <div>
@@ -8268,12 +8331,13 @@ class GamingStatusGamercardEditor extends HTMLElement {
             <label><input type="checkbox" data-field="show_completion_percent" ${this._config.show_completion_percent !== false ? "checked" : ""}> Total Completion Percentage</label>
             <label><input type="checkbox" data-field="show_game_completion" ${this._config.show_game_completion !== false ? "checked" : ""}> Game Completion Percentage</label>
             ${platform === "xbox" ? `<label><input type="checkbox" data-field="show_gamerscore" ${this._config.show_gamerscore !== false ? "checked" : ""}> Total Gamerscore</label>` : ""}
-            ${platform === "steam" || platform === "playstation" ? `<label><input type="checkbox" data-field="show_total_trophies" ${this._config.show_total_trophies !== false ? "checked" : ""}> Total ${platform === "steam" ? "Achievements" : "Trophies"}</label>` : ""}
-            ${platform === "steam" ? `<label><input type="checkbox" data-field="show_total_playtime" ${this._config.show_total_playtime !== false ? "checked" : ""}> Total Playtime</label>` : ""}
+            ${platform !== "xbox" ? `<label><input type="checkbox" data-field="show_total_trophies" ${this._config.show_total_trophies !== false ? "checked" : ""}> Total ${platform === "playstation" ? "Trophies" : "Achievements"}</label>` : ""}
+            ${platform === "epic" ? `<label><input type="checkbox" data-field="show_xp" ${this._config.show_xp !== false ? "checked" : ""}> Total XP</label>` : ""}
+            ${platform === "steam" || platform === "gog" ? `<label><input type="checkbox" data-field="show_total_playtime" ${this._config.show_total_playtime !== false ? "checked" : ""}> Total Playtime</label>` : ""}
             ${platform === "playstation" ? `<label><input type="checkbox" data-field="show_trophy_breakdown" ${showTrophyBreakdown ? "checked" : ""}> Trophy Breakdown</label>` : ""}
           </div>
           <div class="helper-text">Game Completion Percentage shows next to each game row's icons, individually -- unlike Total Completion Percentage above, which averages the whole library.</div>
-          ${platform === "steam" ? `<div class="helper-text">Playtime is hidden automatically when it's 0, even if this is checked.</div>` : ""}
+          ${platform === "steam" || platform === "gog" ? `<div class="helper-text">Playtime is hidden automatically when it's 0, even if this is checked.</div>` : ""}
         </div>
         <hr>
         <div>

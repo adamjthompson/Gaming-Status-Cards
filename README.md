@@ -278,14 +278,14 @@ An Exophase-style summary card for a single player on a single platform: avatar,
 **UI Configuration Options:**
 * **Card Title:** Optional title displayed above the card.
 * **Player:** A single player dropdown.
-* **Platform:** Steam, Xbox, or PlayStation — a single platform at a time, same as the Library card.
+* **Platform:** Steam, Xbox, PlayStation, Epic Games, Ubisoft, or GOG — a single platform at a time. Epic Games, Ubisoft, and GOG are offered once a player has that platform's library sensor, same as the Library card. Epic and GOG libraries come from the player's public profile and work without Gaming Status Agent, but each game row's achievement icons, and Epic's recently-played order, need the Agent, since those unlocks and sessions are recorded on the player's Agent sensor. (GOG's library has its own last-played time, so its rows are in order either way.) Ubisoft needs the Agent for everything, because the Agent sends the Ubisoft library.
 * **Recent Games to Show:** How many of the player's most-recently-played games get their own row (1–10).
-* **Stats to Display:** Total Games in Library, Total Completion Percentage, and Game Completion Percentage (all three always offered — the last one shows each game row's own completion % next to its icons, distinct from the library-wide average above), plus whichever of these apply to the selected platform — **Total Gamerscore** (Xbox), **Total Trophies**/**Total Achievements** (PlayStation/Steam), **Total Playtime** (Steam — automatically hidden whenever it's 0, even if checked), and **Trophy Breakdown** (PlayStation — a compact Bronze/Silver/Gold/Platinum count row).
+* **Stats to Display:** Total Games in Library, Total Completion Percentage, and Game Completion Percentage (all three always offered — the last one shows each game row's own completion % next to its icons, distinct from the library-wide average above), plus whichever of these apply to the selected platform — **Total Gamerscore** (Xbox), **Total Trophies**/**Total Achievements** (every platform except Xbox), **Total XP** (Epic), **Total Playtime** (Steam and GOG — automatically hidden whenever it's 0, even if checked), and **Trophy Breakdown** (PlayStation — a compact Bronze/Silver/Gold/Platinum count row).
 * **Exclude Games With Zero Completion:** Keeps a game out of the recently-played rows above if it has no real completion data (unchecked by default — shows everything). Useful if this platform's sensor sometimes mis-tracks a game actually played through a different platform (e.g. a PC game launched via a different launcher that an Xbox sensor picks up anyway) — it'll always show 0% since it was never really played here, so hiding it avoids a misleading row. Only affects which games are eligible for these rows, not the Total Games/Completion Percentage stats above, which still reflect the whole library.
 * **Trophy Images** *(PlayStation only, shown when Trophy Breakdown is checked)*: **Official Trophy Images** or **Icons Only**, same option as the PlayStation Trophies card.
 * **Show Achievement Hover:** Toggle the tooltip that appears when hovering an achievement/trophy icon (checked by default). Turn off to disable hovering entirely.
 * **Show Achievement Description** *(shown while Show Achievement Hover is checked)*: Include the achievement/trophy's description text in that tooltip, when the platform provided one — some entries (especially "secret" Steam achievements) have none.
-* **Display Gamertags:** Appends the player's real account name (persona name, gamertag, or online ID) for the selected platform next to their name. Off by default.
+* **Display Gamertags:** Appends the player's real account name (persona name, gamertag, or online ID) for the selected platform next to their name. For Epic, Ubisoft, and GOG, it's the account on the player's latest Gaming Status Agent session from that launcher, so nothing is shown until there's one. Off by default.
 
 Hovering an achievement/trophy icon (when enabled) shows a tooltip with its name, description (if available and enabled), and the date/time it was earned. A game row with no captured logo/icon/cover art falls back to its plain title text instead; a game with fewer than four recorded recent unlocks (or none at all) just shows fewer icons rather than a placeholder.
 
@@ -540,14 +540,15 @@ show_field_counts: true # Trophy Counts (PlayStation) or Achievement Count (Stea
 type: custom:gaming-status-gamercard-card
 title: Gamercard
 single_entity: " " # A single player's master sensor ID
-platform: playstation # Options: steam, xbox, playstation (single platform at a time)
+platform: playstation # Options: steam, xbox, playstation, epic, ubisoft, gog (single platform at a time)
 recent_games_count: 2 # Number of most-recently-played games to show as rows (1-10)
 show_game_count: true # Total games in library -- always offered
 show_completion_percent: true # Average completion % across the whole library -- always offered
 show_game_completion: true # Each game row's own completion % next to its icons -- always offered
 show_gamerscore: true # Xbox only
-show_total_trophies: true # PlayStation/Steam only (Total Trophies / Total Achievements)
-show_total_playtime: true # Steam only -- hidden automatically when playtime is 0, even if true
+show_xp: true # Epic only
+show_total_trophies: true # Every platform except Xbox (Total Trophies on PlayStation, Total Achievements elsewhere)
+show_total_playtime: true # Steam and GOG only -- hidden automatically when playtime is 0, even if true
 show_trophy_breakdown: true # PlayStation only
 image_style: official # Options: official, icons (PlayStation trophy breakdown only)
 exclude_zero_completion: false # Keep out of the recently-played rows any game with no real completion data (e.g. one this platform's sensor mis-tracked). Doesn't affect the stats above.
